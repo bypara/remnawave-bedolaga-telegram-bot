@@ -110,6 +110,7 @@ def test_main_actions_use_supported_telegram_colors():
     markup = InlineKeyboardMarkup(
         inline_keyboard=[
             [_button('💎 Купить подписку', callback_data='menu_buy')],
+            [_button('📱 Подписка', callback_data='menu_subscription')],
             [_button('💎 Купить подписку', callback_data='subscription_upgrade')],
             [_button('🧪 Тестовая подписка', callback_data='menu_trial')],
             [_button('🛠️ Техподдержка', callback_data='menu_support')],
@@ -117,8 +118,11 @@ def test_main_actions_use_supported_telegram_colors():
         ]
     )
 
-    buy, upgrade, trial, support, back = [row[0] for row in apply_custom_emoji_icons(markup).inline_keyboard]
+    buy, subscription, upgrade, trial, support, back = [
+        row[0] for row in apply_custom_emoji_icons(markup).inline_keyboard
+    ]
     assert buy.style == 'success'
+    assert subscription.style == 'success'
     assert upgrade.style == 'success'
     assert trial.style == 'danger'
     assert support.style == 'primary'

@@ -90,6 +90,7 @@ CALLBACK_TO_ICON: dict[str, str] = {
 
 CALLBACK_TO_STYLE: dict[str, str] = {
     'menu_buy': 'success',
+    'menu_subscription': 'success',
     'subscription_upgrade': 'success',
     'simple_subscription_purchase': 'success',
     'menu_trial': 'danger',
