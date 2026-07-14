@@ -104,3 +104,23 @@ def test_ticket_creation_cancel_uses_its_specific_icon():
     specific, generic = [row[0] for row in apply_custom_emoji_icons(markup).inline_keyboard]
     assert specific.icon_custom_emoji_id == CUSTOM_EMOJI_IDS['cancel_ticket_creation']
     assert generic.icon_custom_emoji_id == CUSTOM_EMOJI_IDS['cancel']
+
+
+def test_main_actions_use_supported_telegram_colors():
+    markup = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [_button('💎 Купить подписку', callback_data='menu_buy')],
+            [_button('💎 Купить подписку', callback_data='subscription_upgrade')],
+            [_button('🧪 Тестовая подписка', callback_data='menu_trial')],
+            [_button('🛠️ Техподдержка', callback_data='menu_support')],
+            [_button('⬅️ К поддержке', callback_data='menu_support')],
+        ]
+    )
+
+    buy, upgrade, trial, support, back = [row[0] for row in apply_custom_emoji_icons(markup).inline_keyboard]
+    assert buy.style == 'success'
+    assert upgrade.style == 'success'
+    assert trial.style == 'danger'
+    assert support.style == 'primary'
+    assert support.icon_custom_emoji_id == CUSTOM_EMOJI_IDS['support']
+    assert back.style is None

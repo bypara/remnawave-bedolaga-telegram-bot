@@ -41,6 +41,7 @@ CUSTOM_EMOJI_IDS: dict[str, str] = {
     'show_qr': '5231012545799666522',
     'referral_list': '5440539497383087970',
     'referral_analytics': '5231200819986047254',
+    'support': '5472304422669262481',
 }
 
 PRIORITY_CALLBACK_TO_ICON: dict[str, str] = {
@@ -84,6 +85,15 @@ CALLBACK_TO_ICON: dict[str, str] = {
     'referral_show_qr': 'show_qr',
     'referral_list': 'referral_list',
     'referral_analytics': 'referral_analytics',
+    'menu_support': 'support',
+}
+
+CALLBACK_TO_STYLE: dict[str, str] = {
+    'menu_buy': 'success',
+    'subscription_upgrade': 'success',
+    'simple_subscription_purchase': 'success',
+    'menu_trial': 'danger',
+    'menu_support': 'primary',
 }
 
 BACK_TEXT_MARKERS = (
@@ -164,17 +174,26 @@ def apply_custom_emoji_icons(markup: InlineKeyboardMarkup) -> InlineKeyboardMark
         for button in row:
             plain_text = strip_leading_emoji(button.text)
             icon_name = _resolve_icon_name(button, plain_text)
+            normalized_text = plain_text.strip().casefold()
+            is_navigation = any(marker in normalized_text for marker in BACK_TEXT_MARKERS) or any(
+                marker in normalized_text for marker in CANCEL_TEXT_MARKERS
+            )
+            callback_name = (button.callback_data or '').split(':', 1)[0]
+            style = button.style if is_navigation else CALLBACK_TO_STYLE.get(callback_name, button.style)
 
             if icon_name:
                 emoji_id = CUSTOM_EMOJI_IDS[icon_name]
             else:
                 emoji_id = button.icon_custom_emoji_id
 
-            if emoji_id and (button.text != plain_text or button.icon_custom_emoji_id != emoji_id):
+            if (emoji_id and (button.text != plain_text or button.icon_custom_emoji_id != emoji_id)) or (
+                button.style != style
+            ):
                 button = button.model_copy(
                     update={
-                        'text': plain_text,
+                        'text': plain_text if emoji_id else button.text,
                         'icon_custom_emoji_id': emoji_id,
+                        'style': style,
                     }
                 )
                 changed = True
