@@ -21,9 +21,25 @@ def test_requested_custom_emoji_icons_are_applied_by_button_action():
         ('📱 Моя подписка', 'menu_subscription', 'my_subscription'),
         ('⏰ Продлить подписку', 'subscription_extend', 'extend_subscription'),
         ('💳 Автоплатёж', 'subscription_autopay', 'autopay'),
-        ('⚙️ Настройки', 'subscription_settings', 'subscription_settings'),
         ('📦 Тариф', 'instant_switch', 'tariff'),
         ('📈 Докупить трафик', 'buy_traffic', 'buy_traffic'),
+        ('✅ Включить', 'autopay_enable', 'enable'),
+        ('❌ Выключить', 'autopay_disable', 'disable'),
+        ('⚙️ Настроить дни', 'autopay_set_days', 'configure'),
+        ('📅 Период продления', 'autopay_set_period', 'renewal_period'),
+        ('🔧 Управление устройствами', 'subscription_manage_devices', 'manage_devices'),
+        ('🔄 Перевыпустить подписку', 'subscription_revoke', 'revoke_subscription'),
+        ('⚙️ Настройки', 'subscription_settings', 'configure'),
+        ('💰 Баланс: 100 ₽', 'menu_balance', 'balance'),
+        ('🎟️ Промокод', 'menu_promocode', 'promocode'),
+        ('🤝 Реф. система', 'menu_referrals', 'referral_system'),
+        ('🌐 Язык', 'menu_language', 'language'),
+        ('📊 История операций', 'balance_history', 'balance_history'),
+        ('💳 Пополнить', 'balance_topup', 'balance_topup'),
+        ('📝 Создать приглашение', 'referral_create_invite', 'create_invite'),
+        ('📱 Показать QR код', 'referral_show_qr', 'show_qr'),
+        ('👥 Список рефералов', 'referral_list', 'referral_list'),
+        ('📊 Аналитика', 'referral_analytics', 'referral_analytics'),
     ]
     markup = InlineKeyboardMarkup(
         inline_keyboard=[[_button(text, callback_data=callback)] for text, callback, _ in cases]
@@ -75,3 +91,16 @@ def test_existing_context_specific_icon_is_preserved():
     decorated = apply_custom_emoji_icons(markup)
 
     assert decorated.inline_keyboard[0][0].icon_custom_emoji_id == main_menu_subscription_icon
+
+
+def test_ticket_creation_cancel_uses_its_specific_icon():
+    markup = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [_button('❌ Отменить создание тикета', callback_data='cancel_ticket_creation')],
+            [_button('❌ Отмена', callback_data='some_other_cancel')],
+        ]
+    )
+
+    specific, generic = [row[0] for row in apply_custom_emoji_icons(markup).inline_keyboard]
+    assert specific.icon_custom_emoji_id == CUSTOM_EMOJI_IDS['cancel_ticket_creation']
+    assert generic.icon_custom_emoji_id == CUSTOM_EMOJI_IDS['cancel']
