@@ -295,6 +295,7 @@ def get_language_selection_keyboard(
     *,
     include_back: bool = False,
     language: str = DEFAULT_LANGUAGE,
+    back_callback_data: str = 'back_to_menu',
 ) -> InlineKeyboardMarkup:
     available_languages = settings.get_available_languages()
 
@@ -328,7 +329,7 @@ def get_language_selection_keyboard(
 
     if include_back:
         texts = get_texts(language)
-        buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
+        buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback_data)])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -604,15 +605,6 @@ def get_main_menu_keyboard(
             balance=balance_kopeks,
         )
 
-    safe_balance = balance_kopeks or 0
-    if hasattr(texts, 'BALANCE_BUTTON') and safe_balance > 0:
-        balance_button_text = texts.BALANCE_BUTTON.format(balance=texts.format_price(safe_balance))
-    else:
-        balance_button_text = texts.t(
-            'BALANCE_BUTTON_DEFAULT',
-            '💰 Баланс: {balance}',
-        ).format(balance=texts.format_price(safe_balance))
-
     keyboard: list[list[InlineKeyboardButton]] = []
     paired_buttons: list[InlineKeyboardButton] = []
 
@@ -702,8 +694,6 @@ def get_main_menu_keyboard(
                 )
             )
 
-    keyboard.append([InlineKeyboardButton(text=balance_button_text, callback_data='menu_balance')])
-
     show_trial = (
         not has_had_paid_subscription
         and not has_active_subscription
@@ -752,13 +742,6 @@ def get_main_menu_keyboard(
             if isinstance(button, InlineKeyboardButton):
                 paired_buttons.append(button)
 
-    # Добавляем кнопки промокода и рефералов, учитывая настройки
-    paired_buttons.append(InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data='menu_promocode'))
-
-    # Добавляем кнопку рефералов, только если программа включена
-    if settings.is_referral_program_enabled():
-        paired_buttons.append(InlineKeyboardButton(text=texts.MENU_REFERRALS, callback_data='menu_referrals'))
-
     # Добавляем кнопку конкурсов
     if settings.CONTESTS_ENABLED and settings.CONTESTS_BUTTON_VISIBLE:
         paired_buttons.append(
@@ -786,12 +769,18 @@ def get_main_menu_keyboard(
         )
     )
 
-    if settings.is_language_selection_enabled():
-        paired_buttons.append(InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data='menu_language'))
-
     for i in range(0, len(paired_buttons), 2):
         row = paired_buttons[i : i + 2]
         keyboard.append(row)
+
+    keyboard.append(
+        [
+            InlineKeyboardButton(
+                text=texts.t('PROFILE_MENU_BUTTON', '👤 Профиль'),
+                callback_data='menu_profile',
+            )
+        ]
+    )
 
     if settings.DEBUG:
         logger.debug('DEBUG KEYBOARD: админ кнопка', is_admin=is_admin)
@@ -806,6 +795,40 @@ def get_main_menu_keyboard(
     if (not is_admin) and is_moderator:
         keyboard.append([InlineKeyboardButton(text='🧑‍⚖️ Модерация', callback_data='moderator_panel')])
 
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_profile_keyboard(
+    language: str = DEFAULT_LANGUAGE,
+    balance_kopeks: int = 0,
+) -> InlineKeyboardMarkup:
+    """Build a compact profile menu for personal settings and bonuses."""
+    texts = get_texts(language)
+    safe_balance = balance_kopeks or 0
+    balance_text = texts.t('BALANCE_BUTTON_DEFAULT', '💰 Баланс: {balance}').format(
+        balance=texts.format_price(safe_balance),
+    )
+    if hasattr(texts, 'BALANCE_BUTTON') and safe_balance > 0:
+        balance_text = texts.BALANCE_BUTTON.format(balance=texts.format_price(safe_balance))
+
+    keyboard: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text=balance_text, callback_data='menu_balance')],
+    ]
+
+    bonus_row = [InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data='menu_promocode')]
+    if settings.is_referral_program_enabled():
+        bonus_row.append(
+            InlineKeyboardButton(
+                text=texts.t('PROFILE_REFERRALS_BUTTON', '🤝 Реф. система'),
+                callback_data='menu_referrals',
+            )
+        )
+    keyboard.append(bonus_row)
+
+    if settings.is_language_selection_enabled():
+        keyboard.append([InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data='menu_language')])
+
+    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
@@ -1594,7 +1617,7 @@ def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
                 )
             ]
         )
-    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
+    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_profile')])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -2278,7 +2301,7 @@ def get_referral_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMar
             ]
         )
 
-    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
+    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_profile')])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 

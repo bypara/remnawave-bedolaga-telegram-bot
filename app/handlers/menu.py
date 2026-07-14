@@ -23,6 +23,7 @@ from app.keyboards.inline import (
     get_info_menu_keyboard,
     get_language_selection_keyboard,
     get_main_menu_keyboard_async,
+    get_profile_keyboard,
 )
 from app.localization.texts import get_rules, get_texts
 from app.services.faq_service import FaqService
@@ -263,6 +264,31 @@ async def handle_profile_unavailable(callback: types.CallbackQuery) -> None:
         ),
         show_alert=True,
     )
+
+
+async def show_profile_menu(callback: types.CallbackQuery, db_user: User) -> None:
+    if db_user is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
+        await callback.answer(
+            texts.t('USER_NOT_FOUND_ERROR', 'Ошибка: пользователь не найден.'),
+            show_alert=True,
+        )
+        return
+
+    texts = get_texts(db_user.language)
+    title = texts.t('PROFILE_MENU_TITLE', '👤 <b>Профиль</b>')
+    prompt = texts.t(
+        'PROFILE_MENU_PROMPT',
+        'Здесь собраны ваши личные настройки и бонусы.\n\nВыберите раздел:',
+    )
+
+    await edit_or_answer_photo(
+        callback=callback,
+        caption=f'{title}\n\n{prompt}',
+        keyboard=get_profile_keyboard(db_user.language, db_user.balance_kopeks),
+        parse_mode='HTML',
+    )
+    await callback.answer()
 
 
 async def show_service_rules(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
@@ -1137,6 +1163,7 @@ async def show_language_menu(
             current_language=db_user.language,
             include_back=True,
             language=db_user.language,
+            back_callback_data='menu_profile',
         ),
         parse_mode='HTML',
     )
@@ -1716,6 +1743,8 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
 
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(handle_back_to_menu, F.data == 'back_to_menu')
+
+    dp.callback_query.register(show_profile_menu, F.data == 'menu_profile')
 
     dp.callback_query.register(
         handle_profile_unavailable,
