@@ -1131,6 +1131,11 @@ class MenuLayoutService:
 
                 button_cfg = buttons_config[button_id]
 
+                # Докупка трафика доступна только внутри экрана подписки.
+                # Также скрываем её из уже сохранённых конфигураций главного меню.
+                if button_id == 'buy_traffic' or button_cfg.get('action') == 'buy_traffic':
+                    continue
+
                 # Проверяем включена ли кнопка
                 if not button_cfg.get('enabled', True):
                     continue
@@ -1184,6 +1189,9 @@ class MenuLayoutService:
                     continue
 
                 button_cfg = buttons_config[button_id]
+
+                if button_id == 'buy_traffic' or button_cfg.get('action') == 'buy_traffic':
+                    continue
 
                 if not button_cfg.get('enabled', True):
                     continue

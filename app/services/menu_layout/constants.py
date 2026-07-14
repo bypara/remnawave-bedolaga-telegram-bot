@@ -23,10 +23,10 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
             'max_per_row': 1,
         },
         {
-            'id': 'subscription_traffic_row',
-            'buttons': ['subscription', 'buy_traffic'],
+            'id': 'subscription_row',
+            'buttons': ['subscription'],
             'conditions': {'has_active_subscription': True},
-            'max_per_row': 2,
+            'max_per_row': 1,
         },
         {
             'id': 'balance_row',
@@ -120,16 +120,6 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
             'enabled': True,
             'visibility': 'subscribers',
             'conditions': None,
-            'dynamic_text': False,
-        },
-        'buy_traffic': {
-            'type': 'builtin',
-            'builtin_id': 'buy_traffic',
-            'text': {'ru': '📈 Докупить трафик', 'en': '📈 Buy traffic'},
-            'action': 'buy_traffic',
-            'enabled': True,
-            'visibility': 'subscribers',
-            'conditions': {'has_traffic_limit': True, 'traffic_topup_enabled': True},
             'dynamic_text': False,
         },
         'balance': {
@@ -288,13 +278,6 @@ BUILTIN_BUTTONS_INFO: list[dict[str, Any]] = [
         'default_text': {'ru': '📊 Подписка', 'en': '📊 Subscription'},
         'callback_data': 'menu_subscription',
         'default_conditions': {'has_active_subscription': True},
-        'supports_dynamic_text': False,
-    },
-    {
-        'id': 'buy_traffic',
-        'default_text': {'ru': '📈 Докупить трафик', 'en': '📈 Buy traffic'},
-        'callback_data': 'buy_traffic',
-        'default_conditions': {'has_traffic_limit': True},
         'supports_dynamic_text': False,
     },
     {
