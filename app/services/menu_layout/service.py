@@ -788,7 +788,7 @@ class MenuLayoutService:
 
         # show_trial
         if conditions.get('show_trial') is True:
-            if context.has_had_paid_subscription or context.has_active_subscription:
+            if context.has_had_paid_subscription or context.has_active_subscription or context.trial_already_used:
                 return False
             # Триал отключён глобально (нулевая длительность или для всех типов)
             if settings.TRIAL_DURATION_DAYS <= 0 or settings.TRIAL_DISABLED_FOR == 'all':

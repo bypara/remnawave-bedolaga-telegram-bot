@@ -18,6 +18,7 @@ class MenuContext:
     has_active_subscription: bool = False
     subscription_is_active: bool = False
     has_had_paid_subscription: bool = False
+    trial_already_used: bool = False
     balance_kopeks: int = 0
     subscription: Any | None = None
     subscriptions: list[Any] = field(default_factory=list)

@@ -47,6 +47,13 @@ async def get_main_menu_keyboard_async(
     Если MENU_LAYOUT_ENABLED=True, использует конфигурацию из БД.
     Иначе делегирует в синхронную версию.
     """
+    trial_already_used = False
+    if user is not None:
+        try:
+            trial_already_used = user.is_trial_already_used()
+        except (AttributeError, TypeError):
+            trial_already_used = False
+
     if settings.MENU_LAYOUT_ENABLED:
         from app.services.menu_layout_service import MenuContext, MenuLayoutService
 
@@ -120,6 +127,7 @@ async def get_main_menu_keyboard_async(
             has_active_subscription=has_active_subscription,
             subscription_is_active=subscription_is_active,
             has_had_paid_subscription=has_had_paid_subscription,
+            trial_already_used=trial_already_used,
             balance_kopeks=balance_kopeks,
             subscription=subscription,
             show_resume_checkout=show_resume_checkout,
@@ -146,6 +154,7 @@ async def get_main_menu_keyboard_async(
         has_had_paid_subscription=has_had_paid_subscription,
         has_active_subscription=has_active_subscription,
         subscription_is_active=subscription_is_active,
+        trial_already_used=trial_already_used,
         balance_kopeks=balance_kopeks,
         subscription=subscription,
         show_resume_checkout=show_resume_checkout,
@@ -580,6 +589,7 @@ def get_main_menu_keyboard(
     show_resume_checkout: bool = False,
     has_saved_cart: bool = False,  # Новый параметр для отображения уведомления о сохраненной корзине
     *,
+    trial_already_used: bool = False,
     is_moderator: bool = False,
     custom_buttons: list[InlineKeyboardButton] | None = None,
 ) -> InlineKeyboardMarkup:
@@ -697,6 +707,7 @@ def get_main_menu_keyboard(
     show_trial = (
         not has_had_paid_subscription
         and not has_active_subscription
+        and not trial_already_used
         and settings.TRIAL_DURATION_DAYS > 0
         and settings.TRIAL_DISABLED_FOR != 'all'
     )
