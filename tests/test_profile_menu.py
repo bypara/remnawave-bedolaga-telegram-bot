@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from app.config import settings
 from app.keyboards.inline import get_main_menu_keyboard, get_profile_keyboard
 
@@ -41,3 +43,26 @@ def test_profile_hides_optional_actions_when_disabled(monkeypatch):
     callbacks = _callbacks(get_profile_keyboard(language='ru'))
 
     assert callbacks == ['menu_balance', 'menu_promocode', 'back_to_menu']
+
+
+def test_profile_is_near_the_top_for_every_subscription_state():
+    without_subscription = get_main_menu_keyboard(
+        language='ru',
+        has_active_subscription=False,
+        subscription_is_active=False,
+    )
+    assert without_subscription.inline_keyboard[0][0].callback_data == 'menu_profile'
+
+    subscription = SimpleNamespace(
+        subscription_url=None,
+        subscription_crypto_link=None,
+        is_trial=False,
+        traffic_limit_gb=0,
+    )
+    with_subscription = get_main_menu_keyboard(
+        language='ru',
+        has_active_subscription=True,
+        subscription_is_active=True,
+        subscription=subscription,
+    )
+    assert with_subscription.inline_keyboard[1][0].callback_data == 'menu_profile'

@@ -617,6 +617,12 @@ def get_main_menu_keyboard(
 
     keyboard: list[list[InlineKeyboardButton]] = []
     paired_buttons: list[InlineKeyboardButton] = []
+    profile_row = [
+        InlineKeyboardButton(
+            text=texts.t('PROFILE_MENU_BUTTON', '👤 Профиль'),
+            callback_data='menu_profile',
+        )
+    ]
 
     if has_active_subscription and subscription_is_active:
         connect_mode = settings.CONNECT_BUTTON_MODE
@@ -675,6 +681,8 @@ def get_main_menu_keyboard(
         else:
             keyboard.append([_fallback_connect_button()])
 
+        keyboard.append(profile_row)
+
         happ_row = get_happ_download_button_row(texts)
         if happ_row:
             keyboard.append(happ_row)
@@ -703,6 +711,8 @@ def get_main_menu_keyboard(
                     text=texts.t('BUY_TRAFFIC_BUTTON', '📈 Докупить трафик'), callback_data='buy_traffic'
                 )
             )
+    else:
+        keyboard.append(profile_row)
 
     show_trial = (
         not has_had_paid_subscription
@@ -783,15 +793,6 @@ def get_main_menu_keyboard(
     for i in range(0, len(paired_buttons), 2):
         row = paired_buttons[i : i + 2]
         keyboard.append(row)
-
-    keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=texts.t('PROFILE_MENU_BUTTON', '👤 Профиль'),
-                callback_data='menu_profile',
-            )
-        ]
-    )
 
     if settings.DEBUG:
         logger.debug('DEBUG KEYBOARD: админ кнопка', is_admin=is_admin)
