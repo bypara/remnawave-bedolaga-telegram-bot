@@ -29,6 +29,8 @@ CUSTOM_EMOJI_IDS: dict[str, str] = {
 CALLBACK_TO_ICON: dict[str, str] = {
     'menu_buy': 'buy_main',
     'menu_trial': 'trial',
+    'return_to_saved_cart': 'back',
+    'subscription_resume_checkout': 'back',
     'create_ticket': 'create_ticket',
     'my_tickets': 'my_tickets',
     'menu_rules': 'rules',

@@ -126,3 +126,20 @@ def test_main_menu_uses_requested_custom_emoji_without_unicode_duplicates(monkey
         button = _button_by_callback(markup, callback_data)
         assert button.icon_custom_emoji_id == emoji_id
         assert button.text == text
+
+
+def test_resume_checkout_is_a_full_width_last_row():
+    for has_saved_cart, expected_callback in (
+        (True, 'return_to_saved_cart'),
+        (False, 'subscription_resume_checkout'),
+    ):
+        markup = get_main_menu_keyboard(
+            language='ru',
+            is_admin=True,
+            has_saved_cart=has_saved_cart,
+            show_resume_checkout=not has_saved_cart,
+        )
+
+        assert len(markup.inline_keyboard[-1]) == 1
+        assert markup.inline_keyboard[-1][0].callback_data == expected_callback
+        assert markup.inline_keyboard[-2][0].callback_data == 'admin_panel'

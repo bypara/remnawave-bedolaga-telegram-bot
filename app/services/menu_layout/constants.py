@@ -53,12 +53,6 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
             'max_per_row': 1,
         },
         {
-            'id': 'resume_row',
-            'buttons': ['resume_checkout'],
-            'conditions': {'has_saved_cart': True},
-            'max_per_row': 1,
-        },
-        {
             'id': 'promo_referral_row',
             'buttons': ['promocode', 'referrals'],
             'conditions': None,
@@ -92,6 +86,12 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
             'id': 'moderator_row',
             'buttons': ['moderator_panel'],
             'conditions': {'is_moderator': True},
+            'max_per_row': 1,
+        },
+        {
+            'id': 'resume_row',
+            'buttons': ['resume_checkout'],
+            'conditions': {'has_saved_cart': True},
             'max_per_row': 1,
         },
     ],

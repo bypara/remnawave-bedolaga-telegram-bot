@@ -1184,6 +1184,21 @@ class MenuLayoutService:
                 for i in range(0, len(row_buttons), max_per_row):
                     keyboard_rows.append(row_buttons[i : i + max_per_row])
 
+        resume_callbacks = {'return_to_saved_cart', 'subscription_resume_checkout'}
+        regular_rows: list[list[InlineKeyboardButton]] = []
+        resume_buttons: list[InlineKeyboardButton] = []
+        for row in keyboard_rows:
+            regular_buttons = []
+            for button in row:
+                if button.callback_data in resume_callbacks:
+                    resume_buttons.append(button)
+                else:
+                    regular_buttons.append(button)
+            if regular_buttons:
+                regular_rows.append(regular_buttons)
+
+        keyboard_rows = regular_rows + [[button] for button in resume_buttons]
+
         return InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
     @classmethod

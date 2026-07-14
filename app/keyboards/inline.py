@@ -741,6 +741,7 @@ def get_main_menu_keyboard(
 
     show_buy = not has_active_subscription or not subscription_is_active
     simple_purchase_button = None
+    resume_checkout_button = None
     if settings.SIMPLE_SUBSCRIPTION_ENABLED:
         simple_purchase_button = InlineKeyboardButton(
             text=texts.MENU_SIMPLE_SUBSCRIPTION,
@@ -760,11 +761,9 @@ def get_main_menu_keyboard(
 
     if show_resume_checkout or has_saved_cart:
         resume_callback = 'return_to_saved_cart' if has_saved_cart else 'subscription_resume_checkout'
-        paired_buttons.append(
-            InlineKeyboardButton(
-                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                callback_data=resume_callback,
-            )
+        resume_checkout_button = InlineKeyboardButton(
+            text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+            callback_data=resume_callback,
         )
 
     if custom_buttons:
@@ -818,6 +817,9 @@ def get_main_menu_keyboard(
     # Moderator access (limited support panel)
     if (not is_admin) and is_moderator:
         keyboard.append([InlineKeyboardButton(text='🧑‍⚖️ Модерация', callback_data='moderator_panel')])
+
+    if resume_checkout_button:
+        keyboard.append([resume_checkout_button])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
