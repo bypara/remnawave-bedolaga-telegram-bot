@@ -18,6 +18,11 @@ from app.config import settings
 from app.database.crud.system_setting import upsert_system_setting
 from app.database.models import SystemSetting
 from app.localization.texts import get_texts
+from app.utils.miniapp_buttons import (
+    MAIN_MENU_CUSTOM_EMOJI_IDS,
+    get_main_menu_custom_emoji_id,
+    strip_leading_emoji,
+)
 
 from .constants import (
     AVAILABLE_CALLBACKS,
@@ -1013,6 +1018,13 @@ class MenuLayoutService:
         icon = button_config.get('icon', '')
         custom_emoji_id = button_config.get('icon_custom_emoji_id') or None
 
+        main_menu_icon_name = effective_button_id if effective_button_id in MAIN_MENU_CUSTOM_EMOJI_IDS else None
+        custom_emoji_id = (
+            MAIN_MENU_CUSTOM_EMOJI_IDS.get(main_menu_icon_name)
+            or get_main_menu_custom_emoji_id(action)
+            or custom_emoji_id
+        )
+
         # Логирование для отладки кнопки connect
         is_connect_button = (
             effective_button_id == 'connect'
@@ -1035,6 +1047,12 @@ class MenuLayoutService:
         text = cls._get_localized_text(text_config, context.language)
         if not text:
             return None
+
+        if effective_button_id == 'info' or action == 'menu_info':
+            text = texts.t('MAIN_MENU_INFORMATION_BUTTON', 'Информация')
+
+        if custom_emoji_id:
+            text = strip_leading_emoji(text)
 
         # Добавляем юникод-иконку если есть и текст не начинается с неё.
         # Если параллельно задан icon_custom_emoji_id — Telegram сам рендерит кастом emoji

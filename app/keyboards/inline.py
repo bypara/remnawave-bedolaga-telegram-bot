@@ -10,7 +10,12 @@ from app.config import PERIOD_PRICES, settings
 from app.database.models import User
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
-from app.utils.miniapp_buttons import build_miniapp_or_callback_button
+from app.utils.miniapp_buttons import (
+    MAIN_MENU_CUSTOM_EMOJI_IDS,
+    build_miniapp_or_callback_button,
+    get_main_menu_custom_emoji_id,
+    strip_leading_emoji,
+)
 from app.utils.price_display import PriceInfo, format_price_button
 from app.utils.pricing_utils import (
     apply_percentage_discount,
@@ -23,6 +28,14 @@ from app.utils.subscription_utils import (
 
 
 logger = structlog.get_logger(__name__)
+
+
+def _main_menu_button(text: str, icon_name: str, **kwargs) -> InlineKeyboardButton:
+    return InlineKeyboardButton(
+        text=strip_leading_emoji(text),
+        icon_custom_emoji_id=MAIN_MENU_CUSTOM_EMOJI_IDS[icon_name],
+        **kwargs,
+    )
 
 
 async def get_main_menu_keyboard_async(
@@ -416,7 +429,12 @@ def _build_cabinet_main_menu_keyboard(
                 resolved = _resolve_style(section_cfg['style'])
             else:
                 resolved = global_style or _resolve_style(CALLBACK_TO_CABINET_STYLE.get(callback_fallback))
-            resolved_emoji = icon_custom_emoji_id or section_cfg.get('icon_custom_emoji_id') or None
+            resolved_emoji = (
+                get_main_menu_custom_emoji_id(callback_fallback)
+                or icon_custom_emoji_id
+                or section_cfg.get('icon_custom_emoji_id')
+                or None
+            )
 
             # При наличии custom emoji стрипаем ведущий юникод-emoji из текста —
             # иначе Telegram нарисует обе иконки.
@@ -430,7 +448,12 @@ def _build_cabinet_main_menu_keyboard(
                 style=resolved,
                 icon_custom_emoji_id=resolved_emoji or None,
             )
-        return InlineKeyboardButton(text=text, callback_data=callback_fallback)
+        resolved_emoji = get_main_menu_custom_emoji_id(callback_fallback)
+        return InlineKeyboardButton(
+            text=strip_leading_emoji(text) if resolved_emoji else text,
+            callback_data=callback_fallback,
+            icon_custom_emoji_id=resolved_emoji,
+        )
 
     # -- Collect row definitions sorted by row_N key --
     row_keys = sorted(
@@ -527,7 +550,7 @@ def _build_cabinet_main_menu_keyboard(
                 case 'info':
                     if not section_cfg.get('enabled', True):
                         continue
-                    info_text = section_cfg.get('labels', {}).get(language, '') or texts.t('MENU_INFO', 'ℹ️ Инфо')
+                    info_text = texts.t('MAIN_MENU_INFORMATION_BUTTON', 'Информация')
                     row_buttons.append(_cabinet_button(info_text, '/info', 'menu_info'))
 
                 case 'language':
@@ -618,8 +641,9 @@ def get_main_menu_keyboard(
     keyboard: list[list[InlineKeyboardButton]] = []
     paired_buttons: list[InlineKeyboardButton] = []
     profile_row = [
-        InlineKeyboardButton(
+        _main_menu_button(
             text=texts.t('PROFILE_MENU_BUTTON', '👤 Профиль'),
+            icon_name='profile',
             callback_data='menu_profile',
         )
     ]
@@ -629,8 +653,9 @@ def get_main_menu_keyboard(
         subscription_link = get_display_subscription_link(subscription)
 
         def _fallback_connect_button() -> InlineKeyboardButton:
-            return InlineKeyboardButton(
+            return _main_menu_button(
                 text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                icon_name='connect',
                 callback_data='subscription_connect',
             )
 
@@ -638,8 +663,9 @@ def get_main_menu_keyboard(
             if subscription_link:
                 keyboard.append(
                     [
-                        InlineKeyboardButton(
+                        _main_menu_button(
                             text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                            icon_name='connect',
                             web_app=types.WebAppInfo(url=subscription_link),
                         )
                     ]
@@ -649,8 +675,9 @@ def get_main_menu_keyboard(
         elif connect_mode == 'miniapp_custom':
             keyboard.append(
                 [
-                    InlineKeyboardButton(
+                    _main_menu_button(
                         text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                        icon_name='connect',
                         web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                     )
                 ]
@@ -658,7 +685,13 @@ def get_main_menu_keyboard(
         elif connect_mode == 'link':
             if subscription_link:
                 keyboard.append(
-                    [InlineKeyboardButton(text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), url=subscription_link)]
+                    [
+                        _main_menu_button(
+                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                            icon_name='connect',
+                            url=subscription_link,
+                        )
+                    ]
                 )
             else:
                 keyboard.append([_fallback_connect_button()])
@@ -666,8 +699,9 @@ def get_main_menu_keyboard(
             if subscription_link:
                 keyboard.append(
                     [
-                        InlineKeyboardButton(
+                        _main_menu_button(
                             text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                            icon_name='connect',
                             callback_data=(
                                 'subscription_connect'
                                 if settings.is_multi_tariff_enabled()
@@ -691,7 +725,9 @@ def get_main_menu_keyboard(
             if settings.is_multi_tariff_enabled()
             else texts.MENU_SUBSCRIPTION
         )
-        paired_buttons.append(InlineKeyboardButton(text=sub_btn_text, callback_data='menu_subscription'))
+        paired_buttons.append(
+            _main_menu_button(text=sub_btn_text, icon_name='subscription', callback_data='menu_subscription')
+        )
     else:
         keyboard.append(profile_row)
 
@@ -750,15 +786,18 @@ def get_main_menu_keyboard(
         support_enabled = settings.SUPPORT_MENU_ENABLED
 
     if support_enabled:
-        paired_buttons.append(InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data='menu_support'))
+        paired_buttons.append(
+            _main_menu_button(text=texts.MENU_SUPPORT, icon_name='support', callback_data='menu_support')
+        )
 
     # Добавляем кнопку активации
     if settings.ACTIVATE_BUTTON_VISIBLE:
         paired_buttons.append(InlineKeyboardButton(text=settings.ACTIVATE_BUTTON_TEXT, callback_data='activate_button'))
 
     paired_buttons.append(
-        InlineKeyboardButton(
-            text=texts.t('MENU_INFO', 'ℹ️ Инфо'),
+        _main_menu_button(
+            text=texts.t('MAIN_MENU_INFORMATION_BUTTON', 'Информация'),
+            icon_name='info',
             callback_data='menu_info',
         )
     )

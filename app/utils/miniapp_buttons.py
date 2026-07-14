@@ -7,6 +7,32 @@ from app.config import settings
 from app.utils.button_styles_cache import CALLBACK_TO_SECTION, get_cached_button_styles
 
 
+MAIN_MENU_CUSTOM_EMOJI_IDS: dict[str, str] = {
+    'connect': '5443127283898405358',
+    'profile': '5307943162486994719',
+    'subscription': '5319272710688226013',
+    'support': '5472304422669262481',
+    'info': '5289599503194661657',
+}
+
+MAIN_MENU_CALLBACK_TO_ICON: dict[str, str] = {
+    'subscription_connect': 'connect',
+    'open_subscription_link': 'connect',
+    'menu_profile': 'profile',
+    'menu_profile_unavailable': 'profile',
+    'menu_subscription': 'subscription',
+    'menu_support': 'support',
+    'menu_info': 'info',
+}
+
+
+def get_main_menu_custom_emoji_id(callback_data: str) -> str | None:
+    """Return the fixed custom emoji for a main-menu callback, including suffixed callbacks."""
+    callback_name = callback_data.split(':', 1)[0]
+    icon_name = MAIN_MENU_CALLBACK_TO_ICON.get(callback_name)
+    return MAIN_MENU_CUSTOM_EMOJI_IDS.get(icon_name) if icon_name else None
+
+
 # Юникод-диапазоны для одиночного emoji в начале строки + модификаторы (skin tone,
 # variation selector, zero-width joiner-цепочки) + опциональный пробел после.
 # Используется когда у кнопки задан icon_custom_emoji_id — Telegram сам рендерит
