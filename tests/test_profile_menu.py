@@ -66,3 +66,21 @@ def test_profile_is_near_the_top_for_every_subscription_state():
         subscription=subscription,
     )
     assert with_subscription.inline_keyboard[1][0].callback_data == 'menu_profile'
+
+
+def test_buy_and_trial_use_separate_rows_with_buy_first(monkeypatch):
+    monkeypatch.setattr(settings, 'TRIAL_DURATION_DAYS', 3)
+    monkeypatch.setattr(settings, 'TRIAL_DISABLED_FOR', 'none')
+
+    markup = get_main_menu_keyboard(
+        language='ru',
+        has_had_paid_subscription=False,
+        has_active_subscription=False,
+        subscription_is_active=False,
+        trial_already_used=False,
+    )
+    rows = [[button.callback_data for button in row] for row in markup.inline_keyboard]
+
+    buy_row = rows.index(['menu_buy'])
+    trial_row = rows.index(['menu_trial'])
+    assert buy_row < trial_row

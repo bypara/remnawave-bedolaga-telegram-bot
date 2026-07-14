@@ -1124,8 +1124,14 @@ class MenuLayoutService:
 
             row_buttons: list[InlineKeyboardButton] = []
             max_per_row = row_config.get('max_per_row', 2)
+            button_ids = list(row_config.get('buttons', []))
+            if 'trial' in button_ids and 'buy_subscription' in button_ids:
+                button_ids = ['buy_subscription', 'trial'] + [
+                    button_id for button_id in button_ids if button_id not in {'trial', 'buy_subscription'}
+                ]
+                max_per_row = 1
 
-            for button_id in row_config.get('buttons', []):
+            for button_id in button_ids:
                 if button_id not in buttons_config:
                     continue
 
@@ -1183,8 +1189,14 @@ class MenuLayoutService:
 
             row_buttons: list[dict[str, Any]] = []
             max_per_row = row_config.get('max_per_row', 2)
+            button_ids = list(row_config.get('buttons', []))
+            if 'trial' in button_ids and 'buy_subscription' in button_ids:
+                button_ids = ['buy_subscription', 'trial'] + [
+                    button_id for button_id in button_ids if button_id not in {'trial', 'buy_subscription'}
+                ]
+                max_per_row = 1
 
-            for button_id in row_config.get('buttons', []):
+            for button_id in button_ids:
                 if button_id not in buttons_config:
                     continue
 

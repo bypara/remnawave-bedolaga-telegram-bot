@@ -704,12 +704,6 @@ def get_main_menu_keyboard(
     )
 
     show_buy = not has_active_subscription or not subscription_is_active
-    current_subscription = subscription
-    bool(
-        current_subscription
-        and not getattr(current_subscription, 'is_trial', False)
-        and getattr(current_subscription, 'is_active', False)
-    )
     simple_purchase_button = None
     if settings.SIMPLE_SUBSCRIPTION_ENABLED:
         simple_purchase_button = InlineKeyboardButton(
@@ -717,16 +711,14 @@ def get_main_menu_keyboard(
             callback_data='simple_subscription_purchase',
         )
 
-    subscription_buttons: list[InlineKeyboardButton] = []
+    # Покупка — основное действие, триал — альтернатива.
+    # Показываем их отдельными широкими рядами именно в этом порядке.
+    if show_buy:
+        keyboard.append([InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')])
 
     if show_trial:
-        subscription_buttons.append(InlineKeyboardButton(text=texts.MENU_TRIAL, callback_data='menu_trial'))
+        keyboard.append([InlineKeyboardButton(text=texts.MENU_TRIAL, callback_data='menu_trial')])
 
-    if show_buy:
-        subscription_buttons.append(InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy'))
-
-    if subscription_buttons:
-        paired_buttons.extend(subscription_buttons)
     if simple_purchase_button:
         paired_buttons.append(simple_purchase_button)
 
