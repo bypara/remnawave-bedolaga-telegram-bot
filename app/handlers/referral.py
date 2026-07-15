@@ -45,6 +45,8 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
 
     summary = await get_user_referral_summary(db, db_user.id)
 
+    bot_username = (await callback.bot.get_me()).username
+    bot_referral_link = settings.get_bot_referral_link(db_user.referral_code, bot_username)
     cabinet_referral_link = settings.get_cabinet_referral_link(db_user.referral_code)
 
     referral_text = (
@@ -116,6 +118,11 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
 
     referral_text += '\n' + commission_line + '\n\n'
 
+    referral_text += (
+        texts.t('REFERRAL_BOT_LINK_TITLE', '🤖 <b>Ссылка на бота:</b>')
+        + f'\n{html_escape(bot_referral_link)}\n\n'
+    )
+
     # Show cabinet link if configured
     if cabinet_referral_link:
         referral_text += (
@@ -166,28 +173,15 @@ async def show_referral_qr(
         inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_referrals')]]
     )
 
-    caption = texts.t(
-        'REFERRAL_QR_BOT_LINK',
-        '🤖 Ссылка на бота:\n{link}',
-    ).format(link=bot_referral_link)
-
-    cabinet_referral_link = settings.get_cabinet_referral_link(db_user.referral_code)
-    if cabinet_referral_link:
-        caption += '\n\n' + texts.t(
-            'REFERRAL_QR_CABINET_LINK',
-            '🌐 Ссылка на кабинет:\n{link}',
-        ).format(link=cabinet_referral_link)
-
     try:
         await callback.message.edit_media(
-            types.InputMediaPhoto(media=photo, caption=caption),
+            types.InputMediaPhoto(media=photo),
             reply_markup=keyboard,
         )
     except TelegramBadRequest:
         await callback.message.delete()
         await callback.message.answer_photo(
             photo,
-            caption=caption,
             reply_markup=keyboard,
         )
 
