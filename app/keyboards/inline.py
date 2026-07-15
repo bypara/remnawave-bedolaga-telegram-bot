@@ -303,11 +303,17 @@ def get_post_registration_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKe
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('POST_REGISTRATION_TRIAL_BUTTON', '🚀 Подключиться бесплатно 🚀'),
-                    callback_data='trial_activate',
+                    text=texts.t('POST_REGISTRATION_TRIAL_BUTTON', 'Попробовать тестовую подписку'),
+                    callback_data='menu_trial',
+                    style='danger',
                 )
             ],
-            [InlineKeyboardButton(text=texts.t('SKIP_BUTTON', 'Пропустить ➡️'), callback_data='back_to_menu')],
+            [
+                InlineKeyboardButton(
+                    text=texts.t('POST_REGISTRATION_EXPLORE_BUTTON', 'Я пока тут осмотрюсь'),
+                    callback_data='back_to_menu',
+                )
+            ],
         ]
     )
 
