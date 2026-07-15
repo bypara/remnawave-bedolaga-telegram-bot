@@ -282,7 +282,10 @@ async def show_balance_history(callback: types.CallbackQuery, db_user: User, db:
             total_unique += 1
 
     if not unique_transactions:
-        await callback.message.edit_text('📊 История операций пуста', reply_markup=get_back_keyboard(db_user.language))
+        await callback.message.edit_text(
+            texts.t('BALANCE_HISTORY_EMPTY', 'История операций пуста'),
+            reply_markup=get_back_keyboard(db_user.language),
+        )
         await callback.answer()
         return
 

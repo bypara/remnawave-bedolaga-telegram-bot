@@ -74,5 +74,13 @@
   "SUBSCRIPTION_REVOKE_WARNING": "<tg-emoji emoji-id=\"5240241223632954241\">🚫</tg-emoji> Reissue subscription\n\nThis action will:\n• Generate a new connection link\n• Reset all connected devices\n• Make the old link stop working\n\nContinue?",
   "SUBSCRIPTION_REVOKE_SUCCESS": "<tg-emoji emoji-id=\"5206607081334906820\">✔️</tg-emoji> Subscription reissued!\n\nThe new connection link is ready. The old link is no longer valid.\n\nAll devices have been disconnected.",
   "ADD_TRAFFIC_PROMPT": "<tg-emoji emoji-id=\"5274008024585871702\">➕</tg-emoji> Add traffic to subscription\n\nCurrent limit: {current_traffic}",
-  "SUBSCRIPTION_PURCHASED_TRAFFIC_TITLE": "<blockquote><tg-emoji emoji-id=\"5258134813302332906\">📦</tg-emoji> Purchased traffic:\n"
+  "SUBSCRIPTION_PURCHASED_TRAFFIC_TITLE": "<blockquote><tg-emoji emoji-id=\"5258134813302332906\">📦</tg-emoji> Purchased traffic:\n",
+  "BALANCE_HISTORY_EMPTY": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> Transaction history is empty",
+  "TARIFF_LIST_TITLE": "<tg-emoji emoji-id=\"5258477770735885832\">📄</tg-emoji> Choose a plan",
+  "TARIFF_BUTTON_FROM_PRICE": "from {price}",
+  "TARIFF_BUTTON_DAILY_PRICE": "{price}/day",
+  "TARIFF_TRAFFIC_UNLIMITED": "<tg-emoji emoji-id=\"5271934788037517525\">♾</tg-emoji> GB",
+  "TARIFF_TRAFFIC_LIMITED": "{limit} GB",
+  "TARIFF_INFO_DESCRIPTION": "<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> {description}",
+  "TARIFF_INFO_TEXT": "<tg-emoji emoji-id=\"5260730055880876557\">⛓️</tg-emoji> {tariff_name}\n\nParameters:\n• Traffic: {traffic}\n• Devices: {devices}{description_block}"
 }

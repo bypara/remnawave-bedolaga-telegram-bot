@@ -74,5 +74,13 @@
   "SUBSCRIPTION_REVOKE_WARNING": "<tg-emoji emoji-id=\"5240241223632954241\">🚫</tg-emoji> Перевыпуск подписки\n\nЭто действие:\n• Сгенерирует новую ссылку подключения\n• Сбросит все подключённые устройства\n• Старая ссылка перестанет работать\n\nПродолжить?",
   "SUBSCRIPTION_REVOKE_SUCCESS": "<tg-emoji emoji-id=\"5206607081334906820\">✔️</tg-emoji> Подписка перевыпущена!\n\nНовая ссылка подключения готова. Старая ссылка больше не действительна.\n\nВсе устройства были отключены.",
   "ADD_TRAFFIC_PROMPT": "<tg-emoji emoji-id=\"5274008024585871702\">➕</tg-emoji> Добавить трафик к подписке\n\nТекущий лимит: {current_traffic}",
-  "SUBSCRIPTION_PURCHASED_TRAFFIC_TITLE": "<blockquote><tg-emoji emoji-id=\"5258134813302332906\">📦</tg-emoji> Докупленный трафик:\n"
+  "SUBSCRIPTION_PURCHASED_TRAFFIC_TITLE": "<blockquote><tg-emoji emoji-id=\"5258134813302332906\">📦</tg-emoji> Докупленный трафик:\n",
+  "BALANCE_HISTORY_EMPTY": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> История операций пуста",
+  "TARIFF_LIST_TITLE": "<tg-emoji emoji-id=\"5258477770735885832\">📄</tg-emoji> Выберите тариф",
+  "TARIFF_BUTTON_FROM_PRICE": "от {price}",
+  "TARIFF_BUTTON_DAILY_PRICE": "{price}/день",
+  "TARIFF_TRAFFIC_UNLIMITED": "<tg-emoji emoji-id=\"5271934788037517525\">♾</tg-emoji> ГБ",
+  "TARIFF_TRAFFIC_LIMITED": "{limit} ГБ",
+  "TARIFF_INFO_DESCRIPTION": "<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> {description}",
+  "TARIFF_INFO_TEXT": "<tg-emoji emoji-id=\"5260730055880876557\">⛓️</tg-emoji> {tariff_name}\n\nПараметры:\n• Трафик: {traffic}\n• Устройств: {devices}{description_block}"
 }
