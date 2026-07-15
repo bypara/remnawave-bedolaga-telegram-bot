@@ -11,6 +11,8 @@ CUSTOM_EMOJI_IDS: dict[str, str] = {
     'create_ticket': '5422360266618707867',
     'my_tickets': '5388658581664993142',
     'closed_tickets': '5258476306152038031',
+    'privacy_policy': '5251203410396458957',
+    'public_offer': '5334544901428229844',
     'contact_support': '5382355635553739365',
     'rules': '5471930335312747865',
     'back': '5350494198057412369',
@@ -57,6 +59,8 @@ CALLBACK_TO_ICON: dict[str, str] = {
     'create_ticket': 'create_ticket',
     'my_tickets': 'my_tickets',
     'my_tickets_closed': 'closed_tickets',
+    'menu_privacy_policy': 'privacy_policy',
+    'menu_public_offer': 'public_offer',
     'menu_rules': 'rules',
     'trial_activate': 'activate',
     'subscription_connect': 'connect',
@@ -139,6 +143,11 @@ CONNECT_TEXTS = {
     '连接',
 }
 
+LEGACY_BUTTON_TEXT_OVERRIDES: dict[tuple[str, str], str] = {
+    ('menu_privacy_policy', 'политика конф.'): 'Политика конфиденциальности',
+    ('menu_privacy_policy', 'політика конф.'): 'Політика конфіденційності',
+}
+
 
 def _resolve_icon_name(button: InlineKeyboardButton, plain_text: str) -> str | None:
     normalized_text = plain_text.strip().casefold()
@@ -176,12 +185,16 @@ def apply_custom_emoji_icons(markup: InlineKeyboardMarkup) -> InlineKeyboardMark
         updated_row: list[InlineKeyboardButton] = []
         for button in row:
             plain_text = strip_leading_emoji(button.text)
+            callback_name = (button.callback_data or '').split(':', 1)[0]
+            plain_text = LEGACY_BUTTON_TEXT_OVERRIDES.get(
+                (callback_name, plain_text.strip().casefold()),
+                plain_text,
+            )
             icon_name = _resolve_icon_name(button, plain_text)
             normalized_text = plain_text.strip().casefold()
             is_navigation = any(marker in normalized_text for marker in BACK_TEXT_MARKERS) or any(
                 marker in normalized_text for marker in CANCEL_TEXT_MARKERS
             )
-            callback_name = (button.callback_data or '').split(':', 1)[0]
             style = button.style if is_navigation else CALLBACK_TO_STYLE.get(callback_name, button.style)
 
             if icon_name:

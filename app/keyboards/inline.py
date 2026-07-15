@@ -901,7 +901,7 @@ def get_info_menu_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('MENU_PRIVACY_POLICY', '🛡️ Политика конф.'),
+                    text=texts.t('MENU_PRIVACY_POLICY', '🛡️ Политика конфиденциальности'),
                     callback_data='menu_privacy_policy',
                 )
             ]

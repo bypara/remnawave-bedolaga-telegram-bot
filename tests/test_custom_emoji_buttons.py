@@ -14,6 +14,8 @@ def test_requested_custom_emoji_icons_are_applied_by_button_action():
         ('🎫 Создать тикет', 'create_ticket', 'create_ticket'),
         ('📋 Мои тикеты', 'my_tickets', 'my_tickets'),
         ('🟢 Закрытые тикеты', 'my_tickets_closed', 'closed_tickets'),
+        ('🛡️ Политика конфиденциальности', 'menu_privacy_policy', 'privacy_policy'),
+        ('📄 Оферта', 'menu_public_offer', 'public_offer'),
         ('📋 Правила сервиса', 'menu_rules', 'rules'),
         ('🎁 Активировать', 'trial_activate', 'activate'),
         ('🔗 Подключиться', 'subscription_connect', 'connect'),
@@ -105,6 +107,17 @@ def test_ticket_creation_cancel_uses_its_specific_icon():
     specific, generic = [row[0] for row in apply_custom_emoji_icons(markup).inline_keyboard]
     assert specific.icon_custom_emoji_id == CUSTOM_EMOJI_IDS['cancel_ticket_creation']
     assert generic.icon_custom_emoji_id == CUSTOM_EMOJI_IDS['cancel']
+
+
+def test_legacy_privacy_policy_abbreviation_is_expanded():
+    markup = InlineKeyboardMarkup(
+        inline_keyboard=[[_button('🛡️ Политика конф.', callback_data='menu_privacy_policy')]]
+    )
+
+    button = apply_custom_emoji_icons(markup).inline_keyboard[0][0]
+
+    assert button.text == 'Политика конфиденциальности'
+    assert button.icon_custom_emoji_id == CUSTOM_EMOJI_IDS['privacy_policy']
 
 
 def test_main_actions_use_supported_telegram_colors():
