@@ -31,6 +31,8 @@ def test_subscription_copy_uses_requested_custom_emoji():
         'TARIFF_INFO_TEXT': '5260730055880876557',
         'TARIFF_INFO_DESCRIPTION': '5257965174979042426',
         'SUBSCRIPTION_PURCHASE_CONFIRM_TEXT': '5258501105293205250',
+        'SUBSCRIPTION_PURCHASE_SUCCESS_TEXT': '5461151367559141950',
+        'SUBSCRIPTION_RENEWAL_SUCCESS_TEXT': '5461151367559141950',
     }
 
     for locale in locales.values():
@@ -55,6 +57,8 @@ def test_subscription_copy_renders_dynamic_values_in_both_languages():
             'balance': '8499 ₽',
             'balance_after': '7999 ₽',
         },
+        'SUBSCRIPTION_PURCHASE_SUCCESS_TEXT': {'period': '14 days', 'price': '500 ₽'},
+        'SUBSCRIPTION_RENEWAL_SUCCESS_TEXT': {'period': '14 days', 'price': '500 ₽'},
         'DEVICE_MANAGEMENT_OVERVIEW': {'total': 1, 'page': 1, 'pages': 1},
         'DEVICE_RENAME_PROMPT': {'current': '—', 'max_len': 64},
     }

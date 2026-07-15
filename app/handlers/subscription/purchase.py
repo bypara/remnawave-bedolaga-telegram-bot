@@ -1958,7 +1958,7 @@ async def confirm_extend_subscription(
 
     success_message = texts.t(
         'SUBSCRIPTION_RENEWAL_SUCCESS_TEXT',
-        '🎉 Подписка успешно продлена!\n\n📅 Добавлено: {period}\n💰 Списано: {price}',
+        '🎉 Подписка успешно продлена!\n\n📅 Период: {period}\n💰 Списано: {price}',
     ).format(
         period=_format_subscription_days(texts, days),
         price=texts.format_price(price),
@@ -4624,7 +4624,7 @@ async def _extend_existing_subscription(
     # Отправляем сообщение пользователю
     success_message = texts.t(
         'SUBSCRIPTION_RENEWAL_SUCCESS_TEXT',
-        '🎉 Подписка успешно продлена!\n\n📅 Добавлено: {period}\n💰 Списано: {price}',
+        '🎉 Подписка успешно продлена!\n\n📅 Период: {period}\n💰 Списано: {price}',
     ).format(
         period=_format_subscription_days(texts, period_days),
         price=texts.format_price(price_kopeks),

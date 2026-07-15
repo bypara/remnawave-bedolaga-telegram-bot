@@ -1200,16 +1200,19 @@ async def handle_custom_confirm(
 
         await state.clear()
 
-        traffic_display = format_traffic(traffic_limit)
-
         await callback.message.edit_text(
-            f'🎉 <b>Подписка успешно оформлена!</b>\n\n'
-            f'📦 Тариф: <b>{html.escape(tariff.name)}</b>\n'
-            f'📊 Трафик: {traffic_display}\n'
-            f'📱 Устройств: {tariff.device_limit}\n'
-            f'📅 Период: {format_period(custom_days)}\n'
-            f'💰 Списано: {format_price_kopeks(total_price)}\n\n'
-            f'Перейдите в раздел «Подписка» для подключения.',
+            texts.t(
+                'SUBSCRIPTION_PURCHASE_SUCCESS_TEXT',
+                (
+                    '🎉 Подписка успешно оформлена!\n\n'
+                    '📅 Период: {period}\n'
+                    '💰 Списано: {price}\n\n'
+                    'Перейдите в раздел «Подписка» для подключения.'
+                ),
+            ).format(
+                period=_format_localized_period(texts, custom_days),
+                price=format_price_kopeks(total_price),
+            ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
@@ -1824,16 +1827,19 @@ async def confirm_tariff_purchase(
 
     await state.clear()
 
-    traffic = format_traffic(tariff.traffic_limit_gb)
-
     await callback.message.edit_text(
-        f'🎉 <b>Подписка успешно оформлена!</b>\n\n'
-        f'📦 Тариф: <b>{html.escape(tariff.name)}</b>\n'
-        f'📊 Трафик: {traffic}\n'
-        f'📱 Устройств: {tariff.device_limit}\n'
-        f'📅 Период: {format_period(period)}\n'
-        f'💰 Списано: {format_price_kopeks(final_price)}\n\n'
-        f'Перейдите в раздел «Подписка» для подключения.',
+        texts.t(
+            'SUBSCRIPTION_PURCHASE_SUCCESS_TEXT',
+            (
+                '🎉 Подписка успешно оформлена!\n\n'
+                '📅 Период: {period}\n'
+                '💰 Списано: {price}\n\n'
+                'Перейдите в раздел «Подписка» для подключения.'
+            ),
+        ).format(
+            period=_format_localized_period(texts, period),
+            price=format_price_kopeks(final_price),
+        ),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -2733,7 +2739,7 @@ async def confirm_tariff_extend(
         await callback.message.edit_text(
             texts.t(
                 'SUBSCRIPTION_RENEWAL_SUCCESS_TEXT',
-                '🎉 <b>Подписка успешно продлена!</b>\n\n📅 Добавлено: {period}\n💰 Списано: {price}',
+                '🎉 Подписка успешно продлена!\n\n📅 Период: {period}\n💰 Списано: {price}',
             ).format(
                 period=_format_localized_period(texts, period),
                 price=format_price_kopeks(final_price),
