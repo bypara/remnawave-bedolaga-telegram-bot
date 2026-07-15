@@ -266,7 +266,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         else:
             actual_status = 'paid_active'
             status_display = texts.t('SUBSCRIPTION_STATUS_ACTIVE', 'Активна')
-            status_emoji = '💎'
+            status_emoji = '<tg-emoji emoji-id="5251203410396458957">🛡</tg-emoji>'
     else:
         actual_status = 'unknown'
         status_display = texts.t('SUBSCRIPTION_STATUS_UNKNOWN', 'Неизвестно')

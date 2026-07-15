@@ -2622,9 +2622,9 @@ def get_add_traffic_keyboard(
             else:
                 text = f'♾️ Unlimited traffic - {total_price // 100} ₽{period_text}'
         elif use_russian_fallback:
-            text = f'📊 +{gb} ГБ трафика - {total_price // 100} ₽{period_text}'
+            text = f'+{gb} ГБ трафика - {total_price // 100} ₽{period_text}'
         else:
-            text = f'📊 +{gb} GB traffic - {total_price // 100} ₽{period_text}'
+            text = f'+{gb} GB traffic - {total_price // 100} ₽{period_text}'
 
         if discount_percent > 0 and total_discount > 0:
             if use_russian_fallback:
@@ -2632,7 +2632,15 @@ def get_add_traffic_keyboard(
             else:
                 text += f' (discount {discount_percent}%: -{total_discount // 100}₽)'
 
-        buttons.append([InlineKeyboardButton(text=text, callback_data=f'add_traffic_{gb}')])
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=text,
+                    callback_data=f'add_traffic_{gb}',
+                    icon_custom_emoji_id='5274008024585871702' if gb > 0 else None,
+                )
+            ]
+        )
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)])
 
@@ -2690,9 +2698,9 @@ def get_add_traffic_keyboard_from_tariff(
         period_text = ' /мес' if use_russian_fallback else ' /mo'
 
         if use_russian_fallback:
-            text = f'📊 +{gb} ГБ трафика - {discounted_price // 100} ₽{period_text}'
+            text = f'+{gb} ГБ трафика - {discounted_price // 100} ₽{period_text}'
         else:
-            text = f'📊 +{gb} GB traffic - {discounted_price // 100} ₽{period_text}'
+            text = f'+{gb} GB traffic - {discounted_price // 100} ₽{period_text}'
 
         if discount_percent > 0 and discount_value > 0:
             if use_russian_fallback:
@@ -2700,7 +2708,15 @@ def get_add_traffic_keyboard_from_tariff(
             else:
                 text += f' (discount {discount_percent}%: -{discount_value // 100}₽)'
 
-        buttons.append([InlineKeyboardButton(text=text, callback_data=f'add_traffic_{gb}')])
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=text,
+                    callback_data=f'add_traffic_{gb}',
+                    icon_custom_emoji_id='5274008024585871702',
+                )
+            ]
+        )
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)])
 

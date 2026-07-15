@@ -72,5 +72,7 @@
   "DEVICE_RESET_ALL_SUCCESS_MESSAGE": "<tg-emoji emoji-id=\"5260341314095947411\">👀</tg-emoji> All devices have been reset successfully!\n\n<tg-emoji emoji-id=\"5257991477358763590\">↗️</tg-emoji> You can now reconnect your devices\n\n<tg-emoji emoji-id=\"5258216851472654189\">💡</tg-emoji> Use the link in 'My subscription' to reconnect",
   "DEVICE_RENAME_PROMPT": "<tg-emoji emoji-id=\"5258430848218176413\">🎭</tg-emoji> New device name\n\nCurrent: {current}\n\nEnter a new name (up to {max_len} characters).\nTo remove the name, send <code>-</code> or <code>/clear</code>.\nCancel — /cancel",
   "SUBSCRIPTION_REVOKE_WARNING": "<tg-emoji emoji-id=\"5240241223632954241\">🚫</tg-emoji> Reissue subscription\n\nThis action will:\n• Generate a new connection link\n• Reset all connected devices\n• Make the old link stop working\n\nContinue?",
-  "SUBSCRIPTION_REVOKE_SUCCESS": "<tg-emoji emoji-id=\"5206607081334906820\">✔️</tg-emoji> Subscription reissued!\n\nThe new connection link is ready. The old link is no longer valid.\n\nAll devices have been disconnected."
+  "SUBSCRIPTION_REVOKE_SUCCESS": "<tg-emoji emoji-id=\"5206607081334906820\">✔️</tg-emoji> Subscription reissued!\n\nThe new connection link is ready. The old link is no longer valid.\n\nAll devices have been disconnected.",
+  "ADD_TRAFFIC_PROMPT": "<tg-emoji emoji-id=\"5274008024585871702\">➕</tg-emoji> Add traffic to subscription\n\nCurrent limit: {current_traffic}",
+  "SUBSCRIPTION_PURCHASED_TRAFFIC_TITLE": "<blockquote><tg-emoji emoji-id=\"5258134813302332906\">📦</tg-emoji> Purchased traffic:\n"
 }

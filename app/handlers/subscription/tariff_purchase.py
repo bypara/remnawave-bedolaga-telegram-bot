@@ -2249,7 +2249,7 @@ async def show_tariff_extend(
     это tariff_id, а не id подписки). Если не задан — берём из ``se:{id}`` (хвост
     = реальный id подписки).
     """
-    get_texts(db_user.language)
+    texts = get_texts(db_user.language)
 
     if settings.is_multi_tariff_enabled():
         sub_id = subscription_id
@@ -2359,7 +2359,7 @@ async def show_tariff_extend(
         await callback.answer()
         return
 
-    traffic = format_traffic(tariff.traffic_limit_gb)
+    traffic = _format_subscription_traffic(texts, subscription.traffic_used_gb, tariff.traffic_limit_gb)
 
     # Проверяем есть ли у пользователя скидки по периодам
     promo_group = db_user.get_primary_promo_group() if hasattr(db_user, 'get_primary_promo_group') else None
