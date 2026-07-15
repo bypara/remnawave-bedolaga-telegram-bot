@@ -1,6 +1,7 @@
 {
   "MAIN_MENU": "<tg-emoji emoji-id=\"5255850874248399164\">🎁</tg-emoji>",
   "MAIN_MENU_ACTION_PROMPT": "",
+  "MENU_INFO_HEADER": "<tg-emoji emoji-id=\"5258474669769497337\">❗️</tg-emoji> <b>Information</b>",
   "POST_REGISTRATION_OFFER": "<tg-emoji emoji-id=\"5461151367559141950\">🎉</tg-emoji> Try VPN before you buy\n\nFirst, test the speed, stability, and access to the services you need with a trial subscription.\n\nIf something doesn’t work, message us and we’ll do our best to resolve your issue.",
   "PROFILE_MENU_TITLE": "<tg-emoji emoji-id=\"5316727448644103237\">👤</tg-emoji> {user_name}",
   "PROFILE_MENU_PROMPT": "",
