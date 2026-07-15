@@ -39,19 +39,6 @@ def _format_gb(value: float | int) -> str:
     return f'{float(value):g}'
 
 
-def _format_subscription_traffic(texts, used_gb: float | int, limit_gb: float | int) -> str:
-    used = _format_gb(used_gb)
-    if limit_gb == 0:
-        return texts.t(
-            'SUBSCRIPTION_TRAFFIC_UNLIMITED',
-            '<tg-emoji emoji-id="5271934788037517525">♾</tg-emoji> ГБ',
-        ).format(used=used)
-    return texts.t(
-        'SUBSCRIPTION_TRAFFIC_LIMITED',
-        '{used} / {limit} ГБ',
-    ).format(used=used, limit=_format_gb(limit_gb))
-
-
 def _format_tariff_traffic(texts, limit_gb: float | int) -> str:
     if limit_gb == 0:
         return texts.t(
@@ -1340,7 +1327,7 @@ async def select_tariff_period(
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
 
-    traffic = _format_subscription_traffic(texts, 0, tariff.traffic_limit_gb)
+    traffic = _format_tariff_traffic(texts, tariff.traffic_limit_gb)
 
     if user_balance >= final_price:
         # Показываем подтверждение
@@ -2377,7 +2364,7 @@ async def show_tariff_extend(
         await callback.answer()
         return
 
-    traffic = _format_subscription_traffic(texts, subscription.traffic_used_gb, tariff.traffic_limit_gb)
+    traffic = _format_tariff_traffic(texts, tariff.traffic_limit_gb)
 
     # Проверяем есть ли у пользователя скидки по периодам
     promo_group = db_user.get_primary_promo_group() if hasattr(db_user, 'get_primary_promo_group') else None
@@ -2478,7 +2465,7 @@ async def select_tariff_extend_period(
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
 
-    traffic = _format_subscription_traffic(texts, subscription.traffic_used_gb, tariff.traffic_limit_gb)
+    traffic = _format_tariff_traffic(texts, tariff.traffic_limit_gb)
 
     if user_balance >= final_price:
         discount_text = ''
@@ -4733,14 +4720,7 @@ async def return_to_saved_tariff_cart(
 
         # subscription_id обязателен в callback продления (issue #3012), берём из корзины
         _extend_sub_id = cart_data.get('subscription_id')
-        restored_subscription = (
-            await get_subscription_by_id_for_user(db, _extend_sub_id, db_user.id) if _extend_sub_id else None
-        )
-        restored_traffic = _format_subscription_traffic(
-            texts,
-            getattr(restored_subscription, 'traffic_used_gb', 0),
-            tariff.traffic_limit_gb,
-        )
+        restored_traffic = _format_tariff_traffic(texts, tariff.traffic_limit_gb)
 
         await callback.message.edit_text(
             texts.t(
@@ -4782,7 +4762,7 @@ async def return_to_saved_tariff_cart(
         )
     else:  # tariff_purchase
         period = cart_data.get('period_days', 30)
-        purchase_traffic = _format_subscription_traffic(texts, 0, tariff.traffic_limit_gb)
+        purchase_traffic = _format_tariff_traffic(texts, tariff.traffic_limit_gb)
 
         discount_text = ''
         if discount_percent > 0:

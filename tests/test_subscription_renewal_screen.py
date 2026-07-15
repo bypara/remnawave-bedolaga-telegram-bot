@@ -13,7 +13,7 @@ async def test_tariff_renewal_screen_loads_localization(monkeypatch):
     subscription = SimpleNamespace(
         id=42,
         tariff_id=7,
-        traffic_used_gb=4,
+        traffic_used_gb=1.89031e-05,
         device_limit=1,
     )
     tariff = SimpleNamespace(
@@ -56,7 +56,8 @@ async def test_tariff_renewal_screen_loads_localization(monkeypatch):
 
     rendered = callback.message.edit_text.await_args.args[0]
     assert '5199457120428249992' in rendered
-    assert '4 / 100 ГБ' in rendered
+    assert 'Трафик: 100 ГБ' in rendered
+    assert 'e-05' not in rendered
 
 
 def test_add_traffic_button_uses_custom_plus_icon():
@@ -138,6 +139,6 @@ async def test_tariff_period_selection_does_not_require_subscription(monkeypatch
 
     rendered = callback.message.edit_text.await_args.args[0]
     assert '5258501105293205250' in rendered
-    assert 'Трафик: 0 / 100 ГБ' in rendered
+    assert 'Трафик: 100 ГБ' in rendered
     assert 'К оплате: 500 ₽' in rendered
     state.update_data.assert_awaited()
