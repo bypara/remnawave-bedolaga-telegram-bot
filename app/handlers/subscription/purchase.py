@@ -184,21 +184,62 @@ from .traffic import (
 
 
 def _format_subscription_days(texts, days: int) -> str:
-    mod100 = days % 100
-    mod10 = days % 10
-    if 11 <= mod100 <= 19:
-        key = 'SUBSCRIPTION_PERIOD_MANY_DAYS'
-        fallback = '{days} дней'
-    elif mod10 == 1:
-        key = 'SUBSCRIPTION_PERIOD_ONE_DAY'
-        fallback = '{days} день'
-    elif 2 <= mod10 <= 4:
-        key = 'SUBSCRIPTION_PERIOD_FEW_DAYS'
-        fallback = '{days} дня'
-    else:
-        key = 'SUBSCRIPTION_PERIOD_MANY_DAYS'
-        fallback = '{days} дней'
+    form = _trial_plural_form(days, texts.language)
+    key, fallback = {
+        'one': ('SUBSCRIPTION_PERIOD_ONE_DAY', '{days} день'),
+        'few': ('SUBSCRIPTION_PERIOD_FEW_DAYS', '{days} дня'),
+        'many': ('SUBSCRIPTION_PERIOD_MANY_DAYS', '{days} дней'),
+    }[form]
     return texts.t(key, fallback).format(days=days)
+
+
+def _format_trial_number(value: float | int) -> str:
+    numeric = float(value)
+    if numeric.is_integer():
+        return str(int(numeric))
+    return f'{numeric:.2f}'.rstrip('0').rstrip('.')
+
+
+def _trial_plural_form(value: float | int, language: str) -> str:
+    numeric = float(value)
+    if language not in {'ru', 'ua'}:
+        return 'one' if numeric == 1 else 'many'
+    if not numeric.is_integer():
+        return 'few'
+    number = abs(int(numeric))
+    if number % 100 in range(11, 15):
+        return 'many'
+    if number % 10 == 1:
+        return 'one'
+    if number % 10 in range(2, 5):
+        return 'few'
+    return 'many'
+
+
+def _format_trial_traffic_amount(texts, traffic_gb: float | int) -> str:
+    if float(traffic_gb) <= 0:
+        return texts.t('TRIAL_OFFER_TRAFFIC_UNLIMITED', 'безлимитный трафик')
+    form = _trial_plural_form(traffic_gb, texts.language)
+    fallback = {
+        'one': '{count} гигабайт',
+        'few': '{count} гигабайта',
+        'many': '{count} гигабайт',
+    }[form]
+    return texts.t(f'TRIAL_OFFER_TRAFFIC_{form.upper()}', fallback).format(
+        count=_format_trial_number(traffic_gb)
+    )
+
+
+def _format_trial_device_amount(texts, devices: int | None) -> str:
+    if not devices or devices <= 0:
+        return texts.t('TRIAL_OFFER_DEVICES_UNLIMITED', 'без ограничений на устройства')
+    form = _trial_plural_form(devices, texts.language)
+    fallback = {
+        'one': '{count} устройство',
+        'few': '{count} устройства',
+        'many': '{count} устройств',
+    }[form]
+    return texts.t(f'TRIAL_OFFER_DEVICES_{form.upper()}', fallback).format(count=devices)
 
 
 async def show_subscription_info(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
@@ -571,7 +612,6 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
     trial_traffic = settings.TRIAL_TRAFFIC_LIMIT_GB
     trial_device_limit = settings.TRIAL_DEVICE_LIMIT
     trial_tariff = None
-    trial_server_name = texts.t('TRIAL_SERVER_DEFAULT_NAME', '🎯 Тестовый сервер')
 
     # Проверяем триальный тариф
     if settings.is_tariffs_mode():
@@ -594,52 +634,10 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
         except Exception as e:
             logger.error('Ошибка получения триального тарифа', error=e)
 
-    try:
-        from app.database.crud.server_squad import get_trial_eligible_server_squads
-
-        # Для тарифа используем его сервера
-        if trial_tariff and trial_tariff.allowed_squads:
-            from app.database.crud.server_squad import get_server_squads_by_uuids
-
-            tariff_squads = await get_server_squads_by_uuids(db, trial_tariff.allowed_squads)
-            if tariff_squads:
-                if len(tariff_squads) == 1:
-                    trial_server_name = html.escape(tariff_squads[0].display_name)
-                else:
-                    trial_server_name = texts.t(
-                        'TRIAL_SERVER_RANDOM_POOL',
-                        '🎲 Случайный из {count} серверов',
-                    ).format(count=len(tariff_squads))
-        else:
-            trial_squads = await get_trial_eligible_server_squads(db, include_unavailable=True)
-            if trial_squads:
-                if len(trial_squads) == 1:
-                    trial_server_name = html.escape(trial_squads[0].display_name)
-                else:
-                    trial_server_name = texts.t(
-                        'TRIAL_SERVER_RANDOM_POOL',
-                        '🎲 Случайный из {count} серверов',
-                    ).format(count=len(trial_squads))
-            else:
-                logger.warning('Не настроены сквады для выдачи триалов')
-
-    except Exception as e:
-        logger.error('Ошибка получения триального сервера', error=e)
-
     if not settings.is_devices_selection_enabled():
         forced_limit = settings.get_disabled_mode_device_limit()
         if forced_limit is not None:
             trial_device_limit = forced_limit
-
-    devices_line = ''
-    if settings.is_devices_selection_enabled() or trial_tariff:
-        devices_line_template = texts.t(
-            'TRIAL_AVAILABLE_DEVICES_LINE',
-            '\n📱 <b>Устройства:</b> {devices} шт.',
-        )
-        devices_line = devices_line_template.format(
-            devices=trial_device_limit,
-        )
 
     price_line = ''
     if settings.is_trial_paid_activation_enabled():
@@ -651,11 +649,9 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
             ).format(price=settings.format_price(trial_price))
 
     trial_text = texts.TRIAL_AVAILABLE.format(
-        days=trial_days,
-        traffic=texts.format_traffic(trial_traffic),
-        devices=trial_device_limit if trial_device_limit is not None else '',
-        devices_line=devices_line,
-        server_name=trial_server_name,
+        days=_format_subscription_days(texts, trial_days),
+        traffic=_format_trial_traffic_amount(texts, trial_traffic),
+        devices=_format_trial_device_amount(texts, trial_device_limit),
         price_line=price_line,
     )
 
