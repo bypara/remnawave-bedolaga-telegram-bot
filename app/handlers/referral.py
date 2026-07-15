@@ -45,8 +45,6 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
 
     summary = await get_user_referral_summary(db, db_user.id)
 
-    bot_username = (await callback.bot.get_me()).username
-    bot_referral_link = settings.get_bot_referral_link(db_user.referral_code, bot_username)
     cabinet_referral_link = settings.get_cabinet_referral_link(db_user.referral_code)
 
     referral_text = (
@@ -118,22 +116,15 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
 
     referral_text += '\n' + commission_line + '\n\n'
 
-    # Show bot link
-    referral_text += (
-        texts.t('REFERRAL_BOT_LINK_TITLE', '🤖 <b>Ссылка на бота:</b>') + f'\n{html_escape(bot_referral_link)}\n'
-    )
-
     # Show cabinet link if configured
     if cabinet_referral_link:
         referral_text += (
-            '\n'
-            + texts.t('REFERRAL_CABINET_LINK_TITLE', '🌐 <b>Ссылка на кабинет:</b>')
-            + f'\n{html_escape(cabinet_referral_link)}\n'
+            texts.t('REFERRAL_CABINET_LINK_TITLE', '🌐 <b>Ссылка на кабинет:</b>')
+            + f'\n{html_escape(cabinet_referral_link)}\n\n'
         )
 
     referral_text += (
-        '\n'
-        + texts.t('REFERRAL_CODE_TITLE', '🆔 <b>Ваш код:</b> <code>{code}</code>').format(
+        texts.t('REFERRAL_CODE_TITLE', '🆔 <b>Ваш код:</b> <code>{code}</code>').format(
             code=html_escape(str(db_user.referral_code or ''))
         )
     )
