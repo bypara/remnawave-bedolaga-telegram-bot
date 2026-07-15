@@ -13,6 +13,7 @@ def test_requested_custom_emoji_icons_are_applied_by_button_action():
         ('🧪 Тестовая подписка', 'menu_trial', 'trial'),
         ('🎫 Создать тикет', 'create_ticket', 'create_ticket'),
         ('📋 Мои тикеты', 'my_tickets', 'my_tickets'),
+        ('🟢 Закрытые тикеты', 'my_tickets_closed', 'closed_tickets'),
         ('📋 Правила сервиса', 'menu_rules', 'rules'),
         ('🎁 Активировать', 'trial_activate', 'activate'),
         ('🔗 Подключиться', 'subscription_connect', 'connect'),
