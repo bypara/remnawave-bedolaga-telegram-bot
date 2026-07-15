@@ -183,6 +183,24 @@ from .traffic import (
 )
 
 
+def _format_subscription_days(texts, days: int) -> str:
+    mod100 = days % 100
+    mod10 = days % 10
+    if 11 <= mod100 <= 19:
+        key = 'SUBSCRIPTION_PERIOD_MANY_DAYS'
+        fallback = '{days} дней'
+    elif mod10 == 1:
+        key = 'SUBSCRIPTION_PERIOD_ONE_DAY'
+        fallback = '{days} день'
+    elif 2 <= mod10 <= 4:
+        key = 'SUBSCRIPTION_PERIOD_FEW_DAYS'
+        fallback = '{days} дня'
+    else:
+        key = 'SUBSCRIPTION_PERIOD_MANY_DAYS'
+        fallback = '{days} дней'
+    return texts.t(key, fallback).format(days=days)
+
+
 async def show_subscription_info(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     # Multi-tariff: redirect to "My subscriptions" list
     if settings.is_multi_tariff_enabled():
@@ -231,20 +249,20 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     if subscription.status == 'limited':
         actual_status = 'limited'
         status_display = texts.t('SUBSCRIPTION_STATUS_LIMITED', 'Трафик исчерпан')
-        status_emoji = '⚠️'
+        status_emoji = '<tg-emoji emoji-id="5440660757194744323">‼️</tg-emoji>'
     elif subscription.status == 'disabled':
         actual_status = 'disabled'
         status_display = texts.t('SUBSCRIPTION_STATUS_DISABLED', 'Приостановлена')
-        status_emoji = '⏸️'
+        status_emoji = '<tg-emoji emoji-id="5240241223632954241">🚫</tg-emoji>'
     elif subscription.status == 'expired' or subscription.end_date <= current_time:
         actual_status = 'expired'
         status_display = texts.t('SUBSCRIPTION_STATUS_EXPIRED', 'Истекла')
-        status_emoji = '🔴'
+        status_emoji = '<tg-emoji emoji-id="5420323339723881652">⚠️</tg-emoji>'
     elif subscription.status == 'active' and subscription.end_date > current_time:
         if subscription.is_trial:
             actual_status = 'trial_active'
             status_display = texts.t('SUBSCRIPTION_STATUS_TRIAL', 'Тестовая')
-            status_emoji = '🎯'
+            status_emoji = '<tg-emoji emoji-id="5406756500108501710">🆓</tg-emoji>'
         else:
             actual_status = 'paid_active'
             status_display = texts.t('SUBSCRIPTION_STATUS_ACTIVE', 'Активна')
@@ -252,7 +270,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     else:
         actual_status = 'unknown'
         status_display = texts.t('SUBSCRIPTION_STATUS_UNKNOWN', 'Неизвестно')
-        status_emoji = '❓'
+        status_emoji = '<tg-emoji emoji-id="5341715473882955310">⚙️</tg-emoji>'
 
     if subscription.end_date <= current_time:
         days_left = 0
@@ -356,81 +374,12 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                 # Прикрепляем тариф к подписке для использования в клавиатуре
                 subscription.tariff = tariff
 
-                # Формируем блок информации о тарифе
-                is_daily = getattr(tariff, 'is_daily', False)
-                tariff_type_str = '🔄 Суточный' if is_daily else '📅 Периодный'
-
                 tariff_info_lines = [
-                    f'<b>📦 {html.escape(tariff.name)}</b>',
-                    f'Тип: {tariff_type_str}',
-                    f'Трафик: {tariff.traffic_limit_gb} ГБ' if tariff.traffic_limit_gb > 0 else 'Трафик: ∞ Безлимит',
-                    f'Устройства: {tariff.device_limit}',
+                    texts.t(
+                        'SUBSCRIPTION_TARIFF_NAME',
+                        '<tg-emoji emoji-id="5260730055880876557">⛓️</tg-emoji> {name}',
+                    ).format(name=html.escape(tariff.name)),
                 ]
-
-                if is_daily:
-                    # Для суточного тарифа показываем цену с учётом скидки промогруппы + promo-offer
-                    raw_daily_kopeks = getattr(tariff, 'daily_price_kopeks', 0)
-                    promo_group = (
-                        db_user.get_primary_promo_group() if hasattr(db_user, 'get_primary_promo_group') else None
-                    )
-                    daily_group_pct = promo_group.get_discount_percent('period', 1) if promo_group else 0
-                    from app.services.pricing_engine import PricingEngine
-                    from app.utils.promo_offer import get_user_active_promo_discount_percent
-
-                    daily_offer_pct = get_user_active_promo_discount_percent(db_user)
-                    if daily_group_pct > 0 or daily_offer_pct > 0:
-                        daily_kopeks, _, _ = PricingEngine.apply_stacked_discounts(
-                            raw_daily_kopeks, daily_group_pct, daily_offer_pct
-                        )
-                    else:
-                        daily_kopeks = raw_daily_kopeks
-                    daily_price = daily_kopeks / 100
-                    tariff_info_lines.append(f'Цена: {daily_price:.2f} ₽/день')
-
-                    # Прогресс-бар до следующего списания
-                    last_charge = getattr(subscription, 'last_daily_charge_at', None)
-                    is_paused = getattr(subscription, 'is_daily_paused', False)
-
-                    if is_paused:
-                        tariff_info_lines.append('')
-                        tariff_info_lines.append('⏸️ <b>Подписка приостановлена</b>')
-                        # Показываем оставшееся время даже при паузе
-                        if last_charge:
-                            next_charge = last_charge + timedelta(hours=24)
-                            now = datetime.now(UTC)
-                            if next_charge > now:
-                                time_until = next_charge - now
-                                hours_left = time_until.seconds // 3600
-                                minutes_left = (time_until.seconds % 3600) // 60
-                                tariff_info_lines.append(f'⏳ Осталось: {hours_left}ч {minutes_left}мин')
-                                tariff_info_lines.append('💤 Списание приостановлено')
-                    elif last_charge:
-                        next_charge = last_charge + timedelta(hours=24)
-                        now = datetime.now(UTC)
-
-                        if next_charge > now:
-                            time_until = next_charge - now
-                            hours_left = time_until.seconds // 3600
-                            minutes_left = (time_until.seconds % 3600) // 60
-
-                            # Процент оставшегося времени (24 часа = 100%)
-                            total_seconds = 24 * 3600
-                            remaining_seconds = time_until.total_seconds()
-                            percent = min(100, max(0, (remaining_seconds / total_seconds) * 100))
-
-                            # Генерируем прогресс-бар
-                            bar_length = 10
-                            filled = int(bar_length * percent / 100)
-                            empty = bar_length - filled
-                            progress_bar = '▓' * filled + '░' * empty
-
-                            tariff_info_lines.append('')
-                            tariff_info_lines.append(f'⏳ До списания: {hours_left}ч {minutes_left}мин')
-                            tariff_info_lines.append(f'[{progress_bar}] {percent:.0f}%')
-                    else:
-                        tariff_info_lines.append('')
-                        tariff_info_lines.append('⏳ Первое списание скоро')
-
                 tariff_info_block = '\n<blockquote expandable>' + '\n'.join(tariff_info_lines) + '</blockquote>'
 
         except Exception as e:
@@ -476,6 +425,12 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         )
 
     device_limit_display = str(subscription.device_limit)
+    devices_line = ''
+    if show_devices:
+        devices_line = texts.t(
+            'SUBSCRIPTION_OVERVIEW_DEVICES_LINE',
+            '📱 Устройства: {devices_used} / {device_limit}',
+        ).format(devices_used=devices_used_str, device_limit=device_limit_display)
 
     message = message_template.format(
         full_name=html.escape(db_user.full_name or ''),
@@ -491,22 +446,8 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         servers=servers_display,
         devices_used=devices_used_str,
         device_limit=device_limit_display,
+        devices_line=devices_line,
     )
-
-    if show_devices and devices_list:
-        message += '\n\n' + texts.t(
-            'SUBSCRIPTION_CONNECTED_DEVICES_TITLE',
-            '<blockquote>📱 <b>Подключенные устройства:</b>\n',
-        )
-        for device in devices_list[:5]:
-            platform = device.get('platform', 'Unknown')
-            device_model = device.get('deviceModel', 'Unknown')
-            device_info = f'{platform} - {device_model}'
-
-            if len(device_info) > 35:
-                device_info = device_info[:32] + '...'
-            message += f'• {device_info}\n'
-        message += texts.t('SUBSCRIPTION_CONNECTED_DEVICES_FOOTER', '</blockquote>')
 
     # Отображаем докупленный трафик
     if subscription.traffic_limit_gb > 0:  # Только для лимитированных тарифов
@@ -579,10 +520,12 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
             'SUBSCRIPTION_CONNECT_LINK_SECTION',
             '🔗 <b>Ссылка для подключения:</b>\n{subscription_url}',
         ).format(subscription_url=subscription_link_display)
-        message += '\n\n' + texts.t(
+        connection_prompt = texts.t(
             'SUBSCRIPTION_CONNECT_LINK_PROMPT',
             '📱 Скопируйте ссылку и добавьте в ваше VPN приложение',
         )
+        if connection_prompt:
+            message += '\n\n' + connection_prompt
 
     await callback.message.edit_text(
         message,
@@ -1915,7 +1858,6 @@ async def confirm_extend_subscription(
 
         # Promo offer discount info for downstream consume_promo_offer flag
         promo_offer_discount = pricing.promo_offer_discount
-        offer_pct = pricing.breakdown.get('offer_discount_pct', 0)
 
         logger.info(
             '💰 Расчет продления подписки (PricingEngine)',
@@ -1988,7 +1930,6 @@ async def confirm_extend_subscription(
         await callback.answer()
         return
 
-    old_traffic_gb = subscription.traffic_limit_gb
     renewal_description = f'Продление подписки на {days} дней ({months_in_period} мес)'
 
     try:
@@ -2013,23 +1954,15 @@ async def confirm_extend_subscription(
         await callback.answer()
         return
 
-    refreshed_end_date = result.subscription.end_date
     await db.refresh(db_user)
 
-    success_message = (
-        '✅ Подписка успешно продлена!\n\n'
-        f'⏰ Добавлено: {days} дней\n'
-        f'Действует до: {format_local_datetime(refreshed_end_date, "%d.%m.%Y %H:%M")}\n\n'
-        f'💰 Списано: {texts.format_price(price)}'
+    success_message = texts.t(
+        'SUBSCRIPTION_RENEWAL_SUCCESS_TEXT',
+        '🎉 Подписка успешно продлена!\n\n📅 Добавлено: {period}\n💰 Списано: {price}',
+    ).format(
+        period=_format_subscription_days(texts, days),
+        price=texts.format_price(price),
     )
-
-    # Добавляем уведомление о сбросе трафика
-    if settings.is_traffic_fixed() and result.subscription.traffic_limit_gb != old_traffic_gb:
-        fixed_limit = settings.get_fixed_traffic_limit()
-        success_message += f'\n\n📊 Трафик сброшен до {fixed_limit} ГБ'
-
-    if promo_offer_discount > 0:
-        success_message += f' (включая доп. скидку {offer_pct}%: -{texts.format_price(promo_offer_discount)})'
 
     await callback.message.edit_text(success_message, reply_markup=get_back_keyboard(db_user.language))
 
@@ -4689,16 +4622,13 @@ async def _extend_existing_subscription(
         logger.error('Ошибка отправки уведомления о продлении', error=e)
 
     # Отправляем сообщение пользователю
-    success_message = (
-        '✅ Подписка успешно продлена!\n\n'
-        f'⏰ Добавлено: {period_days} дней\n'
-        f'Действует до: {format_local_datetime(new_end_date, "%d.%m.%Y %H:%M")}\n\n'
-        f'💰 Списано: {texts.format_price(price_kopeks)}'
+    success_message = texts.t(
+        'SUBSCRIPTION_RENEWAL_SUCCESS_TEXT',
+        '🎉 Подписка успешно продлена!\n\n📅 Добавлено: {period}\n💰 Списано: {price}',
+    ).format(
+        period=_format_subscription_days(texts, period_days),
+        price=texts.format_price(price_kopeks),
     )
-
-    # Если это была триальная подписка, добавляем информацию о преобразовании
-    if current_subscription.is_trial:
-        success_message += '\n🎯 Триальная подписка преобразована в платную'
 
     await callback.message.edit_text(success_message, reply_markup=get_back_keyboard(db_user.language))
 

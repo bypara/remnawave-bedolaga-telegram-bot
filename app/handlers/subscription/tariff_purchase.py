@@ -35,6 +35,41 @@ from app.utils.promo_offer import get_user_active_promo_discount_percent
 logger = structlog.get_logger(__name__)
 
 
+def _format_gb(value: float | int) -> str:
+    return f'{float(value):g}'
+
+
+def _format_subscription_traffic(texts, used_gb: float | int, limit_gb: float | int) -> str:
+    used = _format_gb(used_gb)
+    if limit_gb == 0:
+        return texts.t(
+            'SUBSCRIPTION_TRAFFIC_UNLIMITED',
+            '<tg-emoji emoji-id="5271934788037517525">♾</tg-emoji> ГБ',
+        ).format(used=used)
+    return texts.t(
+        'SUBSCRIPTION_TRAFFIC_LIMITED',
+        '{used} / {limit} ГБ',
+    ).format(used=used, limit=_format_gb(limit_gb))
+
+
+def _format_localized_period(texts, days: int) -> str:
+    mod100 = days % 100
+    mod10 = days % 10
+    if 11 <= mod100 <= 19:
+        key = 'SUBSCRIPTION_PERIOD_MANY_DAYS'
+        fallback = '{days} дней'
+    elif mod10 == 1:
+        key = 'SUBSCRIPTION_PERIOD_ONE_DAY'
+        fallback = '{days} день'
+    elif 2 <= mod10 <= 4:
+        key = 'SUBSCRIPTION_PERIOD_FEW_DAYS'
+        fallback = '{days} дня'
+    else:
+        key = 'SUBSCRIPTION_PERIOD_MANY_DAYS'
+        fallback = '{days} дней'
+    return texts.t(key, fallback).format(days=days)
+
+
 async def _persist_failed_refund(
     user_id: int,
     amount_kopeks: int,
@@ -1304,7 +1339,7 @@ async def select_tariff_period(
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
 
-    traffic = format_traffic(tariff.traffic_limit_gb)
+    traffic = _format_subscription_traffic(texts, subscription.traffic_used_gb, tariff.traffic_limit_gb)
 
     if user_balance >= final_price:
         # Показываем подтверждение
@@ -2338,16 +2373,28 @@ async def show_tariff_extend(
 
     discount_hint = ''
     if has_period_discounts:
-        discount_hint = '\n🎁 <i>Скидки зависят от выбранного периода</i>'
+        discount_hint = '\n' + texts.t(
+            'SUBSCRIPTION_RENEWAL_DISCOUNT_HINT',
+            '🎁 <i>Скидки зависят от выбранного периода</i>',
+        )
 
     actual_device_limit = subscription.device_limit or tariff.device_limit
 
     await callback.message.edit_text(
-        f'🔄 <b>Продление подписки</b>{discount_hint}\n\n'
-        f'📦 Тариф: <b>{html.escape(tariff.name)}</b>\n'
-        f'📊 Трафик: {traffic}\n'
-        f'📱 Устройств: {actual_device_limit}\n\n'
-        'Выберите период продления:',
+        texts.t(
+            'SUBSCRIPTION_RENEWAL_MENU_TEXT',
+            (
+                '🔄 <b>Продление подписки</b>{discount_hint}\n\n'
+                '📦 Тариф: <b>{tariff}</b>\n'
+                '📊 Трафик: {traffic}\n'
+                '📱 Устройств: {devices}'
+            ),
+        ).format(
+            discount_hint=discount_hint,
+            tariff=html.escape(tariff.name),
+            traffic=traffic,
+            devices=actual_device_limit,
+        ),
         reply_markup=get_tariff_extend_keyboard(
             tariff,
             db_user.language,
@@ -2413,23 +2460,37 @@ async def select_tariff_extend_period(
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
 
-    traffic = format_traffic(tariff.traffic_limit_gb)
+    traffic = _format_subscription_traffic(texts, subscription.traffic_used_gb, tariff.traffic_limit_gb)
 
     if user_balance >= final_price:
         discount_text = ''
         if discount_percent > 0:
-            discount_text = f'\n🎁 Скидка: {discount_percent}% (-{format_price_kopeks(total_discount)})'
+            discount_text = '\n' + texts.t(
+                'SUBSCRIPTION_RENEWAL_DISCOUNT',
+                '🎁 Скидка: {percent}% (-{amount})',
+            ).format(percent=discount_percent, amount=format_price_kopeks(total_discount))
 
         await callback.message.edit_text(
-            f'✅ <b>Подтверждение продления</b>\n\n'
-            f'📦 Тариф: <b>{html.escape(tariff.name)}</b>\n'
-            f'📊 Трафик: {traffic}\n'
-            f'📱 Устройств: {actual_device_limit}\n'
-            f'📅 Период: {format_period(period)}\n'
-            f'{discount_text}\n'
-            f'💰 <b>К оплате: {format_price_kopeks(final_price)}</b>\n\n'
-            f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
-            f'После оплаты: {format_price_kopeks(user_balance - final_price)}',
+            texts.t(
+                'SUBSCRIPTION_RENEWAL_CONFIRM_TEXT',
+                (
+                    '✅ <b>Подтверждение продления</b>\n\n'
+                    '📦 Тариф: <b>{tariff}</b>\n'
+                    '📊 Трафик: {traffic}\n'
+                    '📅 Период: {period}{discount_text}\n\n'
+                    '💰 <b>К оплате: {price}</b>\n\n'
+                    '💳 Ваш баланс: {balance}\n'
+                    'После оплаты: {balance_after}'
+                ),
+            ).format(
+                tariff=html.escape(tariff.name),
+                traffic=traffic,
+                period=_format_localized_period(texts, period),
+                discount_text=discount_text,
+                price=format_price_kopeks(final_price),
+                balance=format_price_kopeks(user_balance),
+                balance_after=format_price_kopeks(user_balance - final_price),
+            ),
             reply_markup=get_tariff_extend_confirm_keyboard(subscription.id, tariff_id, period, db_user.language),
             parse_mode='HTML',
         )
@@ -2664,15 +2725,14 @@ async def confirm_tariff_extend(
 
         await state.clear()
 
-        traffic = format_traffic(tariff.traffic_limit_gb)
-
         await callback.message.edit_text(
-            f'🎉 <b>Подписка успешно продлена!</b>\n\n'
-            f'📦 Тариф: <b>{html.escape(tariff.name)}</b>\n'
-            f'📊 Трафик: {traffic}\n'
-            f'📱 Устройств: {actual_device_limit}\n'
-            f'📅 Добавлено: {format_period(period)}\n'
-            f'💰 Списано: {format_price_kopeks(final_price)}',
+            texts.t(
+                'SUBSCRIPTION_RENEWAL_SUCCESS_TEXT',
+                '🎉 <b>Подписка успешно продлена!</b>\n\n📅 Добавлено: {period}\n💰 Списано: {price}',
+            ).format(
+                period=_format_localized_period(texts, period),
+                price=format_price_kopeks(final_price),
+            ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
@@ -4645,21 +4705,46 @@ async def return_to_saved_tariff_cart(
         discount_text = ''
         if discount_percent > 0:
             original_price = int(total_price / (1 - discount_percent / 100))
-            discount_text = f'\n🎁 Скидка: {discount_percent}% (-{format_price_kopeks(original_price - total_price)})'
+            discount_text = '\n' + texts.t(
+                'SUBSCRIPTION_RENEWAL_DISCOUNT',
+                '🎁 Скидка: {percent}% (-{amount})',
+            ).format(
+                percent=discount_percent,
+                amount=format_price_kopeks(original_price - total_price),
+            )
 
         # subscription_id обязателен в callback продления (issue #3012), берём из корзины
         _extend_sub_id = cart_data.get('subscription_id')
+        restored_subscription = (
+            await get_subscription_by_id_for_user(db, _extend_sub_id, db_user.id) if _extend_sub_id else None
+        )
+        restored_traffic = _format_subscription_traffic(
+            texts,
+            getattr(restored_subscription, 'traffic_used_gb', 0),
+            tariff.traffic_limit_gb,
+        )
 
         await callback.message.edit_text(
-            f'✅ <b>Подтверждение продления</b>\n\n'
-            f'📦 Тариф: <b>{html.escape(tariff.name)}</b>\n'
-            f'📊 Трафик: {traffic}\n'
-            f'📱 Устройств: {tariff.device_limit}\n'
-            f'📅 Период: {format_period(period)}\n'
-            f'{discount_text}\n'
-            f'💰 <b>Итого: {format_price_kopeks(total_price)}</b>\n\n'
-            f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
-            f'После оплаты: {format_price_kopeks(user_balance - total_price)}',
+            texts.t(
+                'SUBSCRIPTION_RENEWAL_CONFIRM_TEXT',
+                (
+                    '✅ <b>Подтверждение продления</b>\n\n'
+                    '📦 Тариф: <b>{tariff}</b>\n'
+                    '📊 Трафик: {traffic}\n'
+                    '📅 Период: {period}{discount_text}\n\n'
+                    '💰 <b>К оплате: {price}</b>\n\n'
+                    '💳 Ваш баланс: {balance}\n'
+                    'После оплаты: {balance_after}'
+                ),
+            ).format(
+                tariff=html.escape(tariff.name),
+                traffic=restored_traffic,
+                period=_format_localized_period(texts, period),
+                discount_text=discount_text,
+                price=format_price_kopeks(total_price),
+                balance=format_price_kopeks(user_balance),
+                balance_after=format_price_kopeks(user_balance - total_price),
+            ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
