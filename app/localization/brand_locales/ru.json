@@ -82,5 +82,6 @@
   "TARIFF_TRAFFIC_UNLIMITED": "<tg-emoji emoji-id=\"5271934788037517525\">♾</tg-emoji> ГБ",
   "TARIFF_TRAFFIC_LIMITED": "{limit} ГБ",
   "TARIFF_INFO_DESCRIPTION": "<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> {description}",
-  "TARIFF_INFO_TEXT": "<tg-emoji emoji-id=\"5260730055880876557\">⛓️</tg-emoji> {tariff_name}\n\nПараметры:\n• Трафик: {traffic}\n• Устройств: {devices}{description_block}"
+  "TARIFF_INFO_TEXT": "<tg-emoji emoji-id=\"5260730055880876557\">⛓️</tg-emoji> {tariff_name}\n\nПараметры:\n• Трафик: {traffic}\n• Устройств: {devices}{description_block}",
+  "SUBSCRIPTION_PURCHASE_CONFIRM_TEXT": "<tg-emoji emoji-id=\"5258501105293205250\">👏</tg-emoji> Подтверждение покупки\n\n<tg-emoji emoji-id=\"5260730055880876557\">⛓️</tg-emoji> Тариф: {tariff}\n<tg-emoji emoji-id=\"5258115571848846212\">✈️</tg-emoji> Трафик: {traffic}\n<tg-emoji emoji-id=\"5258105663359294787\">🗓</tg-emoji> Период: {period}{discount_text}\n\n<tg-emoji emoji-id=\"5258204546391351475\">💰</tg-emoji> К оплате: {price}\n\n<tg-emoji emoji-id=\"5258200019495821936\">🗳</tg-emoji> Ваш баланс: {balance}\nПосле оплаты: {balance_after}"
 }

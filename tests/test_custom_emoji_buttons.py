@@ -21,6 +21,10 @@ def test_requested_custom_emoji_icons_are_applied_by_button_action():
         ('🔗 Подключиться', 'subscription_connect', 'connect'),
         ('💎 Купить подписку', 'subscription_upgrade', 'buy_from_trial'),
         ('✅ Подтвердить покупку', 'subscription_confirm', 'confirm_purchase'),
+        ('✅ Подтвердить покупку', 'tariff_confirm:1:14', 'confirm_purchase'),
+        ('✅ Подтвердить покупку', 'daily_tariff_confirm:1', 'confirm_purchase'),
+        ('✅ Подтвердить покупку', 'custom_confirm:1', 'confirm_purchase'),
+        ('✅ Подтвердить продление', 'tariff_ext_confirm:1:1:14', 'confirm_purchase'),
         ('📱 Моя подписка', 'menu_subscription', 'my_subscription'),
         ('⏰ Продлить подписку', 'subscription_extend', 'extend_subscription'),
         ('💳 Автоплатёж', 'subscription_autopay', 'autopay'),
@@ -55,6 +59,8 @@ def test_requested_custom_emoji_icons_are_applied_by_button_action():
         assert button.text != original_text
         assert button.text == original_text.split(' ', 1)[1]
         assert button.icon_custom_emoji_id == CUSTOM_EMOJI_IDS[icon_name]
+
+    assert CUSTOM_EMOJI_IDS['confirm_purchase'] == '5397916757333654639'
 
 
 def test_url_contact_and_all_back_cancel_buttons_are_decorated():

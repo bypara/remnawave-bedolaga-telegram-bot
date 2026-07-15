@@ -137,5 +137,7 @@ async def test_tariff_period_selection_does_not_require_subscription(monkeypatch
     await tariff_purchase.select_tariff_period(callback, user, AsyncMock(), state)
 
     rendered = callback.message.edit_text.await_args.args[0]
-    assert 'Трафик: 100 ГБ' in rendered
+    assert '5258501105293205250' in rendered
+    assert 'Трафик: 0 / 100 ГБ' in rendered
+    assert 'К оплате: 500 ₽' in rendered
     state.update_data.assert_awaited()

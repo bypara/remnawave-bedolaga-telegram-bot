@@ -30,6 +30,7 @@ def test_subscription_copy_uses_requested_custom_emoji():
         'TARIFF_LIST_TITLE': '5258477770735885832',
         'TARIFF_INFO_TEXT': '5260730055880876557',
         'TARIFF_INFO_DESCRIPTION': '5257965174979042426',
+        'SUBSCRIPTION_PURCHASE_CONFIRM_TEXT': '5258501105293205250',
     }
 
     for locale in locales.values():

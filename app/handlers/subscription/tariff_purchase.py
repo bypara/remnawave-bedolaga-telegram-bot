@@ -1340,24 +1340,41 @@ async def select_tariff_period(
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
 
-    traffic = _format_tariff_traffic(texts, tariff.traffic_limit_gb)
+    traffic = _format_subscription_traffic(texts, 0, tariff.traffic_limit_gb)
 
     if user_balance >= final_price:
         # Показываем подтверждение
         discount_text = ''
         if discount_percent > 0:
-            discount_text = f'\n🎁 Скидка: {discount_percent}% (-{format_price_kopeks(base_price - final_price)})'
+            discount_text = '\n' + texts.t(
+                'SUBSCRIPTION_RENEWAL_DISCOUNT',
+                '🎁 Скидка: {percent}% (-{amount})',
+            ).format(
+                percent=discount_percent,
+                amount=format_price_kopeks(base_price - final_price),
+            )
 
         await callback.message.edit_text(
-            f'✅ <b>Подтверждение покупки</b>\n\n'
-            f'📦 Тариф: <b>{html.escape(tariff.name)}</b>\n'
-            f'📊 Трафик: {traffic}\n'
-            f'📱 Устройств: {tariff.device_limit}\n'
-            f'📅 Период: {format_period(period)}\n'
-            f'{discount_text}\n'
-            f'💰 <b>Итого: {format_price_kopeks(final_price)}</b>\n\n'
-            f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
-            f'После оплаты: {format_price_kopeks(user_balance - final_price)}',
+            texts.t(
+                'SUBSCRIPTION_PURCHASE_CONFIRM_TEXT',
+                (
+                    '✅ <b>Подтверждение покупки</b>\n\n'
+                    '📦 Тариф: <b>{tariff}</b>\n'
+                    '📊 Трафик: {traffic}\n'
+                    '📅 Период: {period}{discount_text}\n\n'
+                    '💰 <b>К оплате: {price}</b>\n\n'
+                    '💳 Ваш баланс: {balance}\n'
+                    'После оплаты: {balance_after}'
+                ),
+            ).format(
+                tariff=html.escape(tariff.name),
+                traffic=traffic,
+                period=_format_localized_period(texts, period),
+                discount_text=discount_text,
+                price=format_price_kopeks(final_price),
+                balance=format_price_kopeks(user_balance),
+                balance_after=format_price_kopeks(user_balance - final_price),
+            ),
             reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language),
             parse_mode='HTML',
         )
@@ -4765,22 +4782,40 @@ async def return_to_saved_tariff_cart(
         )
     else:  # tariff_purchase
         period = cart_data.get('period_days', 30)
+        purchase_traffic = _format_subscription_traffic(texts, 0, tariff.traffic_limit_gb)
 
         discount_text = ''
         if discount_percent > 0:
             original_price = int(total_price / (1 - discount_percent / 100))
-            discount_text = f'\n🎁 Скидка: {discount_percent}% (-{format_price_kopeks(original_price - total_price)})'
+            discount_text = '\n' + texts.t(
+                'SUBSCRIPTION_RENEWAL_DISCOUNT',
+                '🎁 Скидка: {percent}% (-{amount})',
+            ).format(
+                percent=discount_percent,
+                amount=format_price_kopeks(original_price - total_price),
+            )
 
         await callback.message.edit_text(
-            f'✅ <b>Подтверждение покупки</b>\n\n'
-            f'📦 Тариф: <b>{html.escape(tariff.name)}</b>\n'
-            f'📊 Трафик: {traffic}\n'
-            f'📱 Устройств: {tariff.device_limit}\n'
-            f'📅 Период: {format_period(period)}\n'
-            f'{discount_text}\n'
-            f'💰 <b>Итого: {format_price_kopeks(total_price)}</b>\n\n'
-            f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
-            f'После оплаты: {format_price_kopeks(user_balance - total_price)}',
+            texts.t(
+                'SUBSCRIPTION_PURCHASE_CONFIRM_TEXT',
+                (
+                    '✅ <b>Подтверждение покупки</b>\n\n'
+                    '📦 Тариф: <b>{tariff}</b>\n'
+                    '📊 Трафик: {traffic}\n'
+                    '📅 Период: {period}{discount_text}\n\n'
+                    '💰 <b>К оплате: {price}</b>\n\n'
+                    '💳 Ваш баланс: {balance}\n'
+                    'После оплаты: {balance_after}'
+                ),
+            ).format(
+                tariff=html.escape(tariff.name),
+                traffic=purchase_traffic,
+                period=_format_localized_period(texts, period),
+                discount_text=discount_text,
+                price=format_price_kopeks(total_price),
+                balance=format_price_kopeks(user_balance),
+                balance_after=format_price_kopeks(user_balance - total_price),
+            ),
             reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language),
             parse_mode='HTML',
         )
