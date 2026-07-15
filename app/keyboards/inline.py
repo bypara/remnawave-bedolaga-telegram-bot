@@ -217,6 +217,13 @@ _LANGUAGE_DISPLAY_NAMES = {
     'fa-ir': '🇮🇷 فارسی',
 }
 
+_FORK_INTERFACE_LANGUAGES = ('ru', 'en')
+
+
+def get_interface_languages() -> list[str]:
+    """Languages with complete fork-specific user-facing copy."""
+    return list(_FORK_INTERFACE_LANGUAGES)
+
 
 def get_rules_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
@@ -325,7 +332,7 @@ def get_language_selection_keyboard(
     language: str = DEFAULT_LANGUAGE,
     back_callback_data: str = 'back_to_menu',
 ) -> InlineKeyboardMarkup:
-    available_languages = settings.get_available_languages()
+    available_languages = get_interface_languages()
 
     buttons: list[list[InlineKeyboardButton]] = []
     row: list[InlineKeyboardButton] = []

@@ -4,7 +4,6 @@ from decimal import Decimal
 
 import structlog
 from aiogram import Dispatcher, F, types
-from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +20,7 @@ from app.database.models import InfoPage, PromoGroup, User
 from app.handlers.subscription.traffic import add_traffic, handle_add_traffic
 from app.keyboards.inline import (
     get_info_menu_keyboard,
+    get_interface_languages,
     get_language_selection_keyboard,
     get_main_menu_keyboard_async,
     get_profile_keyboard,
@@ -1178,6 +1178,7 @@ async def process_language_change(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
+    state: FSMContext,
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
@@ -1208,7 +1209,7 @@ async def process_language_change(
 
     available_map = {
         lang.strip().lower(): lang.strip()
-        for lang in settings.get_available_languages()
+        for lang in get_interface_languages()
         if isinstance(lang, str) and lang.strip()
     }
 
@@ -1219,17 +1220,18 @@ async def process_language_change(
     resolved_language = available_map[normalized_selected].lower()
 
     if db_user.language.lower() == normalized_selected:
+        await state.clear()
         await show_main_menu(
             callback,
             db_user,
             db,
             skip_callback_answer=True,
         )
-        await callback.answer(texts.t('LANGUAGE_SELECTED', '🌐 Язык интерфейса обновлен.'))
+        await callback.answer()
         return
 
     updated_user = await update_user(db, db_user, language=resolved_language)
-    texts = get_texts(updated_user.language)
+    await state.clear()
 
     await show_main_menu(
         callback,
@@ -1237,7 +1239,7 @@ async def process_language_change(
         db,
         skip_callback_answer=True,
     )
-    await callback.answer(texts.t('LANGUAGE_SELECTED', '🌐 Язык интерфейса обновлен.'))
+    await callback.answer()
 
 
 async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
@@ -1811,7 +1813,7 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(show_language_menu, F.data == 'menu_language')
 
-    dp.callback_query.register(process_language_change, F.data.startswith('language_select:'), StateFilter(None))
+    dp.callback_query.register(process_language_change, F.data.startswith('language_select:'))
 
     dp.callback_query.register(handle_add_traffic, F.data == 'buy_traffic')
 

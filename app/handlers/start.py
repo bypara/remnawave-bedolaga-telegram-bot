@@ -28,6 +28,7 @@ from app.database.crud.user_message import get_random_active_message
 from app.database.models import GuestPurchase, GuestPurchaseStatus, PinnedMessage, SubscriptionStatus, UserStatus
 from app.keyboards.inline import (
     get_back_keyboard,
+    get_interface_languages,
     get_language_selection_keyboard,
     get_main_menu_keyboard_async,
     get_post_registration_keyboard,
@@ -1544,7 +1545,7 @@ async def process_language_selection(
 
     available_map = {
         lang.strip().lower(): lang.strip()
-        for lang in settings.get_available_languages()
+        for lang in get_interface_languages()
         if isinstance(lang, str) and lang.strip()
     }
 
