@@ -107,6 +107,21 @@ def test_tariff_info_uses_localized_copy_and_custom_emoji():
     assert 'Выберите период подписки' not in rendered
 
 
+def test_insufficient_funds_copy_contains_only_requested_values():
+    rendered = tariff_purchase._format_insufficient_funds_text(
+        tariff_purchase.get_texts('ru'),
+        missing_kopeks=50000,
+        cost_kopeks=50000,
+        balance_kopeks=0,
+    )
+
+    assert 'Не хватает: 500 ₽' in rendered
+    assert 'Стоимость: 500 ₽' in rendered
+    assert 'Ваш баланс: 0 ₽' in rendered
+    assert 'Тариф:' not in rendered
+    assert 'Корзина' not in rendered
+
+
 @pytest.mark.asyncio
 async def test_tariff_period_selection_does_not_require_subscription(monkeypatch):
     tariff = SimpleNamespace(

@@ -37,6 +37,8 @@ def test_subscription_copy_uses_requested_custom_emoji():
         'TRIAL_ACTIVATED': '5461151367559141950',
         'SUBSCRIPTION_IMPORT_LINK_SECTION': '5260730055880876557',
         'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT': '5258328383183396223',
+        'SUBSCRIPTION_INSUFFICIENT_FUNDS_TEXT': '5210952531676504517',
+        'PAYMENT_METHODS_TITLE': '5258204546391351475',
     }
 
     for locale in locales.values():
@@ -70,6 +72,11 @@ def test_subscription_copy_renders_dynamic_values_in_both_languages():
             'price_line': '',
         },
         'SUBSCRIPTION_IMPORT_LINK_SECTION': {'subscription_url': 'https://sub.example/test'},
+        'SUBSCRIPTION_INSUFFICIENT_FUNDS_TEXT': {
+            'missing': '500 ₽',
+            'cost': '500 ₽',
+            'balance': '0 ₽',
+        },
         'DEVICE_MANAGEMENT_OVERVIEW': {'total': 1, 'page': 1, 'pages': 1},
         'DEVICE_RENAME_PROMPT': {'current': '—', 'max_len': 64},
     }

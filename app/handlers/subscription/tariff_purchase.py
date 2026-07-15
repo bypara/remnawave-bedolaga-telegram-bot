@@ -48,6 +48,28 @@ def _format_tariff_traffic(texts, limit_gb: float | int) -> str:
     return texts.t('TARIFF_TRAFFIC_LIMITED', '{limit} ГБ').format(limit=_format_gb(limit_gb))
 
 
+def _format_insufficient_funds_text(
+    texts,
+    *,
+    missing_kopeks: int,
+    cost_kopeks: int,
+    balance_kopeks: int,
+) -> str:
+    return texts.t(
+        'SUBSCRIPTION_INSUFFICIENT_FUNDS_TEXT',
+        (
+            '❌ Недостаточно средств\n'
+            '⚠️ Не хватает: {missing}\n\n'
+            '📁 Стоимость: {cost}\n\n'
+            '💳 Ваш баланс: {balance}'
+        ),
+    ).format(
+        missing=format_price_kopeks(missing_kopeks),
+        cost=format_price_kopeks(cost_kopeks),
+        balance=format_price_kopeks(balance_kopeks),
+    )
+
+
 def _format_localized_period(texts, days: int) -> str:
     mod100 = days % 100
     mod10 = days % 10
@@ -749,14 +771,12 @@ async def select_tariff(
             await user_cart_service.save_user_cart(db_user.id, cart_data)
 
             await callback.message.edit_text(
-                f'❌ <b>Недостаточно средств</b>\n\n'
-                f'📦 Тариф: <b>{html.escape(tariff.name)}</b>\n'
-                f'🔄 Тип: Суточный\n'
-                f'💰 Цена: {format_price_kopeks(daily_price)}/день'
-                f'{discount_text}\n\n'
-                f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
-                f'⚠️ Не хватает: <b>{format_price_kopeks(missing)}</b>\n\n'
-                f'🛒 <i>Корзина сохранена! После пополнения баланса подписка будет оформлена автоматически.</i>',
+                _format_insufficient_funds_text(
+                    texts,
+                    missing_kopeks=missing,
+                    cost_kopeks=daily_price,
+                    balance_kopeks=user_balance,
+                ),
                 reply_markup=get_daily_tariff_insufficient_balance_keyboard(tariff_id, db_user.language),
                 parse_mode='HTML',
             )
@@ -1400,13 +1420,12 @@ async def select_tariff_period(
         await user_cart_service.save_user_cart(db_user.id, cart_data)
 
         await callback.message.edit_text(
-            f'❌ <b>Недостаточно средств</b>\n\n'
-            f'📦 Тариф: <b>{html.escape(tariff.name)}</b>\n'
-            f'📅 Период: {format_period(period)}\n'
-            f'💰 Стоимость: {format_price_kopeks(final_price)}\n\n'
-            f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
-            f'⚠️ Не хватает: <b>{format_price_kopeks(missing)}</b>\n\n'
-            f'🛒 <i>Корзина сохранена! После пополнения баланса подписка будет оформлена автоматически.</i>',
+            _format_insufficient_funds_text(
+                texts,
+                missing_kopeks=missing,
+                cost_kopeks=final_price,
+                balance_kopeks=user_balance,
+            ),
             reply_markup=get_tariff_insufficient_balance_keyboard(tariff_id, period, db_user.language),
             parse_mode='HTML',
         )
@@ -2528,13 +2547,12 @@ async def select_tariff_extend_period(
         await user_cart_service.save_user_cart(db_user.id, cart_data)
 
         await callback.message.edit_text(
-            f'❌ <b>Недостаточно средств</b>\n\n'
-            f'📦 Тариф: <b>{html.escape(tariff.name)}</b>\n'
-            f'📅 Период: {format_period(period)}\n'
-            f'💰 К оплате: {format_price_kopeks(final_price)}\n\n'
-            f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
-            f'⚠️ Не хватает: <b>{format_price_kopeks(missing)}</b>\n\n'
-            f'🛒 <i>Корзина сохранена! После пополнения баланса подписка будет продлена автоматически.</i>',
+            _format_insufficient_funds_text(
+                texts,
+                missing_kopeks=missing,
+                cost_kopeks=final_price,
+                balance_kopeks=user_balance,
+            ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [InlineKeyboardButton(text='💳 Пополнить баланс', callback_data='balance_topup')],
@@ -4640,36 +4658,36 @@ async def return_to_saved_tariff_cart(
 
         if cart_mode == 'daily_tariff_purchase':
             await callback.message.edit_text(
-                f'❌ <b>Все еще недостаточно средств</b>\n\n'
-                f'📦 Тариф: <b>{html.escape(tariff.name)}</b>\n'
-                f'🔄 Тип: Суточный\n'
-                f'💰 Стоимость: {format_price_kopeks(total_price)}\n\n'
-                f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
-                f'⚠️ Не хватает: <b>{format_price_kopeks(missing)}</b>',
+                _format_insufficient_funds_text(
+                    texts,
+                    missing_kopeks=missing,
+                    cost_kopeks=total_price,
+                    balance_kopeks=user_balance,
+                ),
                 reply_markup=get_daily_tariff_insufficient_balance_keyboard(tariff_id, db_user.language),
                 parse_mode='HTML',
             )
         elif cart_mode == 'extend':
             period = cart_data.get('period_days', 30)
             await callback.message.edit_text(
-                f'❌ <b>Все еще недостаточно средств</b>\n\n'
-                f'📦 Тариф: <b>{html.escape(tariff.name)}</b>\n'
-                f'📅 Период: {format_period(period)}\n'
-                f'💰 Стоимость: {format_price_kopeks(total_price)}\n\n'
-                f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
-                f'⚠️ Не хватает: <b>{format_price_kopeks(missing)}</b>',
+                _format_insufficient_funds_text(
+                    texts,
+                    missing_kopeks=missing,
+                    cost_kopeks=total_price,
+                    balance_kopeks=user_balance,
+                ),
                 reply_markup=get_tariff_insufficient_balance_keyboard(tariff_id, period, db_user.language),
                 parse_mode='HTML',
             )
         else:  # tariff_purchase
             period = cart_data.get('period_days', 30)
             await callback.message.edit_text(
-                f'❌ <b>Все еще недостаточно средств</b>\n\n'
-                f'📦 Тариф: <b>{html.escape(tariff.name)}</b>\n'
-                f'📅 Период: {format_period(period)}\n'
-                f'💰 Стоимость: {format_price_kopeks(total_price)}\n\n'
-                f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
-                f'⚠️ Не хватает: <b>{format_price_kopeks(missing)}</b>',
+                _format_insufficient_funds_text(
+                    texts,
+                    missing_kopeks=missing,
+                    cost_kopeks=total_price,
+                    balance_kopeks=user_balance,
+                ),
                 reply_markup=get_tariff_insufficient_balance_keyboard(tariff_id, period, db_user.language),
                 parse_mode='HTML',
             )
