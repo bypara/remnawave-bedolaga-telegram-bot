@@ -266,7 +266,7 @@ async def handle_profile_unavailable(callback: types.CallbackQuery) -> None:
     )
 
 
-async def show_profile_menu(callback: types.CallbackQuery, db_user: User) -> None:
+async def show_profile_menu(callback: types.CallbackQuery, db_user: User, state: FSMContext) -> None:
     if db_user is None:
         texts = get_texts(settings.DEFAULT_LANGUAGE)
         await callback.answer(
@@ -274,6 +274,11 @@ async def show_profile_menu(callback: types.CallbackQuery, db_user: User) -> Non
             show_alert=True,
         )
         return
+
+    # Opening the profile is an explicit exit from nested input flows (promo code,
+    # support forms, etc.). Clear FSM so following messages are not consumed by
+    # the handler the user just left.
+    await state.clear()
 
     texts = get_texts(db_user.language)
     display_name = db_user.username or db_user.full_name
