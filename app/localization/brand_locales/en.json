@@ -87,6 +87,7 @@
   "SUBSCRIPTION_REVOKE_WARNING": "<tg-emoji emoji-id=\"5240241223632954241\">🚫</tg-emoji> Reissue subscription\n\nThis action will:\n• Generate a new connection link\n• Reset all connected devices\n• Make the old link stop working\n\nContinue?",
   "SUBSCRIPTION_REVOKE_SUCCESS": "<tg-emoji emoji-id=\"5206607081334906820\">✔️</tg-emoji> Subscription reissued!\n\nThe new connection link is ready. The old link is no longer valid.\n\nAll devices have been disconnected.",
   "ADD_TRAFFIC_PROMPT": "<tg-emoji emoji-id=\"5274008024585871702\">➕</tg-emoji> Add traffic to subscription\n\nCurrent limit: {current_traffic}",
+  "ADD_TRAFFIC_SUCCESS": "<tg-emoji emoji-id=\"5206607081334906820\">✔️</tg-emoji> Traffic added successfully!\n\n<tg-emoji emoji-id=\"5258204546391351475\">💰</tg-emoji> Charged: {price}",
   "SUBSCRIPTION_PURCHASED_TRAFFIC_TITLE": "<blockquote><tg-emoji emoji-id=\"5258134813302332906\">📦</tg-emoji> Purchased traffic:\n",
   "BALANCE_HISTORY_EMPTY": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> Transaction history is empty",
   "BALANCE_HISTORY_TITLE": "<tg-emoji emoji-id=\"5244837092042750681\">📈</tg-emoji> <b>Transaction history</b>",

@@ -87,6 +87,7 @@
   "SUBSCRIPTION_REVOKE_WARNING": "<tg-emoji emoji-id=\"5240241223632954241\">🚫</tg-emoji> Перевыпуск подписки\n\nЭто действие:\n• Сгенерирует новую ссылку подключения\n• Сбросит все подключённые устройства\n• Старая ссылка перестанет работать\n\nПродолжить?",
   "SUBSCRIPTION_REVOKE_SUCCESS": "<tg-emoji emoji-id=\"5206607081334906820\">✔️</tg-emoji> Подписка перевыпущена!\n\nНовая ссылка подключения готова. Старая ссылка больше не действительна.\n\nВсе устройства были отключены.",
   "ADD_TRAFFIC_PROMPT": "<tg-emoji emoji-id=\"5274008024585871702\">➕</tg-emoji> Добавить трафик к подписке\n\nТекущий лимит: {current_traffic}",
+  "ADD_TRAFFIC_SUCCESS": "<tg-emoji emoji-id=\"5206607081334906820\">✔️</tg-emoji> Трафик успешно добавлен!\n\n<tg-emoji emoji-id=\"5258204546391351475\">💰</tg-emoji> Списано: {price}",
   "SUBSCRIPTION_PURCHASED_TRAFFIC_TITLE": "<blockquote><tg-emoji emoji-id=\"5258134813302332906\">📦</tg-emoji> Докупленный трафик:\n",
   "BALANCE_HISTORY_EMPTY": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> История операций пуста",
   "BALANCE_HISTORY_TITLE": "<tg-emoji emoji-id=\"5244837092042750681\">📈</tg-emoji> <b>История операций</b>",

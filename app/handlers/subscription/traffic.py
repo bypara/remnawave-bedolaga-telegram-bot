@@ -551,12 +551,11 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         return
 
     period_hint_days = _get_period_hint_from_subscription(subscription)
-    discounted_per_month, discount_per_month, traffic_discount_pct = PricingEngine.calculate_traffic_discount(
+    discounted_per_month, _, traffic_discount_pct = PricingEngine.calculate_traffic_discount(
         base_price,
         db_user,
         period_hint_days,
     )
-    charged_days = 30
 
     # На тарифах пакеты трафика покупаются на 1 месяц (30 дней),
     # цена в тарифе уже месячная — не умножаем на оставшиеся месяцы подписки.
@@ -566,14 +565,12 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
     if is_tariff_mode:
         price = discounted_per_month
     elif subscription:
-        price, charged_days = calculate_prorated_price(
+        price, _ = calculate_prorated_price(
             discounted_per_month,
             subscription.end_date,
         )
     else:
         price = discounted_per_month
-
-    total_discount_value = int(discount_per_month * charged_days / 30)
 
     if price > 0 and db_user.balance_kopeks < price:
         missing_kopeks = price - db_user.balance_kopeks
@@ -689,17 +686,11 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         except Exception as e:
             logger.error('Ошибка отправки уведомления о докупке трафика', error=e)
 
-        success_text = '✅ Трафик успешно добавлен!\n\n'
-        if traffic_gb == 0:
-            success_text += '🎉 Теперь у вас безлимитный трафик!'
-        else:
-            success_text += f'📈 Добавлено: {traffic_gb} ГБ\n'
-            success_text += f'Новый лимит: {texts.format_traffic(subscription.traffic_limit_gb)}'
-
-        if price > 0:
-            success_text += f'\n💰 Списано: {texts.format_price(price)}'
-            if total_discount_value > 0:
-                success_text += f' (скидка {traffic_discount_pct}%: -{texts.format_price(total_discount_value)})'
+        success_text = texts.t(
+            'ADD_TRAFFIC_SUCCESS',
+            '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Трафик успешно добавлен!\n\n'
+            '<tg-emoji emoji-id="5258204546391351475">💰</tg-emoji> Списано: {price}',
+        ).format(price=texts.format_price(price))
 
         await callback.message.edit_text(success_text, reply_markup=get_back_keyboard(db_user.language))
 
