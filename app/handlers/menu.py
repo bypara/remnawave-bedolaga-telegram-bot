@@ -276,15 +276,19 @@ async def show_profile_menu(callback: types.CallbackQuery, db_user: User) -> Non
         return
 
     texts = get_texts(db_user.language)
-    title = texts.t('PROFILE_MENU_TITLE', '👤 <b>Профиль</b>')
+    display_name = db_user.username or db_user.full_name
+    title = texts.t('PROFILE_MENU_TITLE', '👤 <b>Профиль</b>').format(
+        user_name=html.escape(display_name or '')
+    )
     prompt = texts.t(
         'PROFILE_MENU_PROMPT',
         'Здесь собраны ваши личные настройки и бонусы.\n\nВыберите раздел:',
     )
+    caption = '\n\n'.join(part for part in (title, prompt) if part)
 
     await edit_or_answer_photo(
         callback=callback,
-        caption=f'{title}\n\n{prompt}',
+        caption=caption,
         keyboard=get_profile_keyboard(db_user.language, db_user.balance_kopeks),
         parse_mode='HTML',
     )
@@ -1463,7 +1467,7 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
 
         if tariff_info_block:
             action_prompt_text = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
-            if action_prompt_text in base_text:
+            if action_prompt_text and action_prompt_text in base_text:
                 base_text = base_text.replace(action_prompt_text, f'{tariff_info_block}\n\n{action_prompt_text}')
     else:
         # Single-tariff mode: legacy behavior
@@ -1490,10 +1494,12 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
 
         if tariff_info_block:
             action_prompt_text = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
-            if action_prompt_text in base_text:
+            if action_prompt_text and action_prompt_text in base_text:
                 base_text = base_text.replace(action_prompt_text, f'{tariff_info_block}\n\n{action_prompt_text}')
 
     action_prompt = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
+    if not action_prompt.strip():
+        return base_text
 
     info_sections: list[str] = []
 

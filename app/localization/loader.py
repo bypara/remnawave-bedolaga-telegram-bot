@@ -19,6 +19,7 @@ _FALLBACK_LANGUAGE = 'ru'
 
 _BASE_DIR = Path(__file__).resolve().parent
 _DEFAULT_LOCALES_DIR = _BASE_DIR / 'locales'
+_BRAND_LOCALES_DIR = _BASE_DIR / 'brand_locales'
 
 
 def _normalize_language_code(value: Any) -> str:
@@ -254,6 +255,14 @@ def _load_user_locale(language: str) -> dict[str, Any]:
     return {}
 
 
+def _load_brand_locale(language: str) -> dict[str, Any]:
+    """Load fork-specific copy that must win over mounted runtime locales."""
+    brand_path = _BRAND_LOCALES_DIR / f'{language}.json'
+    if not brand_path.exists():
+        return {}
+    return _normalize_locale_dict(_load_locale_file(brand_path))
+
+
 def _load_locale_file(path: Path) -> dict[str, Any]:
     suffix = path.suffix.lower()
     try:
@@ -290,7 +299,8 @@ def load_locale(language: str) -> dict[str, Any]:
     language = language or DEFAULT_LANGUAGE
     defaults = _load_default_locale(language)
     overrides = _load_user_locale(language)
-    merged = _merge_dicts(defaults, overrides)
+    brand_overrides = _load_brand_locale(language)
+    merged = _merge_dicts(_merge_dicts(defaults, overrides), brand_overrides)
 
     if not merged and language != DEFAULT_LANGUAGE:
         _logger.warning(

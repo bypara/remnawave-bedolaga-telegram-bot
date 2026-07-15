@@ -26,12 +26,14 @@ async def show_promocode_menu(callback: types.CallbackQuery, db_user: User, stat
         await callback.message.answer(
             texts.PROMOCODE_ENTER,
             reply_markup=get_back_keyboard(db_user.language, callback_data='menu_profile'),
+            parse_mode='HTML',
         )
     else:
         try:
             await callback.message.edit_text(
                 texts.PROMOCODE_ENTER,
                 reply_markup=get_back_keyboard(db_user.language, callback_data='menu_profile'),
+                parse_mode='HTML',
             )
         except TelegramBadRequest as error:
             error_message = str(error).lower()
@@ -39,6 +41,7 @@ async def show_promocode_menu(callback: types.CallbackQuery, db_user: User, stat
                 await callback.message.answer(
                     texts.PROMOCODE_ENTER,
                     reply_markup=get_back_keyboard(db_user.language, callback_data='menu_profile'),
+                    parse_mode='HTML',
                 )
             else:
                 raise
