@@ -15,3 +15,4 @@ def test_info_menu_header_uses_requested_custom_emoji_and_full_title():
         assert 'emoji-id="5258474669769497337"' in value
         assert title in value
         assert 'ℹ️' not in value
+        assert locale['MENU_INFO_PROMPT'] == ''
