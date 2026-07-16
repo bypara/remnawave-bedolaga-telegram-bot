@@ -20,6 +20,7 @@ from app.localization.texts import get_texts
 from app.services.support_settings_service import SupportSettingsService
 from app.states import AdminTicketStates
 from app.utils.cache import RateLimitCache
+from app.utils.miniapp_buttons import strip_leading_emoji
 from app.utils.photo_message import safe_edit_or_resend
 
 
@@ -27,6 +28,29 @@ logger = structlog.get_logger(__name__)
 
 # Максимальная длина сообщения Telegram (с запасом)
 MAX_MESSAGE_LEN = 3500
+TICKET_NOTIFICATION_VIEW_CUSTOM_EMOJI_ID = '5210956306952758910'
+TICKET_NOTIFICATION_CLOSE_CUSTOM_EMOJI_ID = '5210952531676504517'
+
+
+def _get_user_ticket_reply_notification_keyboard(texts, ticket_id: int) -> types.InlineKeyboardMarkup:
+    return types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=strip_leading_emoji(texts.t('VIEW_TICKET', '👁️ Посмотреть тикет')),
+                    callback_data=f'view_ticket_{ticket_id}',
+                    icon_custom_emoji_id=TICKET_NOTIFICATION_VIEW_CUSTOM_EMOJI_ID,
+                )
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text=strip_leading_emoji(texts.t('CLOSE_NOTIFICATION', '❌ Закрыть уведомление')),
+                    callback_data=f'close_ticket_notification_{ticket_id}',
+                    icon_custom_emoji_id=TICKET_NOTIFICATION_CLOSE_CUSTOM_EMOJI_ID,
+                )
+            ],
+        ]
+    )
 
 
 def _split_long_block(block: str, max_len: int) -> list[str]:
@@ -1081,21 +1105,7 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
             'TICKET_REPLY_NOTIFICATION',
             '🎫 Получен ответ по тикету #{ticket_id}\n\n{reply_preview}\n\nНажмите кнопку ниже, чтобы перейти к тикету:',
         ).format(ticket_id=ticket.id, reply_preview=html.escape(reply_text))
-        keyboard = types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text=texts.t('VIEW_TICKET', '👁️ Посмотреть тикет'), callback_data=f'view_ticket_{ticket.id}'
-                    )
-                ],
-                [
-                    types.InlineKeyboardButton(
-                        text=texts.t('CLOSE_NOTIFICATION', '❌ Закрыть уведомление'),
-                        callback_data=f'close_ticket_notification_{ticket.id}',
-                    )
-                ],
-            ]
-        )
+        keyboard = _get_user_ticket_reply_notification_keyboard(texts, ticket.id)
 
         # Если было фото в последнем ответе админа — отправим как фото
         last_message = await TicketMessageCRUD.get_last_message(db, ticket.id)

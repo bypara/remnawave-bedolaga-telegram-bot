@@ -64,3 +64,16 @@ def test_reply_handlers_render_custom_emoji_as_html_and_keep_full_notification_t
     assert "parse_mode='HTML'" in admin_source
     assert "reply_preview=html.escape(reply_text)" in notification_source
     assert "reply_text[:100]" not in notification_source
+
+
+def test_user_reply_notification_buttons_use_requested_icons():
+    from app.localization.texts import get_texts
+
+    keyboard = admin_tickets._get_user_ticket_reply_notification_keyboard(get_texts('ru'), 7)
+    view = _button_by_callback(keyboard, 'view_ticket_7')
+    close = _button_by_callback(keyboard, 'close_ticket_notification_7')
+
+    assert view.text == 'Посмотреть тикет'
+    assert view.icon_custom_emoji_id == '5210956306952758910'
+    assert close.text == 'Закрыть уведомление'
+    assert close.icon_custom_emoji_id == '5210952531676504517'
