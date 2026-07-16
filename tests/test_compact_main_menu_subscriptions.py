@@ -18,15 +18,6 @@ def _subscription(*, tariff_name: str, url: str, days: int, subscription_id: int
     )
 
 
-def test_compact_main_menu_time_left_declension():
-    texts = get_texts('ru')
-
-    assert menu._format_compact_main_menu_time_left(1, texts) == 'остался 1 день'
-    assert menu._format_compact_main_menu_time_left(2, texts) == 'осталось 2 дня'
-    assert menu._format_compact_main_menu_time_left(5, texts) == 'осталось 5 дней'
-    assert menu._format_compact_main_menu_time_left(21, texts) == 'остался 21 день'
-
-
 async def test_compact_main_menu_subscription_is_copyable(monkeypatch):
     subscription = _subscription(
         tariff_name='Стандартный',
@@ -41,9 +32,11 @@ async def test_compact_main_menu_subscription_is_copyable(monkeypatch):
 
     result = await menu._build_compact_main_menu_subscriptions(user, get_texts('ru'), AsyncMock())
 
-    assert 'emoji-id="5257965174979042426"' in result
-    assert 'Стандартный' in result
-    assert 'осталось 13 дней' in result
+    assert 'emoji-id="5255850874248399164"' in result
+    assert '<b>Стандартный</b>' in result
+    assert 'emoji-id="5258105663359294787"' in result
+    assert f'<tg-time unix="{int(subscription.end_date.timestamp())}" format="d">' in result
+    assert 'осталось' not in result
     assert 'emoji-id="5260730055880876557"' in result
     assert '<code>https://sub.example/test?key=1&amp;device=2</code>' in result
 
@@ -65,7 +58,8 @@ async def test_compact_main_menu_supports_multiple_tariffs(monkeypatch):
 
     result = await menu._build_compact_main_menu_subscriptions(user, get_texts('ru'), AsyncMock())
 
-    assert result.count('emoji-id="5257965174979042426"') == 2
+    assert result.count('emoji-id="5255850874248399164"') == 2
+    assert result.count('<tg-time unix=') == 2
     assert result.count('<code>https://sub.example/') == 2
     assert 'Стандартный' in result
     assert 'Премиум' in result

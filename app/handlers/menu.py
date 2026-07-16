@@ -39,7 +39,6 @@ from app.services.subscription_checkout_service import (
 from app.services.support_settings_service import SupportSettingsService
 from app.services.user_cart_service import user_cart_service
 from app.utils.display_mode import is_visible_in_bot
-from app.utils.formatters import format_days_declension
 from app.utils.photo_message import edit_or_answer_photo
 from app.utils.pricing_utils import format_period_description
 from app.utils.promo_offer import (
@@ -1464,20 +1463,6 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
     return status_text, ''
 
 
-def _format_compact_main_menu_time_left(days_left: int, texts) -> str:
-    days_text = format_days_declension(days_left, texts.language)
-    language = (texts.language or 'ru').split('-')[0].lower()
-
-    if language == 'ru' and days_left % 10 == 1 and days_left % 100 != 11:
-        template = texts.t('MAIN_MENU_COMPACT_TIME_LEFT_ONE', 'остался {days}')
-    elif language == 'ru':
-        template = texts.t('MAIN_MENU_COMPACT_TIME_LEFT_MANY', 'осталось {days}')
-    else:
-        template = texts.t('MAIN_MENU_COMPACT_TIME_LEFT_MANY', '{days} left')
-
-    return template.format(days=days_text)
-
-
 async def _build_compact_main_menu_subscriptions(user, texts, db: AsyncSession) -> str:
     """Build copy-friendly subscription cards for the compact main menu."""
     if settings.is_multi_tariff_enabled():
@@ -1514,17 +1499,22 @@ async def _build_compact_main_menu_subscriptions(user, texts, db: AsyncSession) 
             'MAIN_MENU_COMPACT_TARIFF_FALLBACK',
             'Подписка',
         )
-        days_left = max(0, (end_date - current_time).days)
-        status_line = texts.t(
-            'MAIN_MENU_COMPACT_SUBSCRIPTION',
-            '<tg-emoji emoji-id="5257965174979042426">📝</tg-emoji> '
-            '{tariff_name} до {end_date}, {time_left}',
+        title_line = texts.t(
+            'MAIN_MENU_COMPACT_SUBSCRIPTION_TITLE',
+            '<tg-emoji emoji-id="5255850874248399164">🎁</tg-emoji> <b>{tariff_name}</b>',
         ).format(
             tariff_name=html.escape(str(tariff_name)),
-            end_date=format_local_datetime(end_date, '%d.%m.%Y'),
-            time_left=_format_compact_main_menu_time_left(days_left, texts),
         )
-        card_lines = [status_line]
+        end_date_fallback = format_local_datetime(end_date, '%d.%m.%Y')
+        telegram_date = (
+            f'<tg-time unix="{int(end_date.timestamp())}" format="d">'
+            f'{html.escape(end_date_fallback)}</tg-time>'
+        )
+        valid_until_line = texts.t(
+            'MAIN_MENU_COMPACT_SUBSCRIPTION_VALID_UNTIL',
+            '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> Действует до: {end_date}',
+        ).format(end_date=telegram_date)
+        card_lines = [title_line, '', valid_until_line]
 
         if not settings.should_hide_subscription_link():
             subscription_link = get_display_subscription_link(subscription)
@@ -1588,7 +1578,7 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
     if not action_prompt.strip():
         subscriptions_block = await _build_compact_main_menu_subscriptions(user, texts, db)
         if subscriptions_block:
-            return f'{base_text}\n\n{subscriptions_block}'
+            return subscriptions_block
         return base_text
 
     info_sections: list[str] = []
