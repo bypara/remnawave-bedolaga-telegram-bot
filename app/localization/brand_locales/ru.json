@@ -127,5 +127,8 @@
   "TICKET_MESSAGES_HEADER": "<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> Сообщения ({count}):\n\n",
   "TICKET_MESSAGE_USER": "<tg-emoji emoji-id=\"5316727448644103237\">👤</tg-emoji> Вы ({date}):",
   "TICKET_MESSAGE_SUPPORT": "<tg-emoji emoji-id=\"5258486128742244085\">👥</tg-emoji> Поддержка ({date}):",
-  "TICKET_MESSAGE_PHOTO_ATTACHMENT": "📎 Вложение: фото"
+  "TICKET_MESSAGE_PHOTO_ATTACHMENT": "📎 Вложение: фото",
+  "TICKET_REPLY_SENT": "<tg-emoji emoji-id=\"5260341314095947411\">👀</tg-emoji> Ответ отправлен",
+  "ADMIN_TICKET_REPLY_SENT": "<tg-emoji emoji-id=\"5260341314095947411\">👀</tg-emoji> Ответ отправлен",
+  "TICKET_REPLY_NOTIFICATION": "<tg-emoji emoji-id=\"5253742260054409879\">✉️</tg-emoji> Получен ответ по тикету #{ticket_id}\n\n{reply_preview}"
 }

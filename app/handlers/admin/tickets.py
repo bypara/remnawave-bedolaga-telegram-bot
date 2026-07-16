@@ -493,6 +493,7 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
 
         await message.answer(
             texts.t('ADMIN_TICKET_REPLY_SENT', '✅ Ответ отправлен!'),
+            parse_mode='HTML',
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
@@ -1079,7 +1080,7 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
         base_text = texts.t(
             'TICKET_REPLY_NOTIFICATION',
             '🎫 Получен ответ по тикету #{ticket_id}\n\n{reply_preview}\n\nНажмите кнопку ниже, чтобы перейти к тикету:',
-        ).format(ticket_id=ticket.id, reply_preview=reply_text[:100] + '...' if len(reply_text) > 100 else reply_text)
+        ).format(ticket_id=ticket.id, reply_preview=html.escape(reply_text))
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -1110,6 +1111,7 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
                     chat_id=chat_id,
                     photo=last_message.media_file_id,
                     caption=caption,
+                    parse_mode='HTML',
                     reply_markup=keyboard,
                 )
                 return
@@ -1126,6 +1128,7 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
         await bot.send_message(
             chat_id=chat_id,
             text=base_text,
+            parse_mode='HTML',
             reply_markup=keyboard,
         )
 

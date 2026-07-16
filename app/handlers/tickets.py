@@ -952,6 +952,7 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
 
         await message.answer(
             texts.t('TICKET_REPLY_SENT', '✅ Ваш ответ отправлен!'),
+            parse_mode='HTML',
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [

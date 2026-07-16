@@ -29,6 +29,9 @@ from app.utils.subscription_utils import (
 
 logger = structlog.get_logger(__name__)
 
+TICKET_REPLY_CUSTOM_EMOJI_ID = '5253742260054409879'
+TICKET_CLOSE_CUSTOM_EMOJI_ID = '5240241223632954241'
+
 
 def _main_menu_button(text: str, icon_name: str, **kwargs) -> InlineKeyboardButton:
     return InlineKeyboardButton(
@@ -3565,7 +3568,9 @@ def get_ticket_view_keyboard(
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('REPLY_TO_TICKET', '💬 Ответить'), callback_data=f'reply_ticket_{ticket_id}'
+                    text=strip_leading_emoji(texts.t('REPLY_TO_TICKET', '💬 Ответить')),
+                    callback_data=f'reply_ticket_{ticket_id}',
+                    icon_custom_emoji_id=TICKET_REPLY_CUSTOM_EMOJI_ID,
                 )
             ]
         )
@@ -3574,7 +3579,9 @@ def get_ticket_view_keyboard(
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('CLOSE_TICKET', '🔒 Закрыть тикет'), callback_data=f'close_ticket_{ticket_id}'
+                    text=strip_leading_emoji(texts.t('CLOSE_TICKET', '🔒 Закрыть тикет')),
+                    callback_data=f'close_ticket_{ticket_id}',
+                    icon_custom_emoji_id=TICKET_CLOSE_CUSTOM_EMOJI_ID,
                 )
             ]
         )
@@ -3707,7 +3714,9 @@ def get_admin_ticket_view_keyboard(
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('REPLY_TO_TICKET', '💬 Ответить'), callback_data=f'admin_reply_ticket_{ticket_id}'
+                    text=strip_leading_emoji(texts.t('REPLY_TO_TICKET', '💬 Ответить')),
+                    callback_data=f'admin_reply_ticket_{ticket_id}',
+                    icon_custom_emoji_id=TICKET_REPLY_CUSTOM_EMOJI_ID,
                 )
             ]
         )
@@ -3716,7 +3725,9 @@ def get_admin_ticket_view_keyboard(
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('CLOSE_TICKET', '🔒 Закрыть тикет'), callback_data=f'admin_close_ticket_{ticket_id}'
+                    text=strip_leading_emoji(texts.t('CLOSE_TICKET', '🔒 Закрыть тикет')),
+                    callback_data=f'admin_close_ticket_{ticket_id}',
+                    icon_custom_emoji_id=TICKET_CLOSE_CUSTOM_EMOJI_ID,
                 )
             ]
         )
@@ -3833,8 +3844,9 @@ def get_ticket_notification_keyboard(
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('REPLY_TO_TICKET', '💬 Ответить'),
+                    text=strip_leading_emoji(texts.t('REPLY_TO_TICKET', '💬 Ответить')),
                     callback_data=f'admin_reply_ticket_{ticket_id}',
+                    icon_custom_emoji_id=TICKET_REPLY_CUSTOM_EMOJI_ID,
                 )
             ]
         )
@@ -3843,8 +3855,9 @@ def get_ticket_notification_keyboard(
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('CLOSE_TICKET', '🔒 Закрыть тикет'),
+                    text=strip_leading_emoji(texts.t('CLOSE_TICKET', '🔒 Закрыть тикет')),
                     callback_data=f'admin_close_ticket_{ticket_id}',
+                    icon_custom_emoji_id=TICKET_CLOSE_CUSTOM_EMOJI_ID,
                 )
             ]
         )
