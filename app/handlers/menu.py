@@ -1464,6 +1464,20 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
     return status_text, ''
 
 
+def _format_compact_main_menu_time_left(days_left: int, texts) -> str:
+    days_text = format_days_declension(days_left, texts.language)
+    language = (texts.language or 'ru').split('-')[0].lower()
+
+    if language == 'ru' and days_left % 10 == 1 and days_left % 100 != 11:
+        template = texts.t('MAIN_MENU_COMPACT_TIME_LEFT_ONE', 'остался {days}')
+    elif language == 'ru':
+        template = texts.t('MAIN_MENU_COMPACT_TIME_LEFT_MANY', 'осталось {days}')
+    else:
+        template = texts.t('MAIN_MENU_COMPACT_TIME_LEFT_MANY', '{days} left')
+
+    return template.format(days=days_text)
+
+
 async def _build_compact_main_menu_subscriptions(user, texts, db: AsyncSession) -> str:
     """Build copy-friendly subscription cards for the compact main menu."""
     if settings.is_multi_tariff_enabled():
@@ -1504,11 +1518,11 @@ async def _build_compact_main_menu_subscriptions(user, texts, db: AsyncSession) 
         status_line = texts.t(
             'MAIN_MENU_COMPACT_SUBSCRIPTION',
             '<tg-emoji emoji-id="5257965174979042426">📝</tg-emoji> '
-            '{tariff_name} до {end_date}, осталось {days_left}',
+            '{tariff_name} до {end_date}, {time_left}',
         ).format(
             tariff_name=html.escape(str(tariff_name)),
             end_date=format_local_datetime(end_date, '%d.%m.%Y'),
-            days_left=format_days_declension(days_left, texts.language),
+            time_left=_format_compact_main_menu_time_left(days_left, texts),
         )
         card_lines = [status_line]
 

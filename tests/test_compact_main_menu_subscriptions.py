@@ -18,6 +18,15 @@ def _subscription(*, tariff_name: str, url: str, days: int, subscription_id: int
     )
 
 
+def test_compact_main_menu_time_left_declension():
+    texts = get_texts('ru')
+
+    assert menu._format_compact_main_menu_time_left(1, texts) == 'остался 1 день'
+    assert menu._format_compact_main_menu_time_left(2, texts) == 'осталось 2 дня'
+    assert menu._format_compact_main_menu_time_left(5, texts) == 'осталось 5 дней'
+    assert menu._format_compact_main_menu_time_left(21, texts) == 'остался 21 день'
+
+
 async def test_compact_main_menu_subscription_is_copyable(monkeypatch):
     subscription = _subscription(
         tariff_name='Стандартный',
