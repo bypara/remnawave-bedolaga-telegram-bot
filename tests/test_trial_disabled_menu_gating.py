@@ -54,6 +54,18 @@ def test_keyboard_hides_trial_when_disabled_for_all():
         settings.TRIAL_DURATION_DAYS, settings.TRIAL_DISABLED_FOR = orig_days, orig_disabled
 
 
+def test_keyboard_hides_trial_after_it_was_used():
+    from app.keyboards.inline import get_main_menu_keyboard
+
+    kb = get_main_menu_keyboard(
+        has_had_paid_subscription=False,
+        has_active_subscription=False,
+        trial_already_used=True,
+    )
+
+    assert not _menu_has_trial(kb)
+
+
 # --- Surface 2: custom-menu constructor path ------------------------------
 
 
@@ -78,6 +90,19 @@ def test_menu_layout_hides_trial_when_disabled():
         assert MenuLayoutService._evaluate_conditions(cond, ctx) is False
     finally:
         settings.TRIAL_DURATION_DAYS, settings.TRIAL_DISABLED_FOR = orig_days, orig_disabled
+
+
+def test_menu_layout_hides_trial_after_it_was_used():
+    from app.services.menu_layout import MenuContext
+    from app.services.menu_layout.service import MenuLayoutService
+
+    ctx = MenuContext(
+        has_had_paid_subscription=False,
+        has_active_subscription=False,
+        trial_already_used=True,
+    )
+
+    assert MenuLayoutService._evaluate_conditions({'show_trial': True}, ctx) is False
 
 
 # --- Surface 3: handlers --------------------------------------------------

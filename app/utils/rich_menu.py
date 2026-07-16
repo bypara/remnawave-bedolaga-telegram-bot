@@ -93,6 +93,12 @@ def is_rich_menu_enabled() -> bool:
     return bool(settings.MAIN_MENU_RICH_ENABLED) and not _rich_unavailable
 
 
+def _compact_main_menu_requested(texts) -> bool:
+    """An empty action prompt opts a locale into the minimal classic caption."""
+    prompt = texts.t('MAIN_MENU_ACTION_PROMPT', 'Choose an option:')
+    return isinstance(prompt, str) and not prompt.strip()
+
+
 def _reset_rich_menu_availability() -> None:
     """Сбрасывает флаги недоступности (используется в тестах)."""
     global _rich_unavailable, _effect_unavailable, _logo_unavailable
@@ -531,7 +537,7 @@ async def try_send_rich_main_menu(
     keyboard: InlineKeyboardMarkup,
 ) -> bool:
     """Отправляет главное меню rich-сообщением. False — показать классическое меню."""
-    if not is_rich_menu_enabled():
+    if not is_rich_menu_enabled() or _compact_main_menu_requested(texts):
         return False
 
     try:
@@ -583,7 +589,7 @@ async def try_edit_rich_main_menu(
     keyboard: InlineKeyboardMarkup,
 ) -> bool:
     """Rich-аналог edit_or_answer_photo для callback-навигации. False — рисовать классику."""
-    if not is_rich_menu_enabled():
+    if not is_rich_menu_enabled() or _compact_main_menu_requested(texts):
         return False
 
     message = callback.message

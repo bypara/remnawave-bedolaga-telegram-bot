@@ -282,24 +282,38 @@ async def show_balance_history(callback: types.CallbackQuery, db_user: User, db:
             total_unique += 1
 
     if not unique_transactions:
-        await callback.message.edit_text('📊 История операций пуста', reply_markup=get_back_keyboard(db_user.language))
+        await callback.message.edit_text(
+            texts.t('BALANCE_HISTORY_EMPTY', 'История операций пуста'),
+            reply_markup=get_back_keyboard(db_user.language),
+        )
         await callback.answer()
         return
 
-    text = '📊 <b>История операций</b>\n\n'
+    text = texts.t(
+        'BALANCE_HISTORY_TITLE',
+        '<tg-emoji emoji-id="5244837092042750681">📈</tg-emoji> <b>История операций</b>',
+    ) + '\n\n'
 
     for transaction in unique_transactions:
         is_credit = transaction.type in CREDIT_TRANSACTION_TYPES
-        emoji = '💰' if is_credit else '💸'
         amount_text = (
             f'+{texts.format_price(transaction.amount_kopeks)}'
             if is_credit
             else f'-{texts.format_price(abs(transaction.amount_kopeks))}'
         )
 
-        text += f'{emoji} {amount_text}\n'
-        text += f'📝 {html.escape(transaction.description or "")}\n'
-        text += f'📅 {transaction.created_at.strftime("%d.%m.%Y %H:%M")}\n\n'
+        text += texts.t(
+            'BALANCE_HISTORY_AMOUNT',
+            '<tg-emoji emoji-id="5258204546391351475">💰</tg-emoji> {amount}',
+        ).format(amount=amount_text) + '\n'
+        text += texts.t(
+            'BALANCE_HISTORY_OPERATION',
+            '<tg-emoji emoji-id="5258328383183396223">📖</tg-emoji> {operation}',
+        ).format(operation=html.escape(transaction.description or '')) + '\n'
+        text += texts.t(
+            'BALANCE_HISTORY_DATE',
+            '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> {date}',
+        ).format(date=transaction.created_at.strftime('%d.%m.%Y %H:%M')) + '\n\n'
 
     keyboard = []
     total_pages = (total_unique + TRANSACTIONS_PER_PAGE - 1) // TRANSACTIONS_PER_PAGE

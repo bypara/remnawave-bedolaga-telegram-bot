@@ -4,7 +4,6 @@ from decimal import Decimal
 
 import structlog
 from aiogram import Dispatcher, F, types
-from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +13,8 @@ from app.database.crud.promo_group import (
     get_auto_assign_promo_groups,
     has_auto_assign_promo_groups,
 )
+from app.database.crud.subscription import get_all_subscriptions_by_user_id
+from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.transaction import get_user_total_spent_kopeks
 from app.database.crud.user import update_user
 from app.database.crud.user_message import get_random_active_message
@@ -21,8 +22,10 @@ from app.database.models import InfoPage, PromoGroup, User
 from app.handlers.subscription.traffic import add_traffic, handle_add_traffic
 from app.keyboards.inline import (
     get_info_menu_keyboard,
+    get_interface_languages,
     get_language_selection_keyboard,
     get_main_menu_keyboard_async,
+    get_profile_keyboard,
 )
 from app.localization.texts import get_rules, get_texts
 from app.services.faq_service import FaqService
@@ -43,6 +46,7 @@ from app.utils.promo_offer import (
     build_test_access_hint,
 )
 from app.utils.rich_menu import try_edit_rich_main_menu
+from app.utils.subscription_utils import get_display_subscription_link
 from app.utils.telegram_html import html_to_telegram, info_page_faq_to_telegram, split_telegram_text
 from app.utils.timezone import format_local_datetime
 
@@ -263,6 +267,40 @@ async def handle_profile_unavailable(callback: types.CallbackQuery) -> None:
         ),
         show_alert=True,
     )
+
+
+async def show_profile_menu(callback: types.CallbackQuery, db_user: User, state: FSMContext) -> None:
+    if db_user is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
+        await callback.answer(
+            texts.t('USER_NOT_FOUND_ERROR', 'Ошибка: пользователь не найден.'),
+            show_alert=True,
+        )
+        return
+
+    # Opening the profile is an explicit exit from nested input flows (promo code,
+    # support forms, etc.). Clear FSM so following messages are not consumed by
+    # the handler the user just left.
+    await state.clear()
+
+    texts = get_texts(db_user.language)
+    display_name = db_user.username or db_user.full_name
+    title = texts.t('PROFILE_MENU_TITLE', '👤 <b>Профиль</b>').format(
+        user_name=html.escape(display_name or '')
+    )
+    prompt = texts.t(
+        'PROFILE_MENU_PROMPT',
+        'Здесь собраны ваши личные настройки и бонусы.\n\nВыберите раздел:',
+    )
+    caption = '\n\n'.join(part for part in (title, prompt) if part)
+
+    await edit_or_answer_photo(
+        callback=callback,
+        caption=caption,
+        keyboard=get_profile_keyboard(db_user.language, db_user.balance_kopeks),
+        parse_mode='HTML',
+    )
+    await callback.answer()
 
 
 async def show_service_rules(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
@@ -1137,6 +1175,7 @@ async def show_language_menu(
             current_language=db_user.language,
             include_back=True,
             language=db_user.language,
+            back_callback_data='menu_profile',
         ),
         parse_mode='HTML',
     )
@@ -1147,6 +1186,7 @@ async def process_language_change(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
+    state: FSMContext,
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
@@ -1177,7 +1217,7 @@ async def process_language_change(
 
     available_map = {
         lang.strip().lower(): lang.strip()
-        for lang in settings.get_available_languages()
+        for lang in get_interface_languages()
         if isinstance(lang, str) and lang.strip()
     }
 
@@ -1188,17 +1228,18 @@ async def process_language_change(
     resolved_language = available_map[normalized_selected].lower()
 
     if db_user.language.lower() == normalized_selected:
+        await state.clear()
         await show_main_menu(
             callback,
             db_user,
             db,
             skip_callback_answer=True,
         )
-        await callback.answer(texts.t('LANGUAGE_SELECTED', '🌐 Язык интерфейса обновлен.'))
+        await callback.answer()
         return
 
     updated_user = await update_user(db, db_user, language=resolved_language)
-    texts = get_texts(updated_user.language)
+    await state.clear()
 
     await show_main_menu(
         callback,
@@ -1206,7 +1247,7 @@ async def process_language_change(
         db,
         skip_callback_answer=True,
     )
-    await callback.answer(texts.t('LANGUAGE_SELECTED', '🌐 Язык интерфейса обновлен.'))
+    await callback.answer()
 
 
 async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
@@ -1422,6 +1463,73 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
     return status_text, ''
 
 
+async def _build_compact_main_menu_subscriptions(user, texts, db: AsyncSession) -> str:
+    """Build copy-friendly subscription cards for the compact main menu."""
+    if settings.is_multi_tariff_enabled():
+        subscriptions = await get_all_subscriptions_by_user_id(db, user.id)
+    else:
+        subscription = getattr(user, 'subscription', None)
+        subscriptions = [subscription] if subscription else []
+
+    current_time = datetime.now(UTC)
+    cards: list[str] = []
+
+    for subscription in subscriptions:
+        actual_status = str(getattr(subscription, 'actual_status', '') or '').lower()
+        end_date = getattr(subscription, 'end_date', None)
+        if end_date and end_date.tzinfo is None:
+            end_date = end_date.replace(tzinfo=UTC)
+
+        if actual_status not in {'active', 'trial', 'limited'} or not end_date or end_date <= current_time:
+            continue
+
+        tariff = vars(subscription).get('tariff')
+        tariff_id = getattr(subscription, 'tariff_id', None)
+        if tariff is None and tariff_id:
+            try:
+                tariff = await get_tariff_by_id(db, tariff_id)
+            except Exception as error:
+                logger.debug(
+                    'Failed to load tariff for compact main menu subscription card',
+                    tariff_id=tariff_id,
+                    error=error,
+                )
+
+        tariff_name = getattr(tariff, 'name', None) or texts.t(
+            'MAIN_MENU_COMPACT_TARIFF_FALLBACK',
+            'Подписка',
+        )
+        title_line = texts.t(
+            'MAIN_MENU_COMPACT_SUBSCRIPTION_TITLE',
+            '<tg-emoji emoji-id="5255850874248399164">🎁</tg-emoji> <b>{tariff_name}</b>',
+        ).format(
+            tariff_name=html.escape(str(tariff_name)),
+        )
+        end_date_fallback = format_local_datetime(end_date, '%d.%m.%Y')
+        telegram_date = (
+            f'<tg-time unix="{int(end_date.timestamp())}" format="d">'
+            f'{html.escape(end_date_fallback)}</tg-time>'
+        )
+        valid_until_line = texts.t(
+            'MAIN_MENU_COMPACT_SUBSCRIPTION_VALID_UNTIL',
+            '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> Действует до: {end_date}',
+        ).format(end_date=telegram_date)
+        card_lines = [title_line, '', valid_until_line]
+
+        if not settings.should_hide_subscription_link():
+            subscription_link = get_display_subscription_link(subscription)
+            if subscription_link:
+                link_line = texts.t(
+                    'MAIN_MENU_COMPACT_SUBSCRIPTION_LINK',
+                    '<tg-emoji emoji-id="5260730055880876557">⛓️</tg-emoji> <code>{subscription_url}</code>',
+                ).format(subscription_url=html.escape(subscription_link))
+                card_lines.append(link_line)
+
+        cards.append('\n'.join(card_lines))
+
+    return '\n\n'.join(cards)
+
+
 async def get_main_menu_text(user, texts, db: AsyncSession):
     from app.config import settings
 
@@ -1436,7 +1544,7 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
 
         if tariff_info_block:
             action_prompt_text = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
-            if action_prompt_text in base_text:
+            if action_prompt_text and action_prompt_text in base_text:
                 base_text = base_text.replace(action_prompt_text, f'{tariff_info_block}\n\n{action_prompt_text}')
     else:
         # Single-tariff mode: legacy behavior
@@ -1463,10 +1571,15 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
 
         if tariff_info_block:
             action_prompt_text = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
-            if action_prompt_text in base_text:
+            if action_prompt_text and action_prompt_text in base_text:
                 base_text = base_text.replace(action_prompt_text, f'{tariff_info_block}\n\n{action_prompt_text}')
 
     action_prompt = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
+    if not action_prompt.strip():
+        subscriptions_block = await _build_compact_main_menu_subscriptions(user, texts, db)
+        if subscriptions_block:
+            return subscriptions_block
+        return base_text
 
     info_sections: list[str] = []
 
@@ -1717,6 +1830,8 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(handle_back_to_menu, F.data == 'back_to_menu')
 
+    dp.callback_query.register(show_profile_menu, F.data == 'menu_profile')
+
     dp.callback_query.register(
         handle_profile_unavailable,
         F.data == 'menu_profile_unavailable',
@@ -1776,7 +1891,7 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(show_language_menu, F.data == 'menu_language')
 
-    dp.callback_query.register(process_language_change, F.data.startswith('language_select:'), StateFilter(None))
+    dp.callback_query.register(process_language_change, F.data.startswith('language_select:'))
 
     dp.callback_query.register(handle_add_traffic, F.data == 'buy_traffic')
 

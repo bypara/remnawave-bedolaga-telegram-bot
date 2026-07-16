@@ -18,6 +18,11 @@ from app.config import settings
 from app.database.crud.system_setting import upsert_system_setting
 from app.database.models import SystemSetting
 from app.localization.texts import get_texts
+from app.utils.miniapp_buttons import (
+    MAIN_MENU_CUSTOM_EMOJI_IDS,
+    get_main_menu_custom_emoji_id,
+    strip_leading_emoji,
+)
 
 from .constants import (
     AVAILABLE_CALLBACKS,
@@ -788,7 +793,7 @@ class MenuLayoutService:
 
         # show_trial
         if conditions.get('show_trial') is True:
-            if context.has_had_paid_subscription or context.has_active_subscription:
+            if context.has_had_paid_subscription or context.has_active_subscription or context.trial_already_used:
                 return False
             # Триал отключён глобально (нулевая длительность или для всех типов)
             if settings.TRIAL_DURATION_DAYS <= 0 or settings.TRIAL_DISABLED_FOR == 'all':
@@ -1013,6 +1018,13 @@ class MenuLayoutService:
         icon = button_config.get('icon', '')
         custom_emoji_id = button_config.get('icon_custom_emoji_id') or None
 
+        main_menu_icon_name = effective_button_id if effective_button_id in MAIN_MENU_CUSTOM_EMOJI_IDS else None
+        custom_emoji_id = (
+            MAIN_MENU_CUSTOM_EMOJI_IDS.get(main_menu_icon_name)
+            or get_main_menu_custom_emoji_id(action)
+            or custom_emoji_id
+        )
+
         # Логирование для отладки кнопки connect
         is_connect_button = (
             effective_button_id == 'connect'
@@ -1035,6 +1047,12 @@ class MenuLayoutService:
         text = cls._get_localized_text(text_config, context.language)
         if not text:
             return None
+
+        if effective_button_id == 'info' or action == 'menu_info':
+            text = texts.t('MAIN_MENU_INFORMATION_BUTTON', 'Информация')
+
+        if custom_emoji_id:
+            text = strip_leading_emoji(text)
 
         # Добавляем юникод-иконку если есть и текст не начинается с неё.
         # Если параллельно задан icon_custom_emoji_id — Telegram сам рендерит кастом emoji
@@ -1124,12 +1142,23 @@ class MenuLayoutService:
 
             row_buttons: list[InlineKeyboardButton] = []
             max_per_row = row_config.get('max_per_row', 2)
+            button_ids = list(row_config.get('buttons', []))
+            if 'trial' in button_ids and 'buy_subscription' in button_ids:
+                button_ids = ['buy_subscription', 'trial'] + [
+                    button_id for button_id in button_ids if button_id not in {'trial', 'buy_subscription'}
+                ]
+                max_per_row = 1
 
-            for button_id in row_config.get('buttons', []):
+            for button_id in button_ids:
                 if button_id not in buttons_config:
                     continue
 
                 button_cfg = buttons_config[button_id]
+
+                # Докупка трафика доступна только внутри экрана подписки.
+                # Также скрываем её из уже сохранённых конфигураций главного меню.
+                if button_id == 'buy_traffic' or button_cfg.get('action') == 'buy_traffic':
+                    continue
 
                 # Проверяем включена ли кнопка
                 if not button_cfg.get('enabled', True):
@@ -1155,6 +1184,21 @@ class MenuLayoutService:
                 for i in range(0, len(row_buttons), max_per_row):
                     keyboard_rows.append(row_buttons[i : i + max_per_row])
 
+        resume_callbacks = {'return_to_saved_cart', 'subscription_resume_checkout'}
+        regular_rows: list[list[InlineKeyboardButton]] = []
+        resume_buttons: list[InlineKeyboardButton] = []
+        for row in keyboard_rows:
+            regular_buttons = []
+            for button in row:
+                if button.callback_data in resume_callbacks:
+                    resume_buttons.append(button)
+                else:
+                    regular_buttons.append(button)
+            if regular_buttons:
+                regular_rows.append(regular_buttons)
+
+        keyboard_rows = regular_rows + [[button] for button in resume_buttons]
+
         return InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
     @classmethod
@@ -1178,12 +1222,21 @@ class MenuLayoutService:
 
             row_buttons: list[dict[str, Any]] = []
             max_per_row = row_config.get('max_per_row', 2)
+            button_ids = list(row_config.get('buttons', []))
+            if 'trial' in button_ids and 'buy_subscription' in button_ids:
+                button_ids = ['buy_subscription', 'trial'] + [
+                    button_id for button_id in button_ids if button_id not in {'trial', 'buy_subscription'}
+                ]
+                max_per_row = 1
 
-            for button_id in row_config.get('buttons', []):
+            for button_id in button_ids:
                 if button_id not in buttons_config:
                     continue
 
                 button_cfg = buttons_config[button_id]
+
+                if button_id == 'buy_traffic' or button_cfg.get('action') == 'buy_traffic':
+                    continue
 
                 if not button_cfg.get('enabled', True):
                     continue

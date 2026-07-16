@@ -10,7 +10,12 @@ from app.config import PERIOD_PRICES, settings
 from app.database.models import User
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
-from app.utils.miniapp_buttons import build_miniapp_or_callback_button
+from app.utils.miniapp_buttons import (
+    MAIN_MENU_CUSTOM_EMOJI_IDS,
+    build_miniapp_or_callback_button,
+    get_main_menu_custom_emoji_id,
+    strip_leading_emoji,
+)
 from app.utils.price_display import PriceInfo, format_price_button
 from app.utils.pricing_utils import (
     apply_percentage_discount,
@@ -23,6 +28,14 @@ from app.utils.subscription_utils import (
 
 
 logger = structlog.get_logger(__name__)
+
+
+def _main_menu_button(text: str, icon_name: str, **kwargs) -> InlineKeyboardButton:
+    return InlineKeyboardButton(
+        text=strip_leading_emoji(text),
+        icon_custom_emoji_id=MAIN_MENU_CUSTOM_EMOJI_IDS[icon_name],
+        **kwargs,
+    )
 
 
 async def get_main_menu_keyboard_async(
@@ -47,6 +60,13 @@ async def get_main_menu_keyboard_async(
     Если MENU_LAYOUT_ENABLED=True, использует конфигурацию из БД.
     Иначе делегирует в синхронную версию.
     """
+    trial_already_used = False
+    if user is not None:
+        try:
+            trial_already_used = user.is_trial_already_used()
+        except (AttributeError, TypeError):
+            trial_already_used = False
+
     if settings.MENU_LAYOUT_ENABLED:
         from app.services.menu_layout_service import MenuContext, MenuLayoutService
 
@@ -120,6 +140,7 @@ async def get_main_menu_keyboard_async(
             has_active_subscription=has_active_subscription,
             subscription_is_active=subscription_is_active,
             has_had_paid_subscription=has_had_paid_subscription,
+            trial_already_used=trial_already_used,
             balance_kopeks=balance_kopeks,
             subscription=subscription,
             show_resume_checkout=show_resume_checkout,
@@ -146,6 +167,7 @@ async def get_main_menu_keyboard_async(
         has_had_paid_subscription=has_had_paid_subscription,
         has_active_subscription=has_active_subscription,
         subscription_is_active=subscription_is_active,
+        trial_already_used=trial_already_used,
         balance_kopeks=balance_kopeks,
         subscription=subscription,
         show_resume_checkout=show_resume_checkout,
@@ -194,6 +216,13 @@ _LANGUAGE_DISPLAY_NAMES = {
     'fa': '🇮🇷 فارسی',
     'fa-ir': '🇮🇷 فارسی',
 }
+
+_FORK_INTERFACE_LANGUAGES = ('ru', 'en')
+
+
+def get_interface_languages() -> list[str]:
+    """Languages with complete fork-specific user-facing copy."""
+    return list(_FORK_INTERFACE_LANGUAGES)
 
 
 def get_rules_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
@@ -281,11 +310,17 @@ def get_post_registration_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKe
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('POST_REGISTRATION_TRIAL_BUTTON', '🚀 Подключиться бесплатно 🚀'),
-                    callback_data='trial_activate',
+                    text=texts.t('POST_REGISTRATION_TRIAL_BUTTON', 'Попробовать тестовую подписку'),
+                    callback_data='menu_trial',
+                    style='danger',
                 )
             ],
-            [InlineKeyboardButton(text=texts.t('SKIP_BUTTON', 'Пропустить ➡️'), callback_data='back_to_menu')],
+            [
+                InlineKeyboardButton(
+                    text=texts.t('POST_REGISTRATION_EXPLORE_BUTTON', 'Я пока тут осмотрюсь'),
+                    callback_data='back_to_menu',
+                )
+            ],
         ]
     )
 
@@ -295,8 +330,9 @@ def get_language_selection_keyboard(
     *,
     include_back: bool = False,
     language: str = DEFAULT_LANGUAGE,
+    back_callback_data: str = 'back_to_menu',
 ) -> InlineKeyboardMarkup:
-    available_languages = settings.get_available_languages()
+    available_languages = get_interface_languages()
 
     buttons: list[list[InlineKeyboardButton]] = []
     row: list[InlineKeyboardButton] = []
@@ -328,7 +364,7 @@ def get_language_selection_keyboard(
 
     if include_back:
         texts = get_texts(language)
-        buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
+        buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback_data)])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -406,7 +442,12 @@ def _build_cabinet_main_menu_keyboard(
                 resolved = _resolve_style(section_cfg['style'])
             else:
                 resolved = global_style or _resolve_style(CALLBACK_TO_CABINET_STYLE.get(callback_fallback))
-            resolved_emoji = icon_custom_emoji_id or section_cfg.get('icon_custom_emoji_id') or None
+            resolved_emoji = (
+                get_main_menu_custom_emoji_id(callback_fallback)
+                or icon_custom_emoji_id
+                or section_cfg.get('icon_custom_emoji_id')
+                or None
+            )
 
             # При наличии custom emoji стрипаем ведущий юникод-emoji из текста —
             # иначе Telegram нарисует обе иконки.
@@ -420,7 +461,12 @@ def _build_cabinet_main_menu_keyboard(
                 style=resolved,
                 icon_custom_emoji_id=resolved_emoji or None,
             )
-        return InlineKeyboardButton(text=text, callback_data=callback_fallback)
+        resolved_emoji = get_main_menu_custom_emoji_id(callback_fallback)
+        return InlineKeyboardButton(
+            text=strip_leading_emoji(text) if resolved_emoji else text,
+            callback_data=callback_fallback,
+            icon_custom_emoji_id=resolved_emoji,
+        )
 
     # -- Collect row definitions sorted by row_N key --
     row_keys = sorted(
@@ -517,7 +563,7 @@ def _build_cabinet_main_menu_keyboard(
                 case 'info':
                     if not section_cfg.get('enabled', True):
                         continue
-                    info_text = section_cfg.get('labels', {}).get(language, '') or texts.t('MENU_INFO', 'ℹ️ Инфо')
+                    info_text = texts.t('MAIN_MENU_INFORMATION_BUTTON', 'Информация')
                     row_buttons.append(_cabinet_button(info_text, '/info', 'menu_info'))
 
                 case 'language':
@@ -579,6 +625,7 @@ def get_main_menu_keyboard(
     show_resume_checkout: bool = False,
     has_saved_cart: bool = False,  # Новый параметр для отображения уведомления о сохраненной корзине
     *,
+    trial_already_used: bool = False,
     is_moderator: bool = False,
     custom_buttons: list[InlineKeyboardButton] | None = None,
 ) -> InlineKeyboardMarkup:
@@ -604,25 +651,24 @@ def get_main_menu_keyboard(
             balance=balance_kopeks,
         )
 
-    safe_balance = balance_kopeks or 0
-    if hasattr(texts, 'BALANCE_BUTTON') and safe_balance > 0:
-        balance_button_text = texts.BALANCE_BUTTON.format(balance=texts.format_price(safe_balance))
-    else:
-        balance_button_text = texts.t(
-            'BALANCE_BUTTON_DEFAULT',
-            '💰 Баланс: {balance}',
-        ).format(balance=texts.format_price(safe_balance))
-
     keyboard: list[list[InlineKeyboardButton]] = []
     paired_buttons: list[InlineKeyboardButton] = []
+    profile_row = [
+        _main_menu_button(
+            text=texts.t('PROFILE_MENU_BUTTON', '👤 Профиль'),
+            icon_name='profile',
+            callback_data='menu_profile',
+        )
+    ]
 
     if has_active_subscription and subscription_is_active:
         connect_mode = settings.CONNECT_BUTTON_MODE
         subscription_link = get_display_subscription_link(subscription)
 
         def _fallback_connect_button() -> InlineKeyboardButton:
-            return InlineKeyboardButton(
+            return _main_menu_button(
                 text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                icon_name='connect',
                 callback_data='subscription_connect',
             )
 
@@ -630,8 +676,9 @@ def get_main_menu_keyboard(
             if subscription_link:
                 keyboard.append(
                     [
-                        InlineKeyboardButton(
+                        _main_menu_button(
                             text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                            icon_name='connect',
                             web_app=types.WebAppInfo(url=subscription_link),
                         )
                     ]
@@ -641,8 +688,9 @@ def get_main_menu_keyboard(
         elif connect_mode == 'miniapp_custom':
             keyboard.append(
                 [
-                    InlineKeyboardButton(
+                    _main_menu_button(
                         text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                        icon_name='connect',
                         web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                     )
                 ]
@@ -650,7 +698,13 @@ def get_main_menu_keyboard(
         elif connect_mode == 'link':
             if subscription_link:
                 keyboard.append(
-                    [InlineKeyboardButton(text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), url=subscription_link)]
+                    [
+                        _main_menu_button(
+                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                            icon_name='connect',
+                            url=subscription_link,
+                        )
+                    ]
                 )
             else:
                 keyboard.append([_fallback_connect_button()])
@@ -658,8 +712,9 @@ def get_main_menu_keyboard(
             if subscription_link:
                 keyboard.append(
                     [
-                        InlineKeyboardButton(
+                        _main_menu_button(
                             text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                            icon_name='connect',
                             callback_data=(
                                 'subscription_connect'
                                 if settings.is_multi_tariff_enabled()
@@ -673,6 +728,8 @@ def get_main_menu_keyboard(
         else:
             keyboard.append([_fallback_connect_button()])
 
+        keyboard.append(profile_row)
+
         happ_row = get_happ_download_button_row(texts)
         if happ_row:
             keyboard.append(happ_row)
@@ -681,83 +738,51 @@ def get_main_menu_keyboard(
             if settings.is_multi_tariff_enabled()
             else texts.MENU_SUBSCRIPTION
         )
-        paired_buttons.append(InlineKeyboardButton(text=sub_btn_text, callback_data='menu_subscription'))
-
-        # Добавляем кнопку докупки трафика для лимитированных подписок
-        # В режиме тарифов проверяем tariff_id (детальная проверка в хендлере)
-        # В классическом режиме проверяем глобальные настройки
-        show_traffic_topup = False
-        if subscription and not subscription.is_trial and (subscription.traffic_limit_gb or 0) > 0:
-            if settings.is_tariffs_mode() and getattr(subscription, 'tariff_id', None):
-                # Режим тарифов - показываем кнопку, проверка настроек тарифа в хендлере
-                show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
-            elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
-                # Классический режим - проверяем глобальные настройки
-                show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
-
-        if show_traffic_topup:
-            paired_buttons.append(
-                InlineKeyboardButton(
-                    text=texts.t('BUY_TRAFFIC_BUTTON', '📈 Докупить трафик'), callback_data='buy_traffic'
-                )
-            )
-
-    keyboard.append([InlineKeyboardButton(text=balance_button_text, callback_data='menu_balance')])
+        paired_buttons.append(
+            _main_menu_button(text=sub_btn_text, icon_name='subscription', callback_data='menu_subscription')
+        )
+    else:
+        keyboard.append(profile_row)
 
     show_trial = (
         not has_had_paid_subscription
         and not has_active_subscription
+        and not trial_already_used
         and settings.TRIAL_DURATION_DAYS > 0
         and settings.TRIAL_DISABLED_FOR != 'all'
     )
 
     show_buy = not has_active_subscription or not subscription_is_active
-    current_subscription = subscription
-    bool(
-        current_subscription
-        and not getattr(current_subscription, 'is_trial', False)
-        and getattr(current_subscription, 'is_active', False)
-    )
     simple_purchase_button = None
+    resume_checkout_button = None
     if settings.SIMPLE_SUBSCRIPTION_ENABLED:
         simple_purchase_button = InlineKeyboardButton(
             text=texts.MENU_SIMPLE_SUBSCRIPTION,
             callback_data='simple_subscription_purchase',
         )
 
-    subscription_buttons: list[InlineKeyboardButton] = []
+    # Покупка — основное действие, триал — альтернатива.
+    # Показываем их отдельными широкими рядами именно в этом порядке.
+    if show_buy:
+        keyboard.append([InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')])
 
     if show_trial:
-        subscription_buttons.append(InlineKeyboardButton(text=texts.MENU_TRIAL, callback_data='menu_trial'))
+        keyboard.append([InlineKeyboardButton(text=texts.MENU_TRIAL, callback_data='menu_trial')])
 
-    if show_buy:
-        subscription_buttons.append(InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy'))
-
-    if subscription_buttons:
-        paired_buttons.extend(subscription_buttons)
     if simple_purchase_button:
         paired_buttons.append(simple_purchase_button)
 
     if show_resume_checkout or has_saved_cart:
         resume_callback = 'return_to_saved_cart' if has_saved_cart else 'subscription_resume_checkout'
-        paired_buttons.append(
-            InlineKeyboardButton(
-                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                callback_data=resume_callback,
-            )
+        resume_checkout_button = InlineKeyboardButton(
+            text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+            callback_data=resume_callback,
         )
 
     if custom_buttons:
         for button in custom_buttons:
             if isinstance(button, InlineKeyboardButton):
                 paired_buttons.append(button)
-
-    # Добавляем кнопки промокода и рефералов, учитывая настройки
-    paired_buttons.append(InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data='menu_promocode'))
-
-    # Добавляем кнопку рефералов, только если программа включена
-    if settings.is_referral_program_enabled():
-        paired_buttons.append(InlineKeyboardButton(text=texts.MENU_REFERRALS, callback_data='menu_referrals'))
 
     # Добавляем кнопку конкурсов
     if settings.CONTESTS_ENABLED and settings.CONTESTS_BUTTON_VISIBLE:
@@ -773,21 +798,21 @@ def get_main_menu_keyboard(
         support_enabled = settings.SUPPORT_MENU_ENABLED
 
     if support_enabled:
-        paired_buttons.append(InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data='menu_support'))
+        paired_buttons.append(
+            _main_menu_button(text=texts.MENU_SUPPORT, icon_name='support', callback_data='menu_support')
+        )
 
     # Добавляем кнопку активации
     if settings.ACTIVATE_BUTTON_VISIBLE:
         paired_buttons.append(InlineKeyboardButton(text=settings.ACTIVATE_BUTTON_TEXT, callback_data='activate_button'))
 
     paired_buttons.append(
-        InlineKeyboardButton(
-            text=texts.t('MENU_INFO', 'ℹ️ Инфо'),
+        _main_menu_button(
+            text=texts.t('MAIN_MENU_INFORMATION_BUTTON', 'Информация'),
+            icon_name='info',
             callback_data='menu_info',
         )
     )
-
-    if settings.is_language_selection_enabled():
-        paired_buttons.append(InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data='menu_language'))
 
     for i in range(0, len(paired_buttons), 2):
         row = paired_buttons[i : i + 2]
@@ -806,6 +831,43 @@ def get_main_menu_keyboard(
     if (not is_admin) and is_moderator:
         keyboard.append([InlineKeyboardButton(text='🧑‍⚖️ Модерация', callback_data='moderator_panel')])
 
+    if resume_checkout_button:
+        keyboard.append([resume_checkout_button])
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_profile_keyboard(
+    language: str = DEFAULT_LANGUAGE,
+    balance_kopeks: int = 0,
+) -> InlineKeyboardMarkup:
+    """Build a compact profile menu for personal settings and bonuses."""
+    texts = get_texts(language)
+    safe_balance = balance_kopeks or 0
+    balance_text = texts.t('BALANCE_BUTTON_DEFAULT', '💰 Баланс: {balance}').format(
+        balance=texts.format_price(safe_balance),
+    )
+    if hasattr(texts, 'BALANCE_BUTTON') and safe_balance > 0:
+        balance_text = texts.BALANCE_BUTTON.format(balance=texts.format_price(safe_balance))
+
+    keyboard: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text=balance_text, callback_data='menu_balance')],
+    ]
+
+    bonus_row = [InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data='menu_promocode')]
+    if settings.is_referral_program_enabled():
+        bonus_row.append(
+            InlineKeyboardButton(
+                text=texts.t('PROFILE_REFERRALS_BUTTON', '🤝 Реф. система'),
+                callback_data='menu_referrals',
+            )
+        )
+    keyboard.append(bonus_row)
+
+    if settings.is_language_selection_enabled():
+        keyboard.append([InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data='menu_language')])
+
+    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
@@ -846,7 +908,7 @@ def get_info_menu_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('MENU_PRIVACY_POLICY', '🛡️ Политика конф.'),
+                    text=texts.t('MENU_PRIVACY_POLICY', '🛡️ Политика конфиденциальности'),
                     callback_data='menu_privacy_policy',
                 )
             ]
@@ -1594,7 +1656,7 @@ def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
                 )
             ]
         )
-    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
+    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_profile')])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -2278,7 +2340,7 @@ def get_referral_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMar
             ]
         )
 
-    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
+    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_profile')])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -2560,9 +2622,9 @@ def get_add_traffic_keyboard(
             else:
                 text = f'♾️ Unlimited traffic - {total_price // 100} ₽{period_text}'
         elif use_russian_fallback:
-            text = f'📊 +{gb} ГБ трафика - {total_price // 100} ₽{period_text}'
+            text = f'+{gb} ГБ трафика - {total_price // 100} ₽{period_text}'
         else:
-            text = f'📊 +{gb} GB traffic - {total_price // 100} ₽{period_text}'
+            text = f'+{gb} GB traffic - {total_price // 100} ₽{period_text}'
 
         if discount_percent > 0 and total_discount > 0:
             if use_russian_fallback:
@@ -2570,7 +2632,15 @@ def get_add_traffic_keyboard(
             else:
                 text += f' (discount {discount_percent}%: -{total_discount // 100}₽)'
 
-        buttons.append([InlineKeyboardButton(text=text, callback_data=f'add_traffic_{gb}')])
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=text,
+                    callback_data=f'add_traffic_{gb}',
+                    icon_custom_emoji_id='5274008024585871702' if gb > 0 else None,
+                )
+            ]
+        )
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)])
 
@@ -2628,9 +2698,9 @@ def get_add_traffic_keyboard_from_tariff(
         period_text = ' /мес' if use_russian_fallback else ' /mo'
 
         if use_russian_fallback:
-            text = f'📊 +{gb} ГБ трафика - {discounted_price // 100} ₽{period_text}'
+            text = f'+{gb} ГБ трафика - {discounted_price // 100} ₽{period_text}'
         else:
-            text = f'📊 +{gb} GB traffic - {discounted_price // 100} ₽{period_text}'
+            text = f'+{gb} GB traffic - {discounted_price // 100} ₽{period_text}'
 
         if discount_percent > 0 and discount_value > 0:
             if use_russian_fallback:
@@ -2638,7 +2708,15 @@ def get_add_traffic_keyboard_from_tariff(
             else:
                 text += f' (discount {discount_percent}%: -{discount_value // 100}₽)'
 
-        buttons.append([InlineKeyboardButton(text=text, callback_data=f'add_traffic_{gb}')])
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=text,
+                    callback_data=f'add_traffic_{gb}',
+                    icon_custom_emoji_id='5274008024585871702',
+                )
+            ]
+        )
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)])
 

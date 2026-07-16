@@ -28,7 +28,7 @@ _DYNAMIC_LANGUAGE_CONFIGS = {
         'traffic_pattern': '📊 {size} ГБ - {price}',
         'unlimited_pattern': '📊 Безлимит - {price}',
         'support_info': (
-            '\n🛟 <b>Поддержка</b>\n\n'
+            '\n<tg-emoji emoji-id="5258337316715373336">🤙</tg-emoji> <b>Поддержка</b>\n\n'
             'Это центр тикетов: создавайте обращения, просматривайте ответы и историю.\n\n'
             '• 🎫 Создать тикет — опишите проблему или вопрос\n'
             '• 📋 Мои тикеты — статус и переписка\n'
@@ -52,7 +52,7 @@ _DYNAMIC_LANGUAGE_CONFIGS = {
         'traffic_pattern': '📊 {size} GB - {price}',
         'unlimited_pattern': '📊 Unlimited - {price}',
         'support_info': (
-            '\n🛟 <b>RemnaWave Support</b>\n\n'
+            '\n<tg-emoji emoji-id="5258337316715373336">🤙</tg-emoji> <b>RemnaWave Support</b>\n\n'
             'This is the ticket center: create requests, view replies and history.\n\n'
             '• 🎫 Create ticket — describe your issue or question\n'
             '• 📋 My tickets — status and conversation\n'

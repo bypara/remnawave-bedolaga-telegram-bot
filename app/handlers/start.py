@@ -28,6 +28,7 @@ from app.database.crud.user_message import get_random_active_message
 from app.database.models import GuestPurchase, GuestPurchaseStatus, PinnedMessage, SubscriptionStatus, UserStatus
 from app.keyboards.inline import (
     get_back_keyboard,
+    get_interface_languages,
     get_language_selection_keyboard,
     get_main_menu_keyboard_async,
     get_post_registration_keyboard,
@@ -75,6 +76,32 @@ logger = structlog.get_logger(__name__)
 
 
 _SUBID_DELIMITER = '_subid_'
+
+
+def _can_offer_post_registration_trial(user) -> bool:
+    """Return whether a newly registered user may enter the trial funnel."""
+    subscriptions = getattr(user, 'subscriptions', None) or []
+    has_active_subscription = any(getattr(subscription, 'is_active', False) for subscription in subscriptions)
+
+    return (
+        settings.TRIAL_DURATION_DAYS > 0
+        and not settings.is_trial_disabled_for_user(getattr(user, 'auth_type', 'telegram'))
+        and not has_active_subscription
+        and not getattr(user, 'has_had_paid_subscription', False)
+        and not user.is_trial_already_used()
+    )
+
+
+def _get_default_post_registration_offer(texts) -> str:
+    return texts.t(
+        'POST_REGISTRATION_OFFER',
+        '🎁 <b>Попробуйте VPN перед покупкой</b>\n\n'
+        'Сначала проверьте скорость, стабильность и доступ к нужным сервисам на тестовой подписке.\n\n'
+        '⚡ Быстрое подключение\n'
+        '🛡 Защищённое соединение\n'
+        '🌍 Доступ к нужным сервисам\n\n'
+        'Сначала попробуйте — потом решите, подходит ли вам сервис.',
+    )
 
 
 def _split_start_param_subid(param: str | None) -> tuple[str | None, str | None]:
@@ -1518,7 +1545,7 @@ async def process_language_selection(
 
     available_map = {
         lang.strip().lower(): lang.strip()
-        for lang in settings.get_available_languages()
+        for lang in get_interface_languages()
         if isinstance(lang, str) and lang.strip()
     }
 
@@ -1537,17 +1564,14 @@ async def process_language_selection(
     data['language'] = resolved_language
     await state.set_data(data)
 
-    texts = get_texts(resolved_language)
-
     try:
-        await callback.message.edit_text(
-            texts.t('LANGUAGE_SELECTED', '🌐 Язык интерфейса обновлен.'),
-        )
+        await callback.message.delete()
     except Exception as error:
-        logger.warning('⚠️ LANGUAGE: Не удалось обновить сообщение выбора языка', error=error)
-        await callback.message.answer(
-            texts.t('LANGUAGE_SELECTED', '🌐 Язык интерфейса обновлен.'),
-        )
+        logger.debug('Не удалось удалить сообщение выбора языка', error=error)
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
 
     await callback.answer()
 
@@ -2178,15 +2202,23 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
     from app.database.crud.welcome_text import get_welcome_text_for_user
 
     offer_text = await get_welcome_text_for_user(db, callback.from_user)
+    can_offer_trial = _can_offer_post_registration_trial(user)
+    if not offer_text and can_offer_trial:
+        offer_text = _get_default_post_registration_offer(texts)
     pinned_message = await get_active_pinned_message(db)
 
     if offer_text:
+        keyboard = (
+            get_post_registration_keyboard(user.language)
+            if can_offer_trial
+            else get_back_keyboard(user.language, callback_data='back_to_menu')
+        )
         try:
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, user, pinned_message)
             await callback.message.answer(
                 offer_text,
-                reply_markup=get_post_registration_keyboard(user.language),
+                reply_markup=keyboard,
                 parse_mode='HTML',
             )
             logger.info('✅ Приветственное сообщение отправлено пользователю', telegram_id=user.telegram_id)
@@ -2198,7 +2230,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
                 try:
                     await callback.message.answer(
                         offer_text,
-                        reply_markup=get_post_registration_keyboard(user.language),
+                        reply_markup=keyboard,
                         parse_mode=None,
                     )
                     if pinned_message and not pinned_message.send_before_menu:
@@ -2537,18 +2569,18 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
     from app.database.crud.welcome_text import get_welcome_text_for_user
 
     offer_text = await get_welcome_text_for_user(db, message.from_user)
+    can_offer_trial = _can_offer_post_registration_trial(user)
+    if not offer_text and can_offer_trial:
+        offer_text = _get_default_post_registration_offer(texts)
     pinned_message = await get_active_pinned_message(db)
 
     if offer_text:
+        keyboard = (
+            get_post_registration_keyboard(user.language)
+            if can_offer_trial
+            else get_back_keyboard(user.language, callback_data='back_to_menu')
+        )
         try:
-            # Если у пользователя уже есть подписка (например, от промокода), не предлагаем триал
-            _subs = getattr(user, 'subscriptions', None) or []
-            user_has_subscription = any(s.is_active for s in _subs)
-            if user_has_subscription:
-                keyboard = get_back_keyboard(user.language, callback_data='back_to_menu')
-            else:
-                keyboard = get_post_registration_keyboard(user.language)
-
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, user, pinned_message)
             await message.answer(

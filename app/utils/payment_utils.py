@@ -433,17 +433,6 @@ def get_payment_methods_text(language: str) -> str:
 Выберите способ пополнения:""",
         )
 
-    if len(methods) == 1 and methods[0]['id'] == 'support':
-        return texts.t(
-            'PAYMENT_METHODS_ONLY_SUPPORT',
-            """💳 <b>Способы пополнения баланса</b>
-
-⚠️ В данный момент автоматические способы оплаты временно недоступны.
-Обратитесь в техподдержку для пополнения баланса.
-
-Выберите способ пополнения:""",
-        )
-
     text = (
         texts.t(
             'PAYMENT_METHODS_TITLE',
@@ -482,12 +471,14 @@ def get_payment_methods_text(language: str) -> str:
 
         text += f'{name} - {description}\n'
 
-    text += '\n' + texts.t(
+    footer = texts.t(
         'PAYMENT_METHODS_FOOTER',
         'Выберите способ пополнения:',
     )
+    if footer:
+        text += '\n' + footer
 
-    return text
+    return text.rstrip()
 
 
 def is_payment_method_available(method_id: str) -> bool:
