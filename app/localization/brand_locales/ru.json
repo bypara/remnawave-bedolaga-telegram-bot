@@ -1,6 +1,9 @@
 {
   "MAIN_MENU": "<tg-emoji emoji-id=\"5255850874248399164\">🎁</tg-emoji>",
   "MAIN_MENU_ACTION_PROMPT": "",
+  "MAIN_MENU_COMPACT_SUBSCRIPTION": "<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> {tariff_name} до {end_date}, осталось {days_left}",
+  "MAIN_MENU_COMPACT_SUBSCRIPTION_LINK": "<tg-emoji emoji-id=\"5260730055880876557\">⛓️</tg-emoji> <code>{subscription_url}</code>",
+  "MAIN_MENU_COMPACT_TARIFF_FALLBACK": "Подписка",
   "MENU_INFO_HEADER": "<tg-emoji emoji-id=\"5258474669769497337\">❗️</tg-emoji> <b>Информация</b>",
   "MENU_INFO_PROMPT": "",
   "POST_REGISTRATION_OFFER": "<tg-emoji emoji-id=\"5461151367559141950\">🎉</tg-emoji> Попробуйте VPN перед покупкой\n\nСначала проверьте скорость, стабильность и доступ к нужным сервисам на тестовой подписке.\n\nЕсли что-то не работает — напишите нам, мы постараемся решить ваш вопрос.",

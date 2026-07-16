@@ -13,6 +13,8 @@ from app.database.crud.promo_group import (
     get_auto_assign_promo_groups,
     has_auto_assign_promo_groups,
 )
+from app.database.crud.subscription import get_all_subscriptions_by_user_id
+from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.transaction import get_user_total_spent_kopeks
 from app.database.crud.user import update_user
 from app.database.crud.user_message import get_random_active_message
@@ -37,6 +39,7 @@ from app.services.subscription_checkout_service import (
 from app.services.support_settings_service import SupportSettingsService
 from app.services.user_cart_service import user_cart_service
 from app.utils.display_mode import is_visible_in_bot
+from app.utils.formatters import format_days_declension
 from app.utils.photo_message import edit_or_answer_photo
 from app.utils.pricing_utils import format_period_description
 from app.utils.promo_offer import (
@@ -44,6 +47,7 @@ from app.utils.promo_offer import (
     build_test_access_hint,
 )
 from app.utils.rich_menu import try_edit_rich_main_menu
+from app.utils.subscription_utils import get_display_subscription_link
 from app.utils.telegram_html import html_to_telegram, info_page_faq_to_telegram, split_telegram_text
 from app.utils.timezone import format_local_datetime
 
@@ -1460,6 +1464,68 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
     return status_text, ''
 
 
+async def _build_compact_main_menu_subscriptions(user, texts, db: AsyncSession) -> str:
+    """Build copy-friendly subscription cards for the compact main menu."""
+    if settings.is_multi_tariff_enabled():
+        subscriptions = await get_all_subscriptions_by_user_id(db, user.id)
+    else:
+        subscription = getattr(user, 'subscription', None)
+        subscriptions = [subscription] if subscription else []
+
+    current_time = datetime.now(UTC)
+    cards: list[str] = []
+
+    for subscription in subscriptions:
+        actual_status = str(getattr(subscription, 'actual_status', '') or '').lower()
+        end_date = getattr(subscription, 'end_date', None)
+        if end_date and end_date.tzinfo is None:
+            end_date = end_date.replace(tzinfo=UTC)
+
+        if actual_status not in {'active', 'trial', 'limited'} or not end_date or end_date <= current_time:
+            continue
+
+        tariff = vars(subscription).get('tariff')
+        tariff_id = getattr(subscription, 'tariff_id', None)
+        if tariff is None and tariff_id:
+            try:
+                tariff = await get_tariff_by_id(db, tariff_id)
+            except Exception as error:
+                logger.debug(
+                    'Failed to load tariff for compact main menu subscription card',
+                    tariff_id=tariff_id,
+                    error=error,
+                )
+
+        tariff_name = getattr(tariff, 'name', None) or texts.t(
+            'MAIN_MENU_COMPACT_TARIFF_FALLBACK',
+            'Подписка',
+        )
+        days_left = max(0, (end_date - current_time).days)
+        status_line = texts.t(
+            'MAIN_MENU_COMPACT_SUBSCRIPTION',
+            '<tg-emoji emoji-id="5257965174979042426">📝</tg-emoji> '
+            '{tariff_name} до {end_date}, осталось {days_left}',
+        ).format(
+            tariff_name=html.escape(str(tariff_name)),
+            end_date=format_local_datetime(end_date, '%d.%m.%Y'),
+            days_left=format_days_declension(days_left, texts.language),
+        )
+        card_lines = [status_line]
+
+        if not settings.should_hide_subscription_link():
+            subscription_link = get_display_subscription_link(subscription)
+            if subscription_link:
+                link_line = texts.t(
+                    'MAIN_MENU_COMPACT_SUBSCRIPTION_LINK',
+                    '<tg-emoji emoji-id="5260730055880876557">⛓️</tg-emoji> <code>{subscription_url}</code>',
+                ).format(subscription_url=html.escape(subscription_link))
+                card_lines.append(link_line)
+
+        cards.append('\n'.join(card_lines))
+
+    return '\n\n'.join(cards)
+
+
 async def get_main_menu_text(user, texts, db: AsyncSession):
     from app.config import settings
 
@@ -1506,6 +1572,9 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
 
     action_prompt = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
     if not action_prompt.strip():
+        subscriptions_block = await _build_compact_main_menu_subscriptions(user, texts, db)
+        if subscriptions_block:
+            return f'{base_text}\n\n{subscriptions_block}'
         return base_text
 
     info_sections: list[str] = []
