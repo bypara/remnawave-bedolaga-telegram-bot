@@ -120,5 +120,12 @@
   "PAYMENT_METHODS_TITLE": "<tg-emoji emoji-id=\"5258204546391351475\">💰</tg-emoji> Способы пополнения баланса",
   "PAYMENT_METHODS_PROMPT": "Выберите удобный для вас способ оплаты:",
   "PAYMENT_METHODS_FOOTER": "",
-  "TICKET_CREATED_MESSAGE": "<tg-emoji emoji-id=\"5206607081334906820\">✔️</tg-emoji> Тикет #{ticket_id} создан\n\n<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> Заголовок: {title}\n<tg-emoji emoji-id=\"5323761960829862762\">⚡️</tg-emoji> Статус: {status}"
+  "TICKET_CREATED_MESSAGE": "<tg-emoji emoji-id=\"5206607081334906820\">✔️</tg-emoji> Тикет #{ticket_id} создан\n\n<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> Заголовок: {title}\n<tg-emoji emoji-id=\"5323761960829862762\">⚡️</tg-emoji> Статус: {status}",
+  "MY_TICKETS_TITLE": "<tg-emoji emoji-id=\"5260233433107407649\">↔️</tg-emoji> Тикеты",
+  "CLOSED_TICKETS_TITLE": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> Закрытые тикеты",
+  "TICKET_DETAIL_HEADER": "<tg-emoji emoji-id=\"5258216851472654189\">💡</tg-emoji> Тикет #{ticket_id}\n\n<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> Заголовок: {title}\n<tg-emoji emoji-id=\"5258474669769497337\">❗️</tg-emoji> Статус: {status}\n<tg-emoji emoji-id=\"5258096772776991776\">⚙️</tg-emoji> Создан: {created}\n\n",
+  "TICKET_MESSAGES_HEADER": "<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> Сообщения ({count}):\n\n",
+  "TICKET_MESSAGE_USER": "<tg-emoji emoji-id=\"5316727448644103237\">👤</tg-emoji> Вы ({date}):",
+  "TICKET_MESSAGE_SUPPORT": "<tg-emoji emoji-id=\"5258486128742244085\">👥</tg-emoji> Поддержка ({date}):",
+  "TICKET_MESSAGE_PHOTO_ATTACHMENT": "📎 Вложение: фото"
 }

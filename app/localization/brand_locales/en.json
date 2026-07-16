@@ -120,5 +120,12 @@
   "PAYMENT_METHODS_TITLE": "<tg-emoji emoji-id=\"5258204546391351475\">💰</tg-emoji> Balance top-up methods",
   "PAYMENT_METHODS_PROMPT": "Choose the payment method that works best for you:",
   "PAYMENT_METHODS_FOOTER": "",
-  "TICKET_CREATED_MESSAGE": "<tg-emoji emoji-id=\"5206607081334906820\">✔️</tg-emoji> Ticket #{ticket_id} created\n\n<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> Title: {title}\n<tg-emoji emoji-id=\"5323761960829862762\">⚡️</tg-emoji> Status: {status}"
+  "TICKET_CREATED_MESSAGE": "<tg-emoji emoji-id=\"5206607081334906820\">✔️</tg-emoji> Ticket #{ticket_id} created\n\n<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> Title: {title}\n<tg-emoji emoji-id=\"5323761960829862762\">⚡️</tg-emoji> Status: {status}",
+  "MY_TICKETS_TITLE": "<tg-emoji emoji-id=\"5260233433107407649\">↔️</tg-emoji> Tickets",
+  "CLOSED_TICKETS_TITLE": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> Closed tickets",
+  "TICKET_DETAIL_HEADER": "<tg-emoji emoji-id=\"5258216851472654189\">💡</tg-emoji> Ticket #{ticket_id}\n\n<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> Title: {title}\n<tg-emoji emoji-id=\"5258474669769497337\">❗️</tg-emoji> Status: {status}\n<tg-emoji emoji-id=\"5258096772776991776\">⚙️</tg-emoji> Created: {created}\n\n",
+  "TICKET_MESSAGES_HEADER": "<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> Messages ({count}):\n\n",
+  "TICKET_MESSAGE_USER": "<tg-emoji emoji-id=\"5316727448644103237\">👤</tg-emoji> You ({date}):",
+  "TICKET_MESSAGE_SUPPORT": "<tg-emoji emoji-id=\"5258486128742244085\">👥</tg-emoji> Support ({date}):",
+  "TICKET_MESSAGE_PHOTO_ATTACHMENT": "📎 Photo attachment"
 }

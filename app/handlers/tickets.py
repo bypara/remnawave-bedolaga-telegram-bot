@@ -576,21 +576,40 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         TicketStatus.PENDING.value: texts.t('TICKET_STATUS_PENDING', 'В ожидании'),
     }.get(ticket.status, ticket.status)
 
-    header = (
-        f'🎫 Тикет #{ticket.id}\n\n'
-        f'📝 Заголовок: {html.escape(ticket.title or "")}\n'
-        f'📊 Статус: {ticket.status_emoji} {status_text}\n'
-        f'📅 Создан: {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n\n'
+    header = texts.t(
+        'TICKET_DETAIL_HEADER',
+        '<tg-emoji emoji-id="5258216851472654189">💡</tg-emoji> Ticket #{ticket_id}\n\n'
+        '<tg-emoji emoji-id="5257965174979042426">📝</tg-emoji> Title: {title}\n'
+        '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> Status: {status}\n'
+        '<tg-emoji emoji-id="5258096772776991776">⚙️</tg-emoji> Created: {created}\n\n',
+    ).format(
+        ticket_id=ticket.id,
+        title=html.escape(ticket.title or ''),
+        status=html.escape(status_text),
+        created=format_local_datetime(ticket.created_at, '%d.%m.%Y %H:%M'),
     )
-    message_blocks: list[str] = []
-    if ticket.messages:
-        message_blocks.append(f'💬 Сообщения ({len(ticket.messages)}):\n\n')
-        for msg in ticket.messages:
-            sender = '👤 Вы' if msg.is_user_message else '🛠️ Поддержка'
-            block = f'{sender} ({format_local_datetime(msg.created_at, "%d.%m %H:%M")}):\n{html.escape(msg.message_text or "")}\n\n'
-            if getattr(msg, 'has_media', False) and getattr(msg, 'media_type', None) == 'photo':
-                block += '📎 Вложение: фото\n\n'
-            message_blocks.append(block)
+    message_blocks: list[str] = [
+        texts.t(
+            'TICKET_MESSAGES_HEADER',
+            '<tg-emoji emoji-id="5257965174979042426">📝</tg-emoji> Messages ({count}):\n\n',
+        ).format(count=len(ticket.messages or []))
+    ]
+    for msg in ticket.messages or []:
+        sender_template = texts.t(
+            'TICKET_MESSAGE_USER' if msg.is_user_message else 'TICKET_MESSAGE_SUPPORT',
+            (
+                '<tg-emoji emoji-id="5316727448644103237">👤</tg-emoji> You ({date}):'
+                if msg.is_user_message
+                else '<tg-emoji emoji-id="5258486128742244085">👥</tg-emoji> Support ({date}):'
+            ),
+        )
+        block = (
+            f'{sender_template.format(date=format_local_datetime(msg.created_at, "%d.%m %H:%M"))}\n'
+            f'{html.escape(msg.message_text or "")}\n\n'
+        )
+        if getattr(msg, 'has_media', False) and getattr(msg, 'media_type', None) == 'photo':
+            block += texts.t('TICKET_MESSAGE_PHOTO_ATTACHMENT', '📎 Photo attachment') + '\n\n'
+        message_blocks.append(block)
     pages = _split_text_into_pages(header, message_blocks, max_len=3500)
     total_pages = len(pages)
     page = min(page, total_pages)
@@ -636,13 +655,13 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
     # Показываем как текст (чтобы не упереться в caption лимит)
     page_text = pages[page - 1]
     try:
-        await callback.message.edit_text(page_text, reply_markup=keyboard)
+        await callback.message.edit_text(page_text, reply_markup=keyboard, parse_mode='HTML')
     except Exception:
         try:
             await callback.message.delete()
         except Exception:
             pass
-        await callback.message.answer(page_text, reply_markup=keyboard)
+        await callback.message.answer(page_text, reply_markup=keyboard, parse_mode='HTML')
     await callback.answer()
 
 
