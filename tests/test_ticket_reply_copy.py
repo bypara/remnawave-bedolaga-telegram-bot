@@ -11,6 +11,7 @@ from app.keyboards.inline import (
     get_ticket_notification_keyboard,
     get_ticket_view_keyboard,
 )
+from app.utils.custom_emoji_buttons import apply_custom_emoji_icons
 
 
 BRAND_LOCALES = Path(__file__).parents[1] / 'app' / 'localization' / 'brand_locales'
@@ -77,3 +78,14 @@ def test_user_reply_notification_buttons_use_requested_icons():
     assert view.icon_custom_emoji_id == '5210956306952758910'
     assert close.text == 'Закрыть уведомление'
     assert close.icon_custom_emoji_id == '5210952531676504517'
+
+
+def test_cancel_reply_buttons_use_requested_icon_without_changing_other_cancel_buttons():
+    from app.keyboards.inline import get_admin_ticket_reply_cancel_keyboard, get_ticket_reply_cancel_keyboard
+
+    user_button = apply_custom_emoji_icons(get_ticket_reply_cancel_keyboard('ru')).inline_keyboard[0][0]
+    admin_button = apply_custom_emoji_icons(get_admin_ticket_reply_cancel_keyboard('ru')).inline_keyboard[0][0]
+
+    assert user_button.text == 'Отменить ответ'
+    assert user_button.icon_custom_emoji_id == '5210952531676504517'
+    assert admin_button.icon_custom_emoji_id == '5210952531676504517'
