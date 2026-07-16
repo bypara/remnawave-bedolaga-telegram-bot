@@ -30,6 +30,8 @@ from app.utils.timezone import format_local_datetime
 
 logger = structlog.get_logger(__name__)
 
+VIEW_TICKET_CUSTOM_EMOJI_ID = '5253959125838090076'
+
 
 class TicketStates(StatesGroup):
     waiting_for_title = State()
@@ -289,20 +291,24 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         texts = get_texts(db_user.language)
         # Ограничим длину подтверждения чтобы не упереться в лимиты
         safe_title = html.escape(title if len(title) <= 200 else (title[:197] + '...'))
-        creation_text = (
-            f'✅ <b>Тикет #{ticket.id} создан</b>\n\n'
-            f'📝 Заголовок: {safe_title}\n'
-            f'📊 Статус: {ticket.status_emoji} '
-            f'{texts.t("TICKET_STATUS_OPEN", "Открыт")}\n'
-            f'📅 Создан: {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n'
-            + ('📎 Вложение: фото\n' if media_type == 'photo' else '')
+        creation_text = texts.t(
+            'TICKET_CREATED_MESSAGE',
+            '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> Тикет #{ticket_id} создан\n\n'
+            '<tg-emoji emoji-id="5257965174979042426">📝</tg-emoji> Заголовок: {title}\n'
+            '<tg-emoji emoji-id="5323761960829862762">⚡️</tg-emoji> Статус: {status}',
+        ).format(
+            ticket_id=ticket.id,
+            title=safe_title,
+            status=html.escape(texts.t('TICKET_STATUS_OPEN', 'Открыт')),
         )
 
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('VIEW_TICKET', '👁️ Посмотреть тикет'), callback_data=f'view_ticket_{ticket.id}'
+                        text=texts.t('VIEW_TICKET', '👁️ Посмотреть тикет'),
+                        callback_data=f'view_ticket_{ticket.id}',
+                        icon_custom_emoji_id=VIEW_TICKET_CUSTOM_EMOJI_ID,
                     )
                 ],
                 [
@@ -931,7 +937,9 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('VIEW_TICKET', '👁️ Посмотреть тикет'), callback_data=f'view_ticket_{ticket_id}'
+                            text=texts.t('VIEW_TICKET', '👁️ Посмотреть тикет'),
+                            callback_data=f'view_ticket_{ticket_id}',
+                            icon_custom_emoji_id=VIEW_TICKET_CUSTOM_EMOJI_ID,
                         )
                     ],
                     [

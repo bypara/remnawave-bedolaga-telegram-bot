@@ -119,5 +119,6 @@
   "SUBSCRIPTION_INSUFFICIENT_FUNDS_TEXT": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> Недостаточно средств\n<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> Не хватает: {missing}\n\n<tg-emoji emoji-id=\"5452165780579843515\">📁</tg-emoji> Стоимость: {cost}\n\n<tg-emoji emoji-id=\"5258200019495821936\">🗳</tg-emoji> Ваш баланс: {balance}",
   "PAYMENT_METHODS_TITLE": "<tg-emoji emoji-id=\"5258204546391351475\">💰</tg-emoji> Способы пополнения баланса",
   "PAYMENT_METHODS_PROMPT": "Выберите удобный для вас способ оплаты:",
-  "PAYMENT_METHODS_FOOTER": ""
+  "PAYMENT_METHODS_FOOTER": "",
+  "TICKET_CREATED_MESSAGE": "<tg-emoji emoji-id=\"5206607081334906820\">✔️</tg-emoji> Тикет #{ticket_id} создан\n\n<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> Заголовок: {title}\n<tg-emoji emoji-id=\"5323761960829862762\">⚡️</tg-emoji> Статус: {status}"
 }
