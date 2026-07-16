@@ -69,17 +69,27 @@ async def show_ticket_priority_selection(
     prompt_text = texts.t('TICKET_TITLE_INPUT', 'Введите заголовок тикета:')
     cancel_kb = get_ticket_cancel_keyboard(db_user.language)
     prompt_msg = callback.message
-    try:
-        await callback.message.edit_text(prompt_text, reply_markup=cancel_kb)
-    except TelegramBadRequest:
-        # Предыдущее сообщение — фото (нет текста для edit_text), удаляем и шлём новое
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
-        prompt_msg = await callback.message.answer(prompt_text, reply_markup=cancel_kb)
+    prompt_is_caption = bool(getattr(prompt_msg, 'photo', None) or getattr(prompt_msg, 'caption', None) is not None)
+    prompt_edited = await _edit_ticket_prompt(
+        callback.bot,
+        prompt_msg.chat.id,
+        prompt_msg.message_id,
+        prompt_text,
+        reply_markup=cancel_kb,
+        is_caption=prompt_is_caption,
+    )
+    if not prompt_edited:
+        await callback.answer(
+            texts.t('TICKET_PROMPT_EDIT_ERROR', 'Не удалось открыть форму создания тикета. Попробуйте ещё раз.'),
+            show_alert=True,
+        )
+        return
     # Запоминаем исходное сообщение бота, чтобы далее редактировать его, а не слать новые
-    await state.update_data(prompt_chat_id=prompt_msg.chat.id, prompt_message_id=prompt_msg.message_id)
+    await state.update_data(
+        prompt_chat_id=prompt_msg.chat.id,
+        prompt_message_id=prompt_msg.message_id,
+        prompt_is_caption=prompt_is_caption,
+    )
     await state.set_state(TicketStates.waiting_for_title)
     await callback.answer()
 
@@ -92,21 +102,26 @@ async def handle_ticket_title_input(message: types.Message, state: FSMContext, d
 
     """Обработать ввод заголовка тикета"""
     if not message.text:
-        asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
         return
     title = message.text.strip()
 
     data_prompt = await state.get_data()
     prompt_chat_id = data_prompt.get('prompt_chat_id')
     prompt_message_id = data_prompt.get('prompt_message_id')
-    # Удалим сообщение пользователя через 2 секунды, чтобы не засорять чат
-    asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
+    prompt_is_caption = bool(data_prompt.get('prompt_is_caption'))
     if len(title) < 5:
         texts = get_texts(db_user.language)
         text_val = texts.t(
             'TICKET_TITLE_TOO_SHORT', 'Заголовок должен содержать минимум 5 символов. Попробуйте еще раз:'
         )
-        await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, db_user.language)
+        await _edit_ticket_prompt(
+            message.bot,
+            prompt_chat_id,
+            prompt_message_id,
+            text_val,
+            reply_markup=get_ticket_cancel_keyboard(db_user.language),
+            is_caption=prompt_is_caption,
+        )
         return
 
     if len(title) > 255:
@@ -114,7 +129,14 @@ async def handle_ticket_title_input(message: types.Message, state: FSMContext, d
         text_val = texts.t(
             'TICKET_TITLE_TOO_LONG', 'Заголовок слишком длинный. Максимум 255 символов. Попробуйте еще раз:'
         )
-        await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, db_user.language)
+        await _edit_ticket_prompt(
+            message.bot,
+            prompt_chat_id,
+            prompt_message_id,
+            text_val,
+            reply_markup=get_ticket_cancel_keyboard(db_user.language),
+            is_caption=prompt_is_caption,
+        )
         return
 
     # Глобальный блок
@@ -124,13 +146,19 @@ async def handle_ticket_title_input(message: types.Message, state: FSMContext, d
     if blocked_until:
         texts = get_texts(db_user.language)
         if blocked_until.year > 9999 - 1:
-            await message.answer(texts.t('USER_BLOCKED_FOREVER', 'Вы заблокированы для обращений в поддержку.'))
+            blocked_text = texts.t('USER_BLOCKED_FOREVER', 'Вы заблокированы для обращений в поддержку.')
         else:
-            await message.answer(
-                texts.t('USER_BLOCKED_UNTIL', 'Вы заблокированы до {time}').format(
-                    time=blocked_until.strftime('%d.%m.%Y %H:%M')
-                )
+            blocked_text = texts.t('USER_BLOCKED_UNTIL', 'Вы заблокированы до {time}').format(
+                time=blocked_until.strftime('%d.%m.%Y %H:%M')
             )
+        await _edit_ticket_prompt(
+            message.bot,
+            prompt_chat_id,
+            prompt_message_id,
+            blocked_text,
+            reply_markup=None,
+            is_caption=prompt_is_caption,
+        )
         await state.clear()
         return
 
@@ -138,7 +166,14 @@ async def handle_ticket_title_input(message: types.Message, state: FSMContext, d
 
     texts = get_texts(db_user.language)
     text_val = texts.t('TICKET_MESSAGE_INPUT', 'Опишите проблему (до 500 символов) или отправьте фото с подписью:')
-    await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, db_user.language)
+    await _edit_ticket_prompt(
+        message.bot,
+        prompt_chat_id,
+        prompt_message_id,
+        text_val,
+        reply_markup=get_ticket_cancel_keyboard(db_user.language),
+        is_caption=prompt_is_caption,
+    )
 
     await state.set_state(TicketStates.waiting_for_message)
 
@@ -155,17 +190,11 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         try:
             from_cache = await cache.get(cache_key('suppress_user_input', db_user.id))
             if from_cache:
-                asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
                 return
         except Exception:
             pass
         limited = await RateLimitCache.is_rate_limited(db_user.id, 'ticket_create_message', limit=1, window=2)
         if limited:
-            # Удаляем лишние части длинного сообщения
-            try:
-                asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
-            except Exception:
-                pass
             return
     except Exception:
         pass
@@ -174,10 +203,6 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         last_ts = data_rl.get('rl_ts_create')
         now_ts = time.time()
         if last_ts and (now_ts - float(last_ts)) < 2:
-            try:
-                asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
-            except Exception:
-                pass
             return
         await state.update_data(rl_ts_create=now_ts)
     except Exception:
@@ -196,15 +221,16 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         media_type = 'photo'
         media_file_id = message.photo[-1].file_id
         media_caption = message.caption
+    data_prompt = await state.get_data()
+    prompt_chat_id = data_prompt.get('prompt_chat_id')
+    prompt_message_id = data_prompt.get('prompt_message_id')
+    prompt_is_caption = bool(data_prompt.get('prompt_is_caption'))
     # Глобальный блок
     from app.database.crud.ticket import TicketCRUD
 
     blocked_until = await TicketCRUD.is_user_globally_blocked(db, db_user.id)
     if blocked_until:
         texts = get_texts(db_user.language)
-        data_prompt = await state.get_data()
-        prompt_chat_id = data_prompt.get('prompt_chat_id')
-        prompt_message_id = data_prompt.get('prompt_message_id')
         text_msg = (
             texts.t('USER_BLOCKED_FOREVER', 'Вы заблокированы для обращений в поддержку.')
             if blocked_until.year > 9999 - 1
@@ -212,28 +238,31 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
                 time=blocked_until.strftime('%d.%m.%Y %H:%M')
             )
         )
-        if prompt_chat_id and prompt_message_id:
-            try:
-                await message.bot.edit_message_text(chat_id=prompt_chat_id, message_id=prompt_message_id, text=text_msg)
-            except TelegramBadRequest:
-                await message.answer(text_msg)
-        else:
-            await message.answer(text_msg)
+        await _edit_ticket_prompt(
+            message.bot,
+            prompt_chat_id,
+            prompt_message_id,
+            text_msg,
+            reply_markup=None,
+            is_caption=prompt_is_caption,
+        )
         await state.clear()
         return
 
-    # Удалим сообщение пользователя через 2 секунды
-    asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
     # Валидируем: допускаем пустой текст, если есть фото
     if (not message_text or len(message_text) < 10) and not message.photo:
         texts = get_texts(db_user.language)
-        data_prompt = await state.get_data()
-        prompt_chat_id = data_prompt.get('prompt_chat_id')
-        prompt_message_id = data_prompt.get('prompt_message_id')
         err_text = texts.t(
             'TICKET_MESSAGE_TOO_SHORT', 'Сообщение слишком короткое. Опишите проблему подробнее или отправьте фото:'
         )
-        await _edit_or_send(message, prompt_chat_id, prompt_message_id, err_text, db_user.language)
+        await _edit_ticket_prompt(
+            message.bot,
+            prompt_chat_id,
+            prompt_message_id,
+            err_text,
+            reply_markup=get_ticket_cancel_keyboard(db_user.language),
+            is_caption=prompt_is_caption,
+        )
         return
 
     data = await state.get_data()
@@ -269,9 +298,6 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
             + ('📎 Вложение: фото\n' if media_type == 'photo' else '')
         )
 
-        data_prompt = await state.get_data()
-        prompt_chat_id = data_prompt.get('prompt_chat_id')
-        prompt_message_id = data_prompt.get('prompt_message_id')
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -286,19 +312,15 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
                 ],
             ]
         )
-        if prompt_chat_id and prompt_message_id:
-            try:
-                await message.bot.edit_message_text(
-                    chat_id=prompt_chat_id,
-                    message_id=prompt_message_id,
-                    text=creation_text,
-                    reply_markup=keyboard,
-                    parse_mode='HTML',
-                )
-            except TelegramBadRequest:
-                await message.answer(creation_text, reply_markup=keyboard, parse_mode='HTML')
-        else:
-            await message.answer(creation_text, reply_markup=keyboard, parse_mode='HTML')
+        await _edit_ticket_prompt(
+            message.bot,
+            prompt_chat_id,
+            prompt_message_id,
+            creation_text,
+            reply_markup=keyboard,
+            is_caption=prompt_is_caption,
+            parse_mode='HTML',
+        )
 
         await state.clear()
 
@@ -308,8 +330,13 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
     except Exception as e:
         logger.error('Error creating ticket', error=e)
         texts = get_texts(db_user.language)
-        await message.answer(
-            texts.t('TICKET_CREATE_ERROR', '❌ Произошла ошибка при создании тикета. Попробуйте позже.')
+        await _edit_ticket_prompt(
+            message.bot,
+            prompt_chat_id,
+            prompt_message_id,
+            texts.t('TICKET_CREATE_ERROR', '❌ Произошла ошибка при создании тикета. Попробуйте позже.'),
+            reply_markup=get_ticket_cancel_keyboard(db_user.language),
+            is_caption=prompt_is_caption,
         )
 
 
@@ -690,26 +717,53 @@ async def user_delete_message(callback: types.CallbackQuery):
     await callback.answer('✅')
 
 
-async def _edit_or_send(
-    message: types.Message,
+async def _edit_ticket_prompt(
+    bot: Bot,
     chat_id: int | None,
     message_id: int | None,
     text: str,
-    language: str,
-) -> None:
-    """Попытаться отредактировать prompt-сообщение, при неудаче — отправить новое."""
-    if chat_id and message_id:
+    *,
+    reply_markup: types.InlineKeyboardMarkup | None,
+    is_caption: bool,
+    parse_mode: str | None = 'HTML',
+) -> bool:
+    """Edit the existing bot prompt without deleting or sending chat messages."""
+    if not chat_id or not message_id:
+        return False
+
+    last_error: TelegramBadRequest | None = None
+    edit_as_caption_order = (is_caption, not is_caption)
+    for edit_as_caption in edit_as_caption_order:
         try:
-            await message.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=message_id,
-                text=text,
-                reply_markup=get_ticket_cancel_keyboard(language),
-            )
-            return
-        except TelegramBadRequest:
-            pass
-    await message.answer(text, reply_markup=get_ticket_cancel_keyboard(language))
+            if edit_as_caption:
+                await bot.edit_message_caption(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    caption=text,
+                    reply_markup=reply_markup,
+                    parse_mode=parse_mode,
+                )
+            else:
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=text,
+                    reply_markup=reply_markup,
+                    parse_mode=parse_mode,
+                )
+            return True
+        except TelegramBadRequest as error:
+            if 'message is not modified' in str(error).lower():
+                return True
+            last_error = error
+
+    logger.warning(
+        'Failed to edit ticket prompt message',
+        chat_id=chat_id,
+        message_id=message_id,
+        error=last_error,
+    )
+    return False
 
 
 async def _try_delete_message_later(bot: Bot, chat_id: int, message_id: int, delay_seconds: float = 1.0):
