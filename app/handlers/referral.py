@@ -217,23 +217,20 @@ async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: Us
         + '\n\n'
     )
 
-    for i, referral in enumerate(referrals_data['referrals'], 1):
-        status_emoji = '🟢' if referral['status'] == 'active' else '🔴'
-
-        topup_emoji = '💰' if referral['has_made_first_topup'] else '⏳'
-
+    first_item_index = (page - 1) * 10 + 1
+    for i, referral in enumerate(referrals_data['referrals'], first_item_index):
         text += (
             texts.t(
                 'REFERRAL_LIST_ITEM_HEADER',
-                '{index}. {status} <b>{name}</b>',
-            ).format(index=i, status=status_emoji, name=html_escape(str(referral['full_name'] or '')))
+                '{index}. <tg-emoji emoji-id="5316727448644103237">👤</tg-emoji> <b>{name}</b>',
+            ).format(index=i, name=html_escape(str(referral['full_name'] or '')))
             + '\n'
         )
         text += (
             texts.t(
                 'REFERRAL_LIST_ITEM_TOPUPS',
-                '   {emoji} Пополнений: {count}',
-            ).format(emoji=topup_emoji, count=referral['topups_count'])
+                '   <tg-emoji emoji-id="5260221883940347555">🔫</tg-emoji> Пополнений: {count}',
+            ).format(count=referral['topups_count'])
             + '\n'
         )
         text += (

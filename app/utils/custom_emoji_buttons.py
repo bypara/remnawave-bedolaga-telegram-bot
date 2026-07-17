@@ -9,8 +9,8 @@ CUSTOM_EMOJI_IDS: dict[str, str] = {
     'buy_main': '5472083403652210905',
     'trial': '5472279778146918060',
     'create_ticket': '5422360266618707867',
-    'my_tickets': '5388658581664993142',
-    'closed_tickets': '5258476306152038031',
+    'my_tickets': '5424818078833715060',
+    'closed_tickets': '5210952531676504517',
     'privacy_policy': '5251203410396458957',
     'public_offer': '5334544901428229844',
     'contact_support': '5382355635553739365',
@@ -34,6 +34,7 @@ CUSTOM_EMOJI_IDS: dict[str, str] = {
     'manage_devices': '5251203410396458957',
     'revoke_subscription': '5395695537687123235',
     'cancel_ticket_creation': '5447183459602669338',
+    'cancel_ticket_reply': '5210952531676504517',
     'balance': '5451882707875276247',
     'promocode': '5431609822288033666',
     'referral_system': '5337080053119336309',
@@ -49,6 +50,8 @@ CUSTOM_EMOJI_IDS: dict[str, str] = {
 
 PRIORITY_CALLBACK_TO_ICON: dict[str, str] = {
     'cancel_ticket_creation': 'cancel_ticket_creation',
+    'cancel_ticket_reply': 'cancel_ticket_reply',
+    'cancel_admin_ticket_reply': 'cancel_ticket_reply',
 }
 
 CALLBACK_TO_ICON: dict[str, str] = {
