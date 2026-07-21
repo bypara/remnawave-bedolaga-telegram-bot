@@ -9,7 +9,7 @@ from app.database.models import User
 from app.utils.pricing_utils import (
     format_period_description,
 )
-from app.utils.timezone import format_local_datetime
+from app.utils.timezone import format_telegram_datetime
 
 from .common import logger
 from .countries import _get_available_countries, _get_countries_info
@@ -334,7 +334,7 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
     info_text = info_template.format(
         status=status_text,
         type=type_text,
-        end_date=format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M'),
+        end_date=format_telegram_datetime(subscription.end_date),
         days_left=max(0, subscription.days_left),
         traffic_used=texts.format_traffic(subscription.traffic_used_gb, is_limit=False),
         traffic_limit=traffic_text,

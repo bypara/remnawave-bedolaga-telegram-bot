@@ -115,7 +115,7 @@ from app.utils.subscription_utils import (
     get_display_subscription_link,
     resolve_simple_subscription_device_limit,
 )
-from app.utils.timezone import format_local_datetime
+from app.utils.timezone import format_local_datetime, format_telegram_datetime
 
 from .autopay import (
     handle_autopay_menu,
@@ -481,7 +481,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         warning=warning_text,
         tariff_info_block=tariff_info_block,
         subscription_type=subscription_type,
-        end_date=format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M'),
+        end_date=format_telegram_datetime(subscription.end_date),
         time_left=time_left_text,
         traffic=traffic_used_display,
         servers=servers_display,

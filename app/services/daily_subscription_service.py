@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 from aiogram import Bot
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -30,9 +31,32 @@ from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
 )
+from app.utils.miniapp_buttons import build_main_menu_button, strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
+
+
+def _build_daily_notification_keyboard(texts) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=strip_leading_emoji(
+                        texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка')
+                    ),
+                    callback_data='menu_subscription',
+                    icon_custom_emoji_id='5319272710688226013',
+                )
+            ],
+            [
+                build_main_menu_button(
+                    texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню'),
+                    icon_custom_emoji_id='5406745015365943482',
+                )
+            ],
+        ]
+    )
 
 
 class DailySubscriptionService:
@@ -338,18 +362,15 @@ class DailySubscriptionService:
 
     async def _notify_daily_charge(self, user, subscription, amount_kopeks: int):
         """Уведомляет пользователя о суточном списании."""
-        get_texts(getattr(user, 'language', 'ru'))
+        texts = get_texts(getattr(user, 'language', 'ru'))
         amount_rubles = amount_kopeks / 100
         balance_rubles = user.balance_kopeks / 100
 
-        tariff_label = ''
-        if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
-            tariff_label = f'\n📦 Тариф: «{subscription.tariff.name}»'
-        message = (
-            f'💳 <b>Суточное списание</b>\n\n'
-            f'Списано: {amount_rubles:.2f} ₽\n'
-            f'Остаток баланса: {balance_rubles:.2f} ₽{tariff_label}\n\n'
-            f'Следующее списание через 24 часа.'
+        tariff_name = subscription.tariff.name if getattr(subscription, 'tariff', None) else ''
+        message = texts.t('DAILY_CHARGE_NOTIFICATION').format(
+            amount=f'{amount_rubles:.2f}',
+            balance=f'{balance_rubles:.2f}',
+            tariff_name=tariff_name,
         )
 
         # Use unified notification delivery service
@@ -360,35 +381,25 @@ class DailySubscriptionService:
                 new_balance_kopeks=user.balance_kopeks,
                 bot=self._bot,
                 telegram_message=message,
+                telegram_markup=_build_daily_notification_keyboard(texts),
             )
         except Exception as e:
             logger.warning('Не удалось отправить уведомление о списании', error=e)
 
     async def _notify_insufficient_balance(self, user, subscription, required_amount: int):
         """Уведомляет пользователя о недостатке средств."""
-        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-
-        get_texts(getattr(user, 'language', 'ru'))
+        texts = get_texts(getattr(user, 'language', 'ru'))
         required_rubles = required_amount / 100
         balance_rubles = user.balance_kopeks / 100
 
-        tariff_label = ''
-        if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
-            tariff_label = f' «{subscription.tariff.name}»'
-        message = (
-            f'⚠️ <b>Подписка{tariff_label} приостановлена</b>\n\n'
-            f'Недостаточно средств для суточной оплаты.\n\n'
-            f'Требуется: {required_rubles:.2f} ₽\n'
-            f'Баланс: {balance_rubles:.2f} ₽\n\n'
-            f'Пополните баланс, чтобы возобновить подписку.'
+        tariff_name = subscription.tariff.name if getattr(subscription, 'tariff', None) else ''
+        message = texts.t('DAILY_INSUFFICIENT_BALANCE_NOTIFICATION').format(
+            tariff_name=tariff_name,
+            required=f'{required_rubles:.2f}',
+            balance=f'{balance_rubles:.2f}',
         )
 
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text='💳 Пополнить баланс', callback_data='menu_balance')],
-                [InlineKeyboardButton(text='📱 Моя подписка', callback_data='menu_subscription')],
-            ]
-        )
+        keyboard = _build_daily_notification_keyboard(texts)
 
         # Use unified notification delivery service
         context = {
@@ -725,15 +736,12 @@ class DailySubscriptionService:
 
     async def _notify_traffic_reset(self, user: User, subscription: Subscription, reset_gb: int):
         """Уведомляет пользователя о сбросе докупленного трафика."""
-        tariff_label = ''
-        if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
-            tariff_label = f'\n📦 Тариф: «{subscription.tariff.name}»'
-        message = (
-            f'ℹ️ <b>Сброс докупленного трафика</b>\n\n'
-            f'Ваш докупленный трафик ({reset_gb} ГБ) был сброшен, '
-            f'так как прошло 30 дней с момента первой докупки.{tariff_label}\n\n'
-            f'Текущий лимит трафика: {subscription.traffic_limit_gb} ГБ\n\n'
-            f'Вы можете докупить трафик снова в любое время.'
+        texts = get_texts(getattr(user, 'language', 'ru'))
+        tariff_name = subscription.tariff.name if getattr(subscription, 'tariff', None) else ''
+        message = texts.t('PURCHASED_TRAFFIC_RESET_NOTIFICATION').format(
+            reset_gb=reset_gb,
+            tariff_name=tariff_name,
+            limit=subscription.traffic_limit_gb,
         )
 
         context = {

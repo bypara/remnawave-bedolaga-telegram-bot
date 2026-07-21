@@ -32,6 +32,17 @@ logger = structlog.get_logger(__name__)
 TICKET_REPLY_CUSTOM_EMOJI_ID = '5253742260054409879'
 TICKET_CLOSE_CUSTOM_EMOJI_ID = '5240241223632954241'
 
+PAYMENT_METHOD_CUSTOM_EMOJI_IDS: dict[str, str] = {
+    'stars': '5438496463044752972',
+    'platega': '5222411706285725412',
+    'platega_m2': '5222411706285725412',
+    'rollypay': '5386495949667339574',
+    'lava_card': '5244521450601194816',
+    'lava_sbp': '5244802057994514325',
+    'lava': '5247106557056920291',
+    'support': '5341715473882955310',
+}
+
 
 def _main_menu_button(text: str, icon_name: str, **kwargs) -> InlineKeyboardButton:
     return InlineKeyboardButton(
@@ -1687,7 +1698,11 @@ def _apply_payment_name_overrides(keyboard: list[list[InlineKeyboardButton]]) ->
                 continue
             override = get_display_name_override(method) if method else None
             if override:
-                row[idx] = button.model_copy(update={'text': override})
+                row[idx] = button.model_copy(
+                    update={
+                        'text': strip_leading_emoji(override) if button.icon_custom_emoji_id else override,
+                    }
+                )
 
 
 def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
@@ -1702,11 +1717,21 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
             return f'topup_amount|{method}|{amount_kopeks}'
         return f'topup_{method}'
 
+    def _payment_method_button(text: str, method: str, **kwargs) -> InlineKeyboardButton:
+        custom_emoji_id = PAYMENT_METHOD_CUSTOM_EMOJI_IDS.get(method)
+        return InlineKeyboardButton(
+            text=strip_leading_emoji(text) if custom_emoji_id else text,
+            icon_custom_emoji_id=custom_emoji_id,
+            **kwargs,
+        )
+
     if settings.TELEGRAM_STARS_ENABLED:
         keyboard.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('PAYMENT_TELEGRAM_STARS', '⭐ Telegram Stars'), callback_data=_build_callback('stars')
+                _payment_method_button(
+                    texts.t('PAYMENT_TELEGRAM_STARS', '⭐ Telegram Stars'),
+                    'stars',
+                    callback_data=_build_callback('stars'),
                 )
             ]
         )
@@ -1786,19 +1811,23 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         if settings.PLATEGA_INLINE_METHODS:
             for method_code in settings.get_platega_active_methods():
                 title = settings.get_platega_method_display_title(method_code)
+                method = f'platega_m{method_code}'
+                label = title if method_code == 2 else f'{title} ({platega_name})'
                 keyboard.append(
                     [
-                        InlineKeyboardButton(
-                            text=f'{title} ({platega_name})',
-                            callback_data=_build_callback(f'platega_m{method_code}'),
+                        _payment_method_button(
+                            label,
+                            method,
+                            callback_data=_build_callback(method),
                         )
                     ]
                 )
         else:
             keyboard.append(
                 [
-                    InlineKeyboardButton(
-                        text=texts.t('PAYMENT_PLATEGA', f'💳 {platega_name}'),
+                    _payment_method_button(
+                        texts.t('PAYMENT_PLATEGA', f'💳 {platega_name}'),
+                        'platega',
                         callback_data=_build_callback('platega'),
                     )
                 ]
@@ -1970,8 +1999,9 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         rollypay_name = settings.get_rollypay_display_name()
         keyboard.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('PAYMENT_ROLLYPAY', f'💳 {rollypay_name}'),
+                _payment_method_button(
+                    texts.t('PAYMENT_ROLLYPAY', f'💳 {rollypay_name}'),
+                    'rollypay',
                     callback_data=_build_callback('rollypay'),
                 )
             ]
@@ -2204,8 +2234,9 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         lava_card_name = settings.get_lava_card_display_name()
         keyboard.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('PAYMENT_LAVA_CARD', f'💳 {lava_card_name}'),
+                _payment_method_button(
+                    texts.t('PAYMENT_LAVA_CARD', f'💳 {lava_card_name}'),
+                    'lava_card',
                     callback_data=_build_callback('lava_card'),
                 )
             ]
@@ -2216,8 +2247,9 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         lava_sbp_name = settings.get_lava_sbp_display_name()
         keyboard.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('PAYMENT_LAVA_SBP', f'📱 {lava_sbp_name}'),
+                _payment_method_button(
+                    texts.t('PAYMENT_LAVA_SBP', f'📱 {lava_sbp_name}'),
+                    'lava_sbp',
                     callback_data=_build_callback('lava_sbp'),
                 )
             ]
@@ -2228,8 +2260,9 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         lava_name = settings.get_lava_display_name()
         keyboard.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('PAYMENT_LAVA', f'🌋 {lava_name}'),
+                _payment_method_button(
+                    texts.t('PAYMENT_LAVA', f'🌋 {lava_name}'),
+                    'lava',
                     callback_data=_build_callback('lava'),
                 )
             ]
@@ -2275,8 +2308,10 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
     if settings.is_support_topup_enabled():
         keyboard.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('PAYMENT_VIA_SUPPORT', '🛠️ Через поддержку'), callback_data='topup_support'
+                _payment_method_button(
+                    texts.t('PAYMENT_VIA_SUPPORT', '🛠️ Через поддержку'),
+                    'support',
+                    callback_data='topup_support',
                 )
             ]
         )

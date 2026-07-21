@@ -428,6 +428,7 @@ class HeleketPaymentMixin:
             if user.telegram_id:
                 try:
                     keyboard = await self.build_topup_success_keyboard(user)
+                    is_english = str(user.language or '').lower().startswith('en')
 
                     exchange_rate_value = updated_payment.exchange_rate or 0
                     rate_text = (
@@ -437,16 +438,23 @@ class HeleketPaymentMixin:
                     )
 
                     message_lines = [
-                        '✅ <b>Пополнение успешно!</b>',
-                        f'💰 Сумма: {settings.format_price(amount_kopeks)}',
-                        '💳 Способ: Heleket',
+                        (
+                            '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> <b>Top-up successful!</b>'
+                            if is_english
+                            else '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> <b>Пополнение успешно!</b>'
+                        ),
+                        f'{"Amount" if is_english else "Сумма"}: {settings.format_price(amount_kopeks)}',
+                        f'{"Method" if is_english else "Способ"}: Heleket',
                     ]
                     if updated_payment.payer_amount and updated_payment.payer_currency:
                         message_lines.append(
-                            f'🪙 Оплата: {updated_payment.payer_amount} {updated_payment.payer_currency}'
+                            f'{"Payment" if is_english else "Оплата"}: '
+                            f'{updated_payment.payer_amount} {updated_payment.payer_currency}'
                         )
                     if rate_text:
-                        message_lines.append(rate_text)
+                        message_lines.append(
+                            rate_text.replace('💱 Курс:', 'Rate:' if is_english else 'Курс:')
+                        )
 
                     await self.bot.send_message(
                         chat_id=user.telegram_id,

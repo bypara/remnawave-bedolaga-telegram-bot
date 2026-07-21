@@ -448,6 +448,7 @@ class CloudPaymentsPaymentMixin:
                         await self._send_cloudpayments_fail_notification(
                             telegram_id=user.telegram_id,
                             message=card_holder_message,
+                            language=user.language,
                         )
         except Exception as error:
             logger.exception('Ошибка отправки уведомления о неуспешном платеже', error=error)
@@ -510,12 +511,17 @@ class CloudPaymentsPaymentMixin:
         self,
         telegram_id: int,
         message: str,
+        language: str = 'ru',
     ) -> None:
         """Send failure notification to user via Telegram."""
 
         from app.bot_factory import create_bot
 
-        text = f'❌ <b>Оплата не прошла</b>\n\n{message}'
+        title = 'Payment failed' if str(language).lower().startswith('en') else 'Оплата не прошла'
+        text = (
+            '<tg-emoji emoji-id="5210952531676504517">❌</tg-emoji>'
+            f' <b>{title}</b>\n\n{message}'
+        )
 
         async with create_bot() as bot:
             try:

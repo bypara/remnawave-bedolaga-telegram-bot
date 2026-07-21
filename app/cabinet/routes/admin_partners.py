@@ -1,5 +1,6 @@
 """Admin routes for managing partners in cabinet."""
 
+import html
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -252,10 +253,18 @@ async def approve_application(
             application = await db.get(PartnerApplication, application_id)
             user = await db.get(User, application.user_id) if application else None
             if user:
-                comment_text = f'\n{request.comment}' if request.comment else ''
-                tg_message = (
-                    f'✅ Ваша заявка на партнёрство одобрена!\nКомиссия: {request.commission_percent}%{comment_text}'
-                )
+                comment_text = f'\n\n{html.escape(request.comment)}' if request.comment else ''
+                if str(user.language or '').lower().startswith('en'):
+                    tg_message = (
+                        '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> '
+                        'Your partnership application has been approved!\n'
+                        f'Commission: {request.commission_percent}%{comment_text}'
+                    )
+                else:
+                    tg_message = (
+                        '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> '
+                        f'Ваша заявка на партнёрство одобрена!\nКомиссия: {request.commission_percent}%{comment_text}'
+                    )
                 bot = create_bot()
                 try:
                     await notification_delivery_service.notify_partner_approved(
@@ -304,8 +313,20 @@ async def reject_application(
             application = await db.get(PartnerApplication, application_id)
             user = await db.get(User, application.user_id) if application else None
             if user:
-                comment_text = f'\nПричина: {request.comment}' if request.comment else ''
-                tg_message = f'❌ Ваша заявка на партнёрство отклонена.{comment_text}'
+                comment_text = (
+                    f'\n\n{"Reason" if str(user.language or "").lower().startswith("en") else "Причина"}: '
+                    f'{html.escape(request.comment)}'
+                    if request.comment
+                    else ''
+                )
+                tg_message = (
+                    '<tg-emoji emoji-id="5240241223632954241">🚫</tg-emoji> '
+                    + (
+                        f'Your partnership application has been rejected.{comment_text}'
+                        if str(user.language or '').lower().startswith('en')
+                        else f'Ваша заявка на партнёрство отклонена.{comment_text}'
+                    )
+                )
                 bot = create_bot()
                 try:
                     await notification_delivery_service.notify_partner_rejected(

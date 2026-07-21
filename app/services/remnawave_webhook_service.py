@@ -39,7 +39,7 @@ from app.services.admin_notification_service import AdminNotificationService
 from app.services.grace_access_runtime import get_open_grace_subscription_ids, grace_access_runtime
 from app.services.grace_access_service import GraceReason
 from app.services.notification_delivery_service import NotificationType, notification_delivery_service
-from app.utils.miniapp_buttons import build_miniapp_or_callback_button
+from app.utils.miniapp_buttons import build_miniapp_or_callback_button, strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
@@ -893,7 +893,13 @@ class RemnaWaveWebhookService:
         )
         return InlineKeyboardMarkup(
             inline_keyboard=[
-                [build_miniapp_or_callback_button(text=button_text, callback_data=extend_callback)],
+                [
+                    build_miniapp_or_callback_button(
+                        text=button_text,
+                        callback_data=extend_callback,
+                        icon_custom_emoji_id='5416081784641168838',
+                    )
+                ],
             ]
         )
 
@@ -902,7 +908,13 @@ class RemnaWaveWebhookService:
         button_text = texts.get('MY_SUBSCRIPTION_BUTTON', 'My subscription')
         return InlineKeyboardMarkup(
             inline_keyboard=[
-                [build_miniapp_or_callback_button(text=button_text, callback_data='menu_subscription')],
+                [
+                    build_miniapp_or_callback_button(
+                        text=button_text,
+                        callback_data='menu_subscription',
+                        icon_custom_emoji_id='5319272710688226013',
+                    )
+                ],
             ]
         )
 
@@ -911,7 +923,13 @@ class RemnaWaveWebhookService:
         button_text = texts.get('CONNECT_BUTTON', 'Connect')
         return InlineKeyboardMarkup(
             inline_keyboard=[
-                [build_miniapp_or_callback_button(text=button_text, callback_data='subscription_connect')],
+                [
+                    build_miniapp_or_callback_button(
+                        text=button_text,
+                        callback_data='subscription_connect',
+                        icon_custom_emoji_id='5271604874419647061',
+                    )
+                ],
             ]
         )
 
@@ -921,8 +939,20 @@ class RemnaWaveWebhookService:
         sub_text = texts.get('MY_SUBSCRIPTION_BUTTON', 'My subscription')
         return InlineKeyboardMarkup(
             inline_keyboard=[
-                [build_miniapp_or_callback_button(text=buy_text, callback_data='buy_traffic')],
-                [build_miniapp_or_callback_button(text=sub_text, callback_data='menu_subscription')],
+                [
+                    build_miniapp_or_callback_button(
+                        text=buy_text,
+                        callback_data='buy_traffic',
+                        icon_custom_emoji_id='5397916757333654639',
+                    )
+                ],
+                [
+                    build_miniapp_or_callback_button(
+                        text=sub_text,
+                        callback_data='menu_subscription',
+                        icon_custom_emoji_id='5319272710688226013',
+                    )
+                ],
             ]
         )
 
@@ -981,7 +1011,13 @@ class RemnaWaveWebhookService:
 
         # Append "Close" button to every webhook notification keyboard
         close_text = texts.get('WEBHOOK_CLOSE_BUTTON', '✖️ Закрыть')
-        close_row = [InlineKeyboardButton(text=close_text, callback_data='webhook:close')]
+        close_row = [
+            InlineKeyboardButton(
+                text=strip_leading_emoji(close_text),
+                callback_data='webhook:close',
+                icon_custom_emoji_id='5210952531676504517',
+            )
+        ]
         if reply_markup:
             reply_markup = InlineKeyboardMarkup(
                 inline_keyboard=[*reply_markup.inline_keyboard, close_row],

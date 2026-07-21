@@ -15,9 +15,12 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
+
+PLATEGA_SBP_CUSTOM_EMOJI_ID = '5222411706285725412'
 
 
 def _get_active_methods() -> list[int]:
@@ -31,7 +34,7 @@ async def _prompt_amount(
     method_code: int,
 ) -> None:
     texts = get_texts(db_user.language)
-    method_name = settings.get_platega_method_display_title(method_code)
+    method_name = settings.get_platega_method_display_name(method_code)
 
     # Всегда фиксируем выбранный метод для последующей обработки
     await state.update_data(payment_method='platega', platega_method=method_code)
@@ -69,7 +72,7 @@ async def _prompt_amount(
 
     prompt_template = texts.t(
         'PLATEGA_TOPUP_PROMPT',
-        (f'💳 <b>Оплата через Platega ({{method_name}})</b>\n\n{default_prompt_body}Оплата происходит через Platega.'),
+        (f'Оплата через {{method_name}}\n\n{default_prompt_body}'),
     )
 
     keyboard = await get_topup_amount_keyboard('platega', db_user.language, back_callback='back_to_menu')
@@ -149,10 +152,12 @@ async def start_platega_payment(
     method_buttons: list[list[types.InlineKeyboardButton]] = []
     for method_code in active_methods:
         label = settings.get_platega_method_display_title(method_code)
+        custom_emoji_id = PLATEGA_SBP_CUSTOM_EMOJI_ID if method_code == 2 else None
         method_buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=label,
+                    text=strip_leading_emoji(label) if custom_emoji_id else label,
+                    icon_custom_emoji_id=custom_emoji_id,
                     callback_data=f'platega_method_{method_code}',
                 )
             ]
@@ -339,23 +344,20 @@ async def process_platega_payment_amount(
     redirect_url = payment_result.get('redirect_url')
     local_payment_id = payment_result.get('local_payment_id')
     transaction_id = payment_result.get('transaction_id')
-    method_title = settings.get_platega_method_display_title(method_code)
+    method_title = settings.get_platega_method_display_name(method_code)
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t(
-                        'PLATEGA_PAY_BUTTON',
-                        '💳 Оплатить через {method}',
-                    ).format(method=method_title),
+                    text=strip_leading_emoji(
+                        texts.t(
+                            'PLATEGA_PAY_BUTTON',
+                            '💳 Оплатить через {method}',
+                        ).format(method=method_title)
+                    ),
+                    icon_custom_emoji_id='5271604874419647061',
                     url=redirect_url,
-                )
-            ],
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
-                    callback_data=f'check_platega_{local_payment_id}',
                 )
             ],
             [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],
@@ -365,7 +367,7 @@ async def process_platega_payment_amount(
     instructions_template = texts.t(
         'PLATEGA_PAYMENT_INSTRUCTIONS',
         (
-            '💳 <b>Оплата через Platega ({method})</b>\n\n'
+            'Оплата через {method}\n\n'
             '💰 Сумма: {amount}\n'
             '🆔 ID транзакции: {transaction}\n\n'
             '📱 <b>Инструкция:</b>\n'

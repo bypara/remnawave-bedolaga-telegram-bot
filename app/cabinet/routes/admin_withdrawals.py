@@ -1,5 +1,6 @@
 """Admin routes for managing withdrawal requests in cabinet."""
 
+import html
 import json
 from typing import Literal
 
@@ -208,8 +209,15 @@ async def approve_withdrawal(
             user = await db.get(User, withdrawal.user_id) if withdrawal else None
             if user and withdrawal:
                 formatted_amount = settings.format_price(withdrawal.amount_kopeks)
-                comment_text = f'\n{request.comment}' if request.comment else ''
-                tg_message = f'✅ Ваш запрос на вывод {formatted_amount} одобрен.{comment_text}'
+                comment_text = f'\n\n{html.escape(request.comment)}' if request.comment else ''
+                tg_message = (
+                    '<tg-emoji emoji-id="5458603043203327669">🔔</tg-emoji> '
+                    + (
+                        f'Your withdrawal request for {formatted_amount} has been approved.{comment_text}'
+                        if str(user.language or '').lower().startswith('en')
+                        else f'Ваш запрос на вывод {formatted_amount} одобрен.{comment_text}'
+                    )
+                )
                 bot = create_bot()
                 try:
                     await notification_delivery_service.notify_withdrawal_approved(
@@ -259,8 +267,20 @@ async def reject_withdrawal(
             user = await db.get(User, withdrawal.user_id) if withdrawal else None
             if user and withdrawal:
                 formatted_amount = settings.format_price(withdrawal.amount_kopeks)
-                comment_text = f'\nПричина: {request.comment}' if request.comment else ''
-                tg_message = f'❌ Ваш запрос на вывод {formatted_amount} отклонён.{comment_text}'
+                comment_text = (
+                    f'\n\n{"Reason" if str(user.language or "").lower().startswith("en") else "Причина"}: '
+                    f'{html.escape(request.comment)}'
+                    if request.comment
+                    else ''
+                )
+                tg_message = (
+                    '<tg-emoji emoji-id="5240241223632954241">🚫</tg-emoji> '
+                    + (
+                        f'Your withdrawal request for {formatted_amount} has been rejected.{comment_text}'
+                        if str(user.language or '').lower().startswith('en')
+                        else f'Ваш запрос на вывод {formatted_amount} отклонён.{comment_text}'
+                    )
+                )
                 bot = create_bot()
                 try:
                     await notification_delivery_service.notify_withdrawal_rejected(

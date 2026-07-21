@@ -69,7 +69,7 @@ from app.utils.promo_offer import get_user_active_promo_discount_percent
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
 )
-from app.utils.timezone import format_local_datetime
+from app.utils.timezone import format_local_datetime, format_telegram_datetime
 
 
 def resolve_autopay_period_candidate(candidate, tariff) -> int | None:
@@ -1416,14 +1416,10 @@ class MonitoringService:
                         if not await cache.exists(autopay_legacy_key):
                             user = sub.user
                             if user and user.telegram_id and self.bot:
+                                legacy_text = get_texts(user.language).t('AUTOPAY_LEGACY_TARIFF_REQUIRED')
                                 await self.bot.send_message(
                                     chat_id=user.telegram_id,
-                                    text=(
-                                        '⚠️ <b>Автоплатёж приостановлен</b>\n\n'
-                                        'Ваша подписка была создана до введения тарифов. '
-                                        'Для работы автоплатежа необходимо выбрать тариф.\n\n'
-                                        'Перейдите в раздел «Моя подписка» → «Продлить», чтобы выбрать тариф.'
-                                    ),
+                                    text=legacy_text,
                                     parse_mode='HTML',
                                 )
                             await cache.set(autopay_legacy_key, 1, expire=86400 * 7)
@@ -1770,10 +1766,31 @@ class MonitoringService:
             from aiogram.types import InlineKeyboardMarkup
 
             extend_callback = f'se:{subscription.id}' if settings.is_multi_tariff_enabled() else 'subscription_extend'
+            texts = get_texts(user.language)
+            message = texts.t('SUBSCRIPTION_EXPIRED').format(tariff_label=tariff_label)
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [build_miniapp_or_callback_button(text='💎 Продлить подписку', callback_data=extend_callback)],
-                    [build_miniapp_or_callback_button(text='💳 Пополнить баланс', callback_data='balance_topup')],
+                    [
+                        build_miniapp_or_callback_button(
+                            text=texts.t('SUBSCRIPTION_EXTEND'),
+                            callback_data=extend_callback,
+                            icon_custom_emoji_id='5397916757333654639',
+                        )
+                    ],
+                    [
+                        build_miniapp_or_callback_button(
+                            text=texts.t('BALANCE_TOPUP'),
+                            callback_data='balance_topup',
+                            icon_custom_emoji_id='5397916757333654639',
+                        )
+                    ],
+                    [
+                        build_miniapp_or_callback_button(
+                            text=texts.t('BTN_MY_SUBSCRIPTION'),
+                            callback_data='menu_subscription',
+                            icon_custom_emoji_id='5319272710688226013',
+                        )
+                    ],
                 ]
             )
 
@@ -1843,7 +1860,7 @@ class MonitoringService:
                         '💡 Продлите подписку вручную',
                     )
 
-            end_date = format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M')
+            end_date = format_telegram_datetime(subscription.end_date)
             # Add tariff name for multi-subscription clarity
             tariff_label = ''
             if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
@@ -1879,15 +1896,23 @@ class MonitoringService:
                             text=texts.t('BTN_RENEW_SUBSCRIPTION', '⏰ Продлить подписку'),
                             callback_data=extend_callback,
                             cabinet_path='/subscription',
+                            icon_custom_emoji_id='5397916757333654639',
                         )
                     ],
                     [
                         build_miniapp_or_callback_button(
                             text=texts.t('BTN_TOPUP_BALANCE', '💳 Пополнить баланс'),
                             callback_data='balance_topup',
+                            icon_custom_emoji_id='5397916757333654639',
                         )
                     ],
-                    [build_miniapp_or_callback_button(text=sub_btn_text, callback_data='menu_subscription')],
+                    [
+                        build_miniapp_or_callback_button(
+                            text=sub_btn_text,
+                            callback_data='menu_subscription',
+                            icon_custom_emoji_id='5319272710688226013',
+                        )
+                    ],
                 ]
             )
 
@@ -1927,7 +1952,7 @@ class MonitoringService:
                     notification_type=NotificationType.WINBACK_TRIAL_ENDING,
                     context={},
                 )
-            get_texts(user.language)
+            texts = get_texts(user.language)
 
             tariff_label = ''
             if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
@@ -1945,10 +1970,29 @@ class MonitoringService:
 
             from aiogram.types import InlineKeyboardMarkup
 
+            tariff_name = subscription.tariff.name if getattr(subscription, 'tariff', None) else ''
+            trial_tariff_label = f' «{tariff_name}»' if tariff_name else ''
+            message = texts.t('TRIAL_ENDING_SOON').format(
+                tariff_label=trial_tariff_label,
+                tariff_name=tariff_name,
+                price='',
+            )
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [build_miniapp_or_callback_button(text='💎 Купить подписку', callback_data='menu_buy')],
-                    [build_miniapp_or_callback_button(text='💰 Пополнить баланс', callback_data='balance_topup')],
+                    [
+                        build_miniapp_or_callback_button(
+                            text=texts.t('MENU_BUY_SUBSCRIPTION'),
+                            callback_data='menu_buy',
+                            icon_custom_emoji_id='5397916757333654639',
+                        )
+                    ],
+                    [
+                        build_miniapp_or_callback_button(
+                            text=texts.t('BALANCE_TOPUP'),
+                            callback_data='balance_topup',
+                            icon_custom_emoji_id='5449683594425410231',
+                        )
+                    ],
                 ]
             )
 
@@ -2062,7 +2106,7 @@ class MonitoringService:
                 return await notification_delivery_service.send_notification(
                     user=user,
                     notification_type=NotificationType.WINBACK_EXPIRED_1D,
-                    context={'end_date': format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M')},
+                    context={'end_date': format_telegram_datetime(subscription.end_date)},
                 )
             texts = get_texts(user.language)
             tariff = getattr(subscription, 'tariff', None)
@@ -2093,7 +2137,7 @@ class MonitoringService:
                 ),
             )
             message = template.format(
-                end_date=format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M'),
+                end_date=format_telegram_datetime(subscription.end_date),
                 price=settings.format_price(renewal_price_kopeks),
                 tariff_label=tariff_label,
             )
@@ -2108,17 +2152,21 @@ class MonitoringService:
                         build_miniapp_or_callback_button(
                             text=texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
                             callback_data=extend_callback,
+                            icon_custom_emoji_id='5397916757333654639',
                         )
                     ],
                     [
                         build_miniapp_or_callback_button(
                             text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'),
                             callback_data='balance_topup',
+                            icon_custom_emoji_id='5397916757333654639',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('SUPPORT_BUTTON', '🆘 Поддержка'), callback_data='menu_support'
+                            text=texts.t('SUPPORT_BUTTON', '🆘 Поддержка'),
+                            callback_data='menu_support',
+                            icon_custom_emoji_id='5452069934089641166',
                         )
                     ],
                 ]
@@ -2169,7 +2217,7 @@ class MonitoringService:
                     notification_type=NotificationType.WINBACK_DISCOUNT,
                     context={
                         'percent': percent,
-                        'expires_at': format_local_datetime(expires_at, '%d.%m.%Y %H:%M'),
+                        'expires_at': format_telegram_datetime(expires_at),
                         'trigger_days': trigger_days or '',
                     },
                 )
@@ -2200,7 +2248,7 @@ class MonitoringService:
 
             message = template.format(
                 percent=percent,
-                expires_at=format_local_datetime(expires_at, '%d.%m.%Y %H:%M'),
+                expires_at=format_telegram_datetime(expires_at),
                 trigger_days=trigger_days or '',
                 tariff_label=tariff_label,
             )
@@ -2213,24 +2261,30 @@ class MonitoringService:
                 inline_keyboard=[
                     [
                         build_miniapp_or_callback_button(
-                            text='🎁 Получить скидку', callback_data=f'claim_discount_{offer_id}'
+                            text='🎁 Получить скидку',
+                            callback_data=f'claim_discount_{offer_id}',
+                            icon_custom_emoji_id='5217822164362739968',
                         )
                     ],
                     [
                         build_miniapp_or_callback_button(
                             text=texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
                             callback_data=extend_callback,
+                            icon_custom_emoji_id='5397916757333654639',
                         )
                     ],
                     [
                         build_miniapp_or_callback_button(
                             text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'),
                             callback_data='balance_topup',
+                            icon_custom_emoji_id='5397916757333654639',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('SUPPORT_BUTTON', '🆘 Поддержка'), callback_data='menu_support'
+                            text=texts.t('SUPPORT_BUTTON', '🆘 Поддержка'),
+                            callback_data='menu_support',
+                            icon_custom_emoji_id='5452069934089641166',
                         )
                     ],
                 ]
@@ -2275,7 +2329,10 @@ class MonitoringService:
                 tariff_label = f' «{subscription.tariff.name}»'
             message = texts.AUTOPAY_SUCCESS.format(days=days, amount=settings.format_price(amount))
             if tariff_label:
-                message += f'\n📦 Тариф:{tariff_label}'
+                message += (
+                    '\n<tg-emoji emoji-id="5251203410396458957">🛡</tg-emoji>'
+                    f' Тариф:{tariff_label}'
+                )
             await self._send_message_with_logo(
                 chat_id=user.telegram_id,
                 text=message,
@@ -2323,14 +2380,29 @@ class MonitoringService:
                 and hasattr(subscription, 'tariff')
                 and subscription.tariff
             ):
-                message += f'\n📦 Тариф: «{subscription.tariff.name}»'
+                message += (
+                    '\n<tg-emoji emoji-id="5251203410396458957">🛡</tg-emoji>'
+                    f' Тариф: «{subscription.tariff.name}»'
+                )
 
             from aiogram.types import InlineKeyboardMarkup
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [build_miniapp_or_callback_button(text='💳 Пополнить баланс', callback_data='balance_topup')],
-                    [build_miniapp_or_callback_button(text='📱 Моя подписка', callback_data='menu_subscription')],
+                    [
+                        build_miniapp_or_callback_button(
+                            text=texts.t('BALANCE_TOPUP'),
+                            callback_data='balance_topup',
+                            icon_custom_emoji_id='5449683594425410231',
+                        )
+                    ],
+                    [
+                        build_miniapp_or_callback_button(
+                            text=texts.t('BTN_MY_SUBSCRIPTION'),
+                            callback_data='menu_subscription',
+                            icon_custom_emoji_id='5319272710688226013',
+                        )
+                    ],
                 ]
             )
 

@@ -89,6 +89,7 @@ class PaymentCommonMixin:
         first_button = build_miniapp_or_callback_button(
             text=(texts.MENU_EXTEND_SUBSCRIPTION if has_active_subscription else texts.MENU_BUY_SUBSCRIPTION),
             callback_data=('subscription_extend' if has_active_subscription else 'menu_buy'),
+            icon_custom_emoji_id='5397916757333654639',
         )
 
         keyboard_rows: list[list[InlineKeyboardButton]] = [
@@ -113,6 +114,7 @@ class PaymentCommonMixin:
                         build_miniapp_or_callback_button(
                             text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
                             callback_data='return_to_saved_cart',
+                            icon_custom_emoji_id='5271604874419647061',
                         )
                     ]
                 )
@@ -124,6 +126,7 @@ class PaymentCommonMixin:
                             build_miniapp_or_callback_button(
                                 text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
                                 callback_data='subscription_resume_checkout',
+                                icon_custom_emoji_id='5271604874419647061',
                             )
                         ]
                     )
@@ -138,6 +141,7 @@ class PaymentCommonMixin:
                 build_miniapp_or_callback_button(
                     text=texts.MY_BALANCE_BUTTON,
                     callback_data='menu_balance',
+                    icon_custom_emoji_id='5451882707875276247',
                 )
             ]
         )
@@ -147,7 +151,9 @@ class PaymentCommonMixin:
         # в бесконечном цикле «хочу в бот → попадаю в кабинет → тапаю
         # главное меню → снова кабинет». build_main_menu_button фиксирует
         # это инвариантом на уровне типа.
-        keyboard_rows.append([build_main_menu_button(texts.MAIN_MENU_BUTTON)])
+        keyboard_rows.append(
+            [build_main_menu_button(texts.MAIN_MENU_BUTTON, icon_custom_emoji_id='5416041192905265756')]
+        )
 
         return InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
@@ -198,15 +204,20 @@ class PaymentCommonMixin:
         )
 
         try:
-            payment_method = payment_method_title or 'Банковская карта (YooKassa)'
+            language = getattr(user_snapshot, 'language', 'ru')
+            texts = get_texts(language)
+            default_method = (
+                'Bank card (YooKassa)'
+                if str(language).lower().startswith('en')
+                else 'Банковская карта (YooKassa)'
+            )
+            payment_method = payment_method_title or default_method
 
             # Стандартное сообщение с полной клавиатурой
             keyboard = await self.build_topup_success_keyboard(user_snapshot)
-            message = (
-                '✅ <b>Платеж успешно завершен!</b>\n\n'
-                f'💰 Сумма: {settings.format_price(amount_kopeks)}\n'
-                f'💳 Способ: {payment_method}\n\n'
-                'Средства зачислены на ваш баланс!'
+            message = texts.t('PAYMENT_SUCCESS_STANDARD').format(
+                amount=settings.format_price(amount_kopeks),
+                method=payment_method,
             )
 
             await self.bot.send_message(

@@ -24,7 +24,15 @@ logger = structlog.get_logger(__name__)
 def get_delete_keyboard() -> InlineKeyboardMarkup:
     """Клавиатура с кнопкой удаления уведомления"""
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text='🗑 Удалить', callback_data='ban_notify:delete')]]
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text='Удалить',
+                    callback_data='ban_notify:delete',
+                    icon_custom_emoji_id='5445267414562389170',
+                )
+            ]
+        ]
     )
 
 

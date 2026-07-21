@@ -44,7 +44,7 @@ from app.services.user_service import UserService
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_duration
-from app.utils.miniapp_buttons import build_miniapp_or_callback_button
+from app.utils.miniapp_buttons import build_miniapp_or_callback_button, strip_leading_emoji
 from app.utils.subscription_utils import get_display_subscription_link
 
 
@@ -2056,8 +2056,11 @@ async def _send_offer_to_users(
                     keyboard_rows.append(
                         [
                             InlineKeyboardButton(
-                                text=user_texts.t('PROMO_OFFER_CLOSE', '❌ Закрыть'),
+                                text=strip_leading_emoji(
+                                    user_texts.t('PROMO_OFFER_CLOSE', '❌ Закрыть')
+                                ),
                                 callback_data='promo_offer_close',
+                                icon_custom_emoji_id='5210952531676504517',
                             )
                         ]
                     )

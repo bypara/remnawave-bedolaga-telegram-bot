@@ -74,6 +74,31 @@ def format_local_datetime(
     return localized.strftime(fmt)
 
 
+def format_telegram_datetime(
+    dt: datetime | None,
+    *,
+    time_format: str = 'dt',
+    fallback_format: str = '%d.%m.%Y %H:%M',
+    na_placeholder: str = 'N/A',
+) -> str:
+    """Render a datetime with Telegram's client-localized ``tg-time`` tag.
+
+    Telegram accepts Unix timestamps only through 19 January 2038. Values
+    outside that range gracefully fall back to an ordinary localized date.
+    """
+
+    localized = to_local_datetime(dt)
+    if localized is None:
+        return na_placeholder
+
+    fallback = localized.strftime(fallback_format)
+    unix_time = int(localized.timestamp())
+    if unix_time <= 0 or unix_time > 2_147_483_647:
+        return fallback
+
+    return f'<tg-time unix="{unix_time}" format="{time_format}">{fallback}</tg-time>'
+
+
 def format_email_datetime(
     dt: datetime | str | None,
     *,
