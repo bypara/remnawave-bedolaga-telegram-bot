@@ -13,6 +13,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
@@ -115,7 +116,13 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
 
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='⭐ Оплатить', url=invoice_link)],
+                [
+                    types.InlineKeyboardButton(
+                        text=strip_leading_emoji(texts.t('STARS_PAY_BUTTON', '⭐ Оплатить')),
+                        icon_custom_emoji_id='5271604874419647061',
+                        url=invoice_link,
+                    )
+                ],
                 [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],
             ]
         )
