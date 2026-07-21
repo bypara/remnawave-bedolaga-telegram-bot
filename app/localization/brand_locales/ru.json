@@ -128,6 +128,8 @@
   "ROLLYPAY_ENTER_AMOUNT": "<tg-emoji emoji-id=\"5449683594425410231\">🔼</tg-emoji> Оплата через {name}\n\nВведите сумму для пополнения от {min_amount} ₽ до {max_amount} ₽.",
   "LAVA_ENTER_AMOUNT": "<tg-emoji emoji-id=\"5449683594425410231\">🔼</tg-emoji> Оплата через {name}\n\nВведите сумму для пополнения от {min_amount} ₽ до {max_amount} ₽.",
   "STARS_BALANCE_PAYMENT_INVOICE": "<tg-emoji emoji-id=\"5438496463044752972\">⭐️</tg-emoji> Оплата через Telegram Stars\n\nСумма: {amount}\nК оплате: {stars_amount} звезд\nКурс: {stars_rate}₽ за звезду",
+  "STARS_PAY_BUTTON": "Оплатить",
+  "SUPPORT_TOPUP_INFO": "<tg-emoji emoji-id=\"5341715473882955310\">⚙️</tg-emoji> Пополнение через поддержку\n\nДля пополнения баланса обратитесь в техподдержку: {contact}\n\nУкажите:\n• ID: {user_id}\n• Сумму пополнения\n• Способ оплаты\n\n<tg-emoji emoji-id=\"5334544901428229844\">ℹ️</tg-emoji> Время обработки: 1-24 часа\n\nДоступные способы:\n• Криптовалюта\n• Переводы между банками по номеру карты",
   "TICKET_CREATED_MESSAGE": "<tg-emoji emoji-id=\"5206607081334906820\">✔️</tg-emoji> Тикет #{ticket_id} создан\n\n<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> Заголовок: {title}\n<tg-emoji emoji-id=\"5323761960829862762\">⚡️</tg-emoji> Статус: {status}",
   "MY_TICKETS_TITLE": "<tg-emoji emoji-id=\"5260233433107407649\">↔️</tg-emoji> Тикеты",
   "CLOSED_TICKETS_TITLE": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> Закрытые тикеты",

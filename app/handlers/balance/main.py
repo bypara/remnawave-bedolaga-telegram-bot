@@ -497,25 +497,23 @@ async def request_support_topup(callback: types.CallbackQuery, db_user: User):
         )
         return
 
-    user_id_display = db_user.telegram_id or db_user.email or f'#{db_user.id}'
-    support_text = f"""
-🛠️ <b>Пополнение через поддержку</b>
-
-Для пополнения баланса обратитесь в техподдержку:
-{settings.get_support_contact_display_html()}
-
-Укажите:
-• ID: {user_id_display}
-• Сумму пополнения
-• Способ оплаты
-
-⏰ Время обработки: 1-24 часа
-
-<b>Доступные способы:</b>
-• Криптовалюта
-• Переводы между банками
-• Другие платежные системы
-"""
+    user_id_display = html.escape(str(db_user.telegram_id or db_user.email or f'#{db_user.id}'))
+    support_text = texts.t(
+        'SUPPORT_TOPUP_INFO',
+        'Пополнение через поддержку\n\n'
+        'Для пополнения баланса обратитесь в техподдержку: {contact}\n\n'
+        'Укажите:\n'
+        '• ID: {user_id}\n'
+        '• Сумму пополнения\n'
+        '• Способ оплаты\n\n'
+        'Время обработки: 1-24 часа\n\n'
+        'Доступные способы:\n'
+        '• Криптовалюта\n'
+        '• Переводы между банками по номеру карты',
+    ).format(
+        contact=settings.get_support_contact_display_html(),
+        user_id=user_id_display,
+    )
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
