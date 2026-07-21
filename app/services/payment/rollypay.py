@@ -466,23 +466,13 @@ class RollyPayPaymentMixin:
             except Exception as error:
                 logger.error('Ошибка отправки админ уведомления RollyPay', error=error)
 
-        if getattr(self, 'bot', None) and user.telegram_id:
-            try:
-                keyboard = await self.build_topup_success_keyboard(user)
-                await self.bot.send_message(
-                    user.telegram_id,
-                    (
-                        '\u2705 <b>Пополнение успешно!</b>\n\n'
-                        f'\U0001f4b0 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        f'\U0001f4b3 Способ: {display_name}\n'
-                        f'\U0001f194 Транзакция: {transaction.id}\n\n'
-                        'Баланс пополнен автоматически!'
-                    ),
-                    parse_mode='HTML',
-                    reply_markup=keyboard,
-                )
-            except Exception as error:
-                logger.error('Ошибка отправки уведомления пользователю RollyPay', error=error)
+        await self._send_payment_success_notification(
+            user.telegram_id,
+            payment.amount_kopeks,
+            user,
+            db=db,
+            payment_method_title=display_name,
+        )
 
         try:
             from app.services.payment.common import send_cart_notification_after_topup

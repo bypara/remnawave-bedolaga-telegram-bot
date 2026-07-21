@@ -8,6 +8,7 @@ from app.keyboards import topup_amounts
 from app.keyboards.topup_amounts import (
     format_quick_amount,
     get_topup_amount_keyboard,
+    get_topup_amount_limits,
     resolve_config_method_id,
 )
 
@@ -116,3 +117,18 @@ async def test_keyboard_falls_back_to_back_only_on_db_error(monkeypatch: pytest.
     assert len(keyboard.inline_keyboard) == 1
     assert len(keyboard.inline_keyboard[0]) == 1
     assert keyboard.inline_keyboard[0][0].callback_data == 'menu_balance'
+
+
+async def test_amount_limits_use_cabinet_overrides(monkeypatch: pytest.MonkeyPatch):
+    config = SimpleNamespace(
+        min_amount_kopeks=12300,
+        max_amount_kopeks=45600,
+    )
+
+    async def fake_get_config(db, method_id):
+        assert method_id == 'telegram_stars'
+        return config
+
+    monkeypatch.setattr(topup_amounts, 'get_config_by_method_id', fake_get_config)
+
+    assert await get_topup_amount_limits('stars', db=object()) == (12300, 45600)

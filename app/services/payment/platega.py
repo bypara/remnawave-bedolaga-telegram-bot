@@ -477,25 +477,15 @@ class PlategaPaymentMixin:
             except Exception as error:
                 logger.error('Ошибка отправки админ уведомления Platega', error=error)
 
-        method_title = settings.get_platega_method_display_title(payment.payment_method_code)
+        method_title = settings.get_platega_method_display_name(payment.payment_method_code)
 
-        if getattr(self, 'bot', None) and user.telegram_id:
-            try:
-                keyboard = await self.build_topup_success_keyboard(user)
-                await self.bot.send_message(
-                    user.telegram_id,
-                    (
-                        '✅ <b>Пополнение успешно!</b>\n\n'
-                        f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        f'🦊 Способ: {method_title}\n'
-                        f'🆔 Транзакция: {transaction.id}\n\n'
-                        'Баланс пополнен автоматически!'
-                    ),
-                    parse_mode='HTML',
-                    reply_markup=keyboard,
-                )
-            except Exception as error:
-                logger.error('Ошибка отправки уведомления пользователю Platega', error=error)
+        await self._send_payment_success_notification(
+            user.telegram_id,
+            payment.amount_kopeks,
+            user,
+            db=db,
+            payment_method_title=method_title,
+        )
 
         try:
             from app.services.payment.common import send_cart_notification_after_topup

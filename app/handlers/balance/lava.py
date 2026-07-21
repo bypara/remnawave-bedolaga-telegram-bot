@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import User
 from app.keyboards.inline import get_back_keyboard
-from app.keyboards.topup_amounts import get_topup_amount_keyboard
+from app.keyboards.topup_amounts import get_topup_amount_keyboard, get_topup_amount_limits
 from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
@@ -203,6 +203,7 @@ async def process_lava_payment_amount(
 async def _start_lava_topup_impl(
     callback: types.CallbackQuery,
     db_user: User,
+    db: AsyncSession,
     state: FSMContext,
     payment_method: str,
 ):
@@ -222,12 +223,11 @@ async def _start_lava_topup_impl(
     await state.set_state(BalanceStates.waiting_for_amount)
     await state.update_data(payment_method=payment_method)
 
-    min_amount = settings.LAVA_MIN_AMOUNT_KOPEKS // 100
-    max_amount = settings.LAVA_MAX_AMOUNT_KOPEKS // 100
+    min_amount_kopeks, max_amount_kopeks = await get_topup_amount_limits(payment_method, db)
 
     display_name = _get_display_name(payment_method)
 
-    keyboard = await get_topup_amount_keyboard(payment_method, db_user.language)
+    keyboard = await get_topup_amount_keyboard(payment_method, db_user.language, db=db)
 
     await callback.message.edit_text(
         texts.t(
@@ -238,8 +238,8 @@ async def _start_lava_topup_impl(
             'Максимум: {max_amount}₽',
         ).format(
             name=display_name,
-            min_amount=min_amount,
-            max_amount=f'{max_amount:,}'.replace(',', ' '),
+            min_amount=f'{min_amount_kopeks // 100:,}'.replace(',', ' '),
+            max_amount=f'{max_amount_kopeks // 100:,}'.replace(',', ' '),
         ),
         parse_mode='HTML',
         reply_markup=keyboard,
@@ -253,7 +253,7 @@ async def start_lava_topup(
     db: AsyncSession,
     state: FSMContext,
 ):
-    await _start_lava_topup_impl(callback, db_user, state, 'lava')
+    await _start_lava_topup_impl(callback, db_user, db, state, 'lava')
 
 
 @error_handler
@@ -263,7 +263,7 @@ async def start_lava_card_topup(
     db: AsyncSession,
     state: FSMContext,
 ):
-    await _start_lava_topup_impl(callback, db_user, state, 'lava_card')
+    await _start_lava_topup_impl(callback, db_user, db, state, 'lava_card')
 
 
 @error_handler
@@ -273,4 +273,4 @@ async def start_lava_sbp_topup(
     db: AsyncSession,
     state: FSMContext,
 ):
-    await _start_lava_topup_impl(callback, db_user, state, 'lava_sbp')
+    await _start_lava_topup_impl(callback, db_user, db, state, 'lava_sbp')

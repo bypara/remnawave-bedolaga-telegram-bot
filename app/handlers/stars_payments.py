@@ -612,28 +612,17 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
         if success:
             rubles_amount = TelegramStarsService.calculate_rubles_from_stars(payment.total_amount)
             amount_kopeks = int((rubles_amount * Decimal(100)).to_integral_value(rounding=ROUND_HALF_UP))
-            amount_text = settings.format_price(amount_kopeks).replace(' ₽', '')
-
-            keyboard = await payment_service.build_topup_success_keyboard(user)
-
-            transaction_id_short = payment.telegram_payment_charge_id[:8]
-
-            await message.answer(
-                texts.t(
-                    'STARS_PAYMENT_SUCCESS',
-                    '🎉 <b>Платеж успешно обработан!</b>\n\n'
-                    '⭐ Потрачено звезд: {stars_spent}\n'
-                    '💰 Зачислено на баланс: {amount} ₽\n'
-                    '🆔 ID транзакции: {transaction_id}...\n\n'
-                    'Спасибо за пополнение! 🚀',
-                ).format(
-                    stars_spent=payment.total_amount,
-                    amount=amount_text,
-                    transaction_id=transaction_id_short,
-                ),
-                parse_mode='HTML',
-                reply_markup=keyboard,
+            is_simple_subscription = bool(
+                payment.invoice_payload and payment.invoice_payload.startswith('simple_sub_')
             )
+            if not is_simple_subscription:
+                await payment_service._send_payment_success_notification(
+                    user.telegram_id,
+                    amount_kopeks,
+                    user,
+                    db=db,
+                    payment_method_title='Telegram Stars',
+                )
 
             logger.info(
                 '✅ Stars платеж успешно обработан',
