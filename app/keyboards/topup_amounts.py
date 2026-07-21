@@ -69,6 +69,38 @@ async def _load_quick_amounts(db: AsyncSession, method: str, min_amount_kopeks: 
     return get_effective_quick_amounts(config.quick_amounts, min_amount, max_amount)
 
 
+async def get_topup_amount_limits(
+    method: str,
+    db: AsyncSession | None = None,
+) -> tuple[int, int]:
+    """Return effective min/max limits, including overrides from the cabinet."""
+
+    method_id = resolve_config_method_id(method)
+    method_def = _get_method_defaults().get(method_id, {})
+    default_min = int(method_def.get('default_min', 1000))
+    default_max = int(method_def.get('default_max', 10000000))
+
+    async def _load(session: AsyncSession) -> tuple[int, int]:
+        config = await get_config_by_method_id(session, method_id)
+        if not config:
+            return default_min, default_max
+        min_amount = config.min_amount_kopeks if config.min_amount_kopeks is not None else default_min
+        max_amount = config.max_amount_kopeks if config.max_amount_kopeks is not None else default_max
+        return int(min_amount), int(max_amount)
+
+    try:
+        if db is not None:
+            return await _load(db)
+
+        from app.database.database import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as session:
+            return await _load(session)
+    except Exception as error:
+        logger.warning('Не удалось загрузить лимиты пополнения', method=method, error=error, exc_info=True)
+        return default_min, default_max
+
+
 async def get_topup_amount_keyboard(
     method: str,
     language: str = DEFAULT_LANGUAGE,

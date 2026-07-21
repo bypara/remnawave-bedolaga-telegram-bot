@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import User
 from app.keyboards.inline import get_back_keyboard
-from app.keyboards.topup_amounts import get_topup_amount_keyboard
+from app.keyboards.topup_amounts import get_topup_amount_keyboard, get_topup_amount_limits
 from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
@@ -216,11 +216,10 @@ async def start_rollypay_topup(
     await state.set_state(BalanceStates.waiting_for_amount)
     await state.update_data(payment_method='rollypay')
 
-    min_amount = settings.ROLLYPAY_MIN_AMOUNT_KOPEKS // 100
-    max_amount = settings.ROLLYPAY_MAX_AMOUNT_KOPEKS // 100
+    min_amount_kopeks, max_amount_kopeks = await get_topup_amount_limits('rollypay', db)
     display_name = settings.get_rollypay_display_name()
 
-    keyboard = await get_topup_amount_keyboard('rollypay', db_user.language)
+    keyboard = await get_topup_amount_keyboard('rollypay', db_user.language, db=db)
 
     await callback.message.edit_text(
         texts.t(
@@ -231,8 +230,8 @@ async def start_rollypay_topup(
             'Максимум: {max_amount}\u20bd',
         ).format(
             name=display_name,
-            min_amount=min_amount,
-            max_amount=f'{max_amount:,}'.replace(',', ' '),
+            min_amount=f'{min_amount_kopeks // 100:,}'.replace(',', ' '),
+            max_amount=f'{max_amount_kopeks // 100:,}'.replace(',', ' '),
         ),
         parse_mode='HTML',
         reply_markup=keyboard,

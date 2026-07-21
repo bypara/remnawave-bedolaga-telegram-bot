@@ -20,6 +20,7 @@ from app.keyboards.inline import (
 from app.localization.texts import get_texts
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
@@ -520,7 +521,9 @@ async def request_support_topup(callback: types.CallbackQuery, db_user: User):
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text='💬 Написать в поддержку', url=settings.get_support_contact_url() or 'https://t.me/'
+                    text=strip_leading_emoji(texts.t('CONTACT_SUPPORT', '💬 Написать в поддержку')),
+                    icon_custom_emoji_id='5253742260054409879',
+                    url=settings.get_support_contact_url() or 'https://t.me/',
                 )
             ],
             [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],
