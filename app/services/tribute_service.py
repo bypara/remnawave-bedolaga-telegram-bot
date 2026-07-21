@@ -12,6 +12,7 @@ from app.database.crud.user import get_user_by_telegram_id
 from app.database.database import get_db
 from app.database.models import PaymentMethod, TransactionType
 from app.external.tribute import TributeService as TributeAPI
+from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.utils.user_utils import format_referrer_info
 
@@ -316,15 +317,11 @@ class TributeService:
                 payment_service = PaymentService(self.bot)
                 keyboard = await payment_service.build_topup_success_keyboard(user)
 
-                text = (
-                    f'✅ **Платеж успешно получен!**\n\n'
-                    f'💰 Сумма: {int(amount_rubles)} ₽\n'
-                    f'💳 Способ оплаты: Tribute\n'
-                    f'🎉 Средства зачислены на баланс!\n\n'
-                    f'Спасибо за оплату! 🙏'
+                text = get_texts(user.language).t('TRIBUTE_PAYMENT_SUCCESS').format(
+                    amount=int(amount_rubles)
                 )
 
-                await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='Markdown')
+                await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='HTML')
 
                 # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
                 from app.services.payment.common import send_cart_notification_after_topup
@@ -342,15 +339,13 @@ class TributeService:
             return
 
         try:
-            text = (
-                '⌘ **Платеж не прошел**\n\n'
-                'К сожалению, ваш платеж через Tribute был отклонен.\n\n'
-                'Возможные причины:\n'
-                '• Недостаточно средств на карте\n'
-                '• Технические проблемы банка\n'
-                '• Превышен лимит операций\n\n'
-                'Попробуйте еще раз или обратитесь в поддержку.'
-            )
+            language = 'ru'
+            async for session in get_db():
+                user = await get_user_by_telegram_id(session, user_id)
+                if user:
+                    language = user.language
+                break
+            text = get_texts(language).t('TRIBUTE_PAYMENT_FAILED')
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -359,7 +354,7 @@ class TributeService:
                 ]
             )
 
-            await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='Markdown')
+            await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='HTML')
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления о неудачном платеже', error=e)
@@ -372,14 +367,13 @@ class TributeService:
 
         try:
             amount_rubles = amount_kopeks / 100
-
-            text = (
-                f'🔄 **Возврат средств**\n\n'
-                f'💰 Сумма возврата: {int(amount_rubles)} ₽\n'
-                f'💳 Способ: Tribute\n\n'
-                f'Средства будут возвращены на вашу карту в течение 3-5 рабочих дней.\n\n'
-                f'Если у вас есть вопросы, обратитесь в поддержку.'
-            )
+            language = 'ru'
+            async for session in get_db():
+                user = await get_user_by_telegram_id(session, user_id)
+                if user:
+                    language = user.language
+                break
+            text = get_texts(language).t('TRIBUTE_PAYMENT_REFUND').format(amount=int(amount_rubles))
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -388,7 +382,7 @@ class TributeService:
                 ]
             )
 
-            await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='Markdown')
+            await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='HTML')
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления о возврате', error=e)

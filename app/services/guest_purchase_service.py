@@ -905,30 +905,51 @@ async def _send_telegram_gift_notification(
 
         from app.bot_factory import create_bot
 
+        is_english = str(user.language or '').lower().startswith('en')
         gift_from = ''
         if purchase.contact_value:
             safe_name = html_mod.escape(purchase.contact_value)
-            gift_from = f'\nОт: {safe_name}'
+            gift_from = f'\n{"From" if is_english else "От"}: {safe_name}'
 
         gift_msg = ''
         if purchase.gift_message:
             safe_msg = html_mod.escape(purchase.gift_message)
-            gift_msg = f'\n\n"{safe_msg}"'
+            gift_msg = (
+                '\n\n<tg-emoji emoji-id="5253742260054409879">✉️</tg-emoji> '
+                f'"{safe_msg}"'
+            )
 
         safe_tariff = html_mod.escape(tariff_name) if tariff_name else ''
-        period_text = f'{purchase.period_days} дн.' if purchase.period_days else ''
+        if purchase.period_days:
+            if is_english:
+                period_unit = 'day' if purchase.period_days == 1 else 'days'
+            else:
+                period_unit = 'дн.'
+            period_text = f'{purchase.period_days} {period_unit}'
+        else:
+            period_text = ''
         tariff_text = f'{safe_tariff} — {period_text}' if safe_tariff else period_text
 
-        text = f'🎁 <b>Вам подарили VPN подписку!</b>\n{tariff_text}{gift_from}{gift_msg}'
+        title = 'You received a VPN subscription as a gift!' if is_english else 'Вам подарили VPN подписку!'
+        text = (
+            '<tg-emoji emoji-id="5406756500108501710">🆓</tg-emoji> '
+            f'<b>{title}</b>\n\n{tariff_text}{gift_from}{gift_msg}'
+        )
 
         keyboard = None
         if is_pending_activation:
-            text += '\n\nУ вас уже есть активная подписка. Нажмите кнопку ниже, чтобы активировать подарок (текущая подписка будет заменена).'
+            text += (
+                '\n\nYou already have an active subscription. Tap the button below to activate the gift '
+                '(your current subscription will be replaced).'
+                if is_english
+                else '\n\nУ вас уже есть активная подписка. Нажмите кнопку ниже, чтобы активировать подарок '
+                '(текущая подписка будет заменена).'
+            )
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text='Активировать подарок',
+                            text='Activate gift' if is_english else 'Активировать подарок',
                             callback_data=f'gift_activate:{purchase.id}',
                         )
                     ]

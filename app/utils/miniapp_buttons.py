@@ -146,7 +146,11 @@ BUTTON_KEY_TO_CABINET_PATH: dict[str, str] = {
 _VALID_STYLES = frozenset({'primary', 'success', 'danger'})
 
 
-def build_main_menu_button(text: str) -> InlineKeyboardButton:
+def build_main_menu_button(
+    text: str,
+    *,
+    icon_custom_emoji_id: str | None = None,
+) -> InlineKeyboardButton:
     """Always-callback button for "Main Menu" / "Главное меню" navigation.
 
     Exists as a typed alternative to ``build_miniapp_or_callback_button``
@@ -165,7 +169,12 @@ def build_main_menu_button(text: str) -> InlineKeyboardButton:
     callback even if called wrongly, AND this dedicated factory is
     what callers should reach for to express intent.
     """
-    return InlineKeyboardButton(text=text, callback_data='back_to_menu')
+    final_text = strip_leading_emoji(text) if icon_custom_emoji_id else text
+    return InlineKeyboardButton(
+        text=final_text,
+        callback_data='back_to_menu',
+        icon_custom_emoji_id=icon_custom_emoji_id,
+    )
 
 
 def _resolve_style(style: str | None) -> str | None:
@@ -262,7 +271,14 @@ def build_miniapp_or_callback_button(
                     icon_custom_emoji_id=resolved_emoji or None,
                 )
 
-    return InlineKeyboardButton(text=text, callback_data=callback_data)
+    resolved_style = _resolve_style(style)
+    final_text = strip_leading_emoji(text) if icon_custom_emoji_id else text
+    return InlineKeyboardButton(
+        text=final_text,
+        callback_data=callback_data,
+        style=resolved_style,
+        icon_custom_emoji_id=icon_custom_emoji_id,
+    )
 
 
 # Префикс startapp/маршрута для диплинка на конкретный тикет в админ-кабинете.

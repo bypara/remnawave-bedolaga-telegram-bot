@@ -21,6 +21,7 @@ from app.database.models import (
     User,
 )
 from app.localization.texts import get_texts
+from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
@@ -29,7 +30,10 @@ logger = structlog.get_logger(__name__)
 def _build_poll_invitation_text(poll: Poll, language: str) -> str:
     texts = get_texts(language)
 
-    lines: list[str] = [f'🗳️ <b>{html.escape(poll.title)}</b>']
+    lines: list[str] = [
+        '<tg-emoji emoji-id="5424818078833715060">📣</tg-emoji> '
+        f'<b>{html.escape(poll.title)}</b>'
+    ]
     if poll.description:
         lines.append(html.escape(poll.description))
 
@@ -56,8 +60,9 @@ def build_start_keyboard(response_id: int, language: str) -> InlineKeyboardMarku
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('POLL_START_BUTTON', '📝 Пройти опрос'),
+                    text=strip_leading_emoji(texts.t('POLL_START_BUTTON', '📝 Пройти опрос')),
                     callback_data=f'poll_start:{response_id}',
+                    icon_custom_emoji_id='5452069934089641166',
                 )
             ]
         ]

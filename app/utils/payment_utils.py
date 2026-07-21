@@ -469,13 +469,14 @@ def get_payment_methods_text(language: str) -> str:
 Выберите способ пополнения:""",
         )
 
-    text = (
-        texts.t(
-            'PAYMENT_METHODS_TITLE',
-            '💳 <b>Способы пополнения баланса</b>',
-        )
-        + '\n\n'
+    title = texts.t(
+        'PAYMENT_METHODS_TITLE',
+        '💳 <b>Способы пополнения баланса</b>',
     )
+    if texts.t('PAYMENT_METHODS_DETAILS_ENABLED', 'true').strip().lower() == 'false':
+        return title.rstrip()
+
+    text = title + '\n\n'
     text += (
         texts.t(
             'PAYMENT_METHODS_PROMPT',

@@ -150,24 +150,32 @@ class UserService:
         """
         if amount_kopeks > 0:
             # Пополнение
-            emoji = '💰'
             amount_text = f'+{settings.format_price(amount_kopeks)}'
-            message = (
-                f'{emoji} <b>Баланс пополнен!</b>\n\n'
-                f'💵 <b>Сумма:</b> {amount_text}\n'
-                f'💳 <b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n\n'
-                f'Спасибо за использование нашего сервиса! 🎉'
-            )
+            if str(user.language or '').lower().startswith('en'):
+                message = (
+                    '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> <b>Balance topped up!</b>\n\n'
+                    f'Amount: {amount_text}\nCurrent balance: {settings.format_price(user.balance_kopeks)}'
+                )
+            else:
+                message = (
+                    '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> <b>Баланс пополнен!</b>\n\n'
+                    f'Сумма: {amount_text}\nТекущий баланс: {settings.format_price(user.balance_kopeks)}'
+                )
         else:
             # Списание
-            emoji = '💸'
             amount_text = f'-{settings.format_price(abs(amount_kopeks))}'
-            message = (
-                f'{emoji} <b>Средства списаны с баланса</b>\n\n'
-                f'💵 <b>Сумма:</b> {amount_text}\n'
-                f'💳 <b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n\n'
-                f'Если у вас есть вопросы, обратитесь в поддержку.'
-            )
+            if str(user.language or '').lower().startswith('en'):
+                message = (
+                    '<tg-emoji emoji-id="5274099962655816924">❗️</tg-emoji> <b>Funds deducted from balance</b>\n\n'
+                    f'Amount: {amount_text}\nCurrent balance: {settings.format_price(user.balance_kopeks)}\n\n'
+                    'If you have any questions, contact support.'
+                )
+            else:
+                message = (
+                    '<tg-emoji emoji-id="5274099962655816924">❗️</tg-emoji> <b>Средства списаны с баланса</b>\n\n'
+                    f'Сумма: {amount_text}\nТекущий баланс: {settings.format_price(user.balance_kopeks)}\n\n'
+                    'Если у вас есть вопросы, обратитесь в поддержку.'
+                )
 
         keyboard_rows = []
         subs = getattr(user, 'subscriptions', None) or []

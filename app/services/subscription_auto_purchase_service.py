@@ -34,7 +34,8 @@ from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 from app.utils.formatters import format_days_declension
 from app.utils.pricing_utils import format_period_description
-from app.utils.timezone import format_email_datetime, format_local_datetime
+from app.utils.miniapp_buttons import strip_leading_emoji
+from app.utils.timezone import format_email_datetime, format_local_datetime, format_telegram_datetime
 
 
 logger = structlog.get_logger(__name__)
@@ -698,7 +699,7 @@ async def _auto_extend_subscription(
         getattr(user, 'language', 'ru'),
     )
     new_end_date = updated_subscription.end_date
-    end_date_label = format_local_datetime(new_end_date, '%d.%m.%Y %H:%M')
+    end_date_label = format_telegram_datetime(new_end_date)
 
     # Уведомление администраторам (не зависит от наличия bot)
     try:
@@ -731,7 +732,10 @@ async def _auto_extend_subscription(
                 '✅ Subscription automatically extended for {period}.',
             ).format(period=period_label)
             if settings.is_multi_tariff_enabled() and prepared.tariff_name:
-                auto_message += f'\n📦 Тариф: «{prepared.tariff_name}»'
+                auto_message += (
+                    '\n<tg-emoji emoji-id="5251203410396458957">🛡</tg-emoji>'
+                    f' Тариф: «{prepared.tariff_name}»'
+                )
             details_message = texts.t(
                 'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS',
                 'New expiration date: {date}.',
@@ -749,14 +753,16 @@ async def _auto_extend_subscription(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 My subscription'),
+                            text=strip_leading_emoji(texts.t('MY_SUBSCRIPTION_BUTTON', '📱 My subscription')),
                             callback_data='menu_subscription',
+                            icon_custom_emoji_id='5319272710688226013',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Main menu'),
+                            text=strip_leading_emoji(texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Main menu')),
                             callback_data='back_to_menu',
+                            icon_custom_emoji_id='5406745015365943482',
                         )
                     ],
                 ]
@@ -1119,14 +1125,16 @@ async def _auto_purchase_tariff(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                            text=strip_leading_emoji(texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка')),
                             callback_data='menu_subscription',
+                            icon_custom_emoji_id='5319272710688226013',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню'),
+                            text=strip_leading_emoji(texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню')),
                             callback_data='back_to_menu',
+                            icon_custom_emoji_id='5406745015365943482',
                         )
                     ],
                 ]
@@ -1465,25 +1473,25 @@ async def _auto_purchase_daily_tariff(
         try:
             texts = get_texts(getattr(user, 'language', 'ru'))
 
-            message = (
-                f'✅ <b>Суточный тариф «{html.escape(tariff.name)}» активирован!</b>\n\n'
-                f'💰 Списано: {final_price / 100:.0f} ₽ за первый день\n'
-                f'🔄 Средства будут списываться автоматически раз в сутки.\n\n'
-                f'ℹ️ Вы можете приостановить подписку в любой момент.'
+            message = texts.t('DAILY_TARIFF_ACTIVATED_NOTIFICATION').format(
+                tariff_name=html.escape(tariff.name),
+                amount=f'{final_price / 100:.0f}',
             )
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                            text=strip_leading_emoji(texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка')),
                             callback_data='menu_subscription',
+                            icon_custom_emoji_id='5319272710688226013',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню'),
+                            text=strip_leading_emoji(texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню')),
                             callback_data='back_to_menu',
+                            icon_custom_emoji_id='5406745015365943482',
                         )
                     ],
                 ]
@@ -1825,14 +1833,16 @@ async def _auto_add_devices(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                            text=strip_leading_emoji(texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка')),
                             callback_data='menu_subscription',
+                            icon_custom_emoji_id='5319272710688226013',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню'),
+                            text=strip_leading_emoji(texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню')),
                             callback_data='back_to_menu',
+                            icon_custom_emoji_id='5406745015365943482',
                         )
                     ],
                 ]
@@ -2181,14 +2191,16 @@ async def _auto_add_traffic(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                            text=strip_leading_emoji(texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка')),
                             callback_data='menu_subscription',
+                            icon_custom_emoji_id='5319272710688226013',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню'),
+                            text=strip_leading_emoji(texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню')),
                             callback_data='back_to_menu',
+                            icon_custom_emoji_id='5406745015365943482',
                         )
                     ],
                 ]
@@ -2520,7 +2532,7 @@ async def try_auto_extend_expired_after_topup(
     texts = get_texts(getattr(user, 'language', 'ru'))
     period_label = format_period_description(period_days, getattr(user, 'language', 'ru'))
     new_end_date = updated_subscription.end_date
-    end_date_label = format_local_datetime(new_end_date, '%d.%m.%Y %H:%M')
+    end_date_label = format_telegram_datetime(new_end_date)
 
     # Admin notification
     try:
@@ -2553,7 +2565,10 @@ async def try_auto_extend_expired_after_topup(
                 '✅ Subscription automatically extended for {period}.',
             ).format(period=period_label)
             if settings.is_multi_tariff_enabled() and tariff_name_for_label:
-                auto_message += f'\n📦 Тариф: «{tariff_name_for_label}»'
+                auto_message += (
+                    '\n<tg-emoji emoji-id="5251203410396458957">🛡</tg-emoji>'
+                    f' Тариф: «{tariff_name_for_label}»'
+                )
             details_message = texts.t(
                 'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS',
                 'New expiration date: {date}.',
@@ -2571,14 +2586,16 @@ async def try_auto_extend_expired_after_topup(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 My subscription'),
+                            text=strip_leading_emoji(texts.t('MY_SUBSCRIPTION_BUTTON', '📱 My subscription')),
                             callback_data='menu_subscription',
+                            icon_custom_emoji_id='5319272710688226013',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Main menu'),
+                            text=strip_leading_emoji(texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Main menu')),
                             callback_data='back_to_menu',
+                            icon_custom_emoji_id='5406745015365943482',
                         )
                     ],
                 ]
@@ -2951,14 +2968,16 @@ async def try_resume_disabled_daily_after_topup(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 My subscription'),
+                            text=strip_leading_emoji(texts.t('MY_SUBSCRIPTION_BUTTON', '📱 My subscription')),
                             callback_data='menu_subscription',
+                            icon_custom_emoji_id='5319272710688226013',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Main menu'),
+                            text=strip_leading_emoji(texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Main menu')),
                             callback_data='back_to_menu',
+                            icon_custom_emoji_id='5406745015365943482',
                         )
                     ],
                 ]
@@ -3346,7 +3365,10 @@ async def _process_legacy_generic_cart(
 
                         _t = await _get_tariff_label(db, subscription.tariff_id)
                         if _t:
-                            auto_message += f'\n📦 Тариф: «{_t.name}»'
+                            auto_message += (
+                                '\n<tg-emoji emoji-id="5251203410396458957">🛡</tg-emoji>'
+                                f' Тариф: «{_t.name}»'
+                            )
                     except Exception:
                         pass
 
@@ -3364,14 +3386,20 @@ async def _process_legacy_generic_cart(
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 My subscription'),
+                                text=strip_leading_emoji(
+                                    texts.t('MY_SUBSCRIPTION_BUTTON', '📱 My subscription')
+                                ),
                                 callback_data='menu_subscription',
+                                icon_custom_emoji_id='5319272710688226013',
                             )
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Main menu'),
+                                text=strip_leading_emoji(
+                                    texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Main menu')
+                                ),
                                 callback_data='back_to_menu',
+                                icon_custom_emoji_id='5406745015365943482',
                             )
                         ],
                     ]

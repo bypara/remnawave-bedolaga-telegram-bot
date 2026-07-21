@@ -471,8 +471,9 @@ async def _send_promo_notifications(
                         ],
                         [
                             InlineKeyboardButton(
-                                text='❌ Закрыть',
+                                text='Закрыть',
                                 callback_data='promo_offer_close',
+                                icon_custom_emoji_id='5210952531676504517',
                             )
                         ],
                     ]

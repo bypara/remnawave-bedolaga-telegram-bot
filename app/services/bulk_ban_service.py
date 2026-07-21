@@ -2,6 +2,8 @@
 Модуль для массовой блокировки пользователей по списку Telegram ID
 """
 
+import html
+
 import structlog
 from aiogram import Bot
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -80,10 +82,14 @@ class BulkBanService:
                             await bot.send_message(
                                 chat_id=telegram_id,
                                 text=(
-                                    f'🚫 <b>Ваш аккаунт заблокирован</b>\n\n'
-                                    f'Причина: {reason}\n\n'
-                                    f'Если вы считаете, что блокировка произошла ошибочно, '
-                                    f'обратитесь в поддержку.'
+                                    '<tg-emoji emoji-id="5240241223632954241">🚫</tg-emoji> '
+                                    + (
+                                        f'<b>Your account has been blocked</b>\n\nReason: {html.escape(reason)}\n\n'
+                                        'If you believe this was a mistake, contact support.'
+                                        if str(user.language or '').lower().startswith('en')
+                                        else f'<b>Ваш аккаунт заблокирован</b>\n\nПричина: {html.escape(reason)}\n\n'
+                                        'Если вы считаете, что блокировка произошла ошибочно, обратитесь в поддержку.'
+                                    )
                                 ),
                                 parse_mode='HTML',
                             )

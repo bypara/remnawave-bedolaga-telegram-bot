@@ -48,7 +48,7 @@ from app.utils.promo_offer import (
 from app.utils.rich_menu import try_edit_rich_main_menu
 from app.utils.subscription_utils import get_display_subscription_link
 from app.utils.telegram_html import html_to_telegram, info_page_faq_to_telegram, split_telegram_text
-from app.utils.timezone import format_local_datetime
+from app.utils.timezone import format_local_datetime, format_telegram_datetime
 
 
 logger = structlog.get_logger(__name__)
@@ -1505,10 +1505,10 @@ async def _build_compact_main_menu_subscriptions(user, texts, db: AsyncSession) 
         ).format(
             tariff_name=html.escape(str(tariff_name)),
         )
-        end_date_fallback = format_local_datetime(end_date, '%d.%m.%Y')
-        telegram_date = (
-            f'<tg-time unix="{int(end_date.timestamp())}" format="d">'
-            f'{html.escape(end_date_fallback)}</tg-time>'
+        telegram_date = format_telegram_datetime(
+            end_date,
+            time_format='d',
+            fallback_format='%d.%m.%Y',
         )
         valid_until_line = texts.t(
             'MAIN_MENU_COMPACT_SUBSCRIPTION_VALID_UNTIL',

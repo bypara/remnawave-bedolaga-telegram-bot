@@ -24,6 +24,7 @@ from app.database.models import (
     User,
     UserPromoGroup,
 )
+from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
@@ -61,8 +62,33 @@ def _build_extend_keyboard(texts, subscription_id: int | None = None) -> InlineK
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
+                    text=strip_leading_emoji(
+                        texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку')
+                    ),
                     callback_data=extend_callback,
+                    icon_custom_emoji_id='5397916757333654639',
+                )
+            ],
+        ]
+    )
+
+
+def _build_autopay_failed_keyboard(texts) -> InlineKeyboardMarkup:
+    """Keyboard for a failed automatic card charge."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=strip_leading_emoji(texts.t('BALANCE_TOPUP', '💳 Пополнить баланс')),
+                    callback_data='balance_topup',
+                    icon_custom_emoji_id='5449683594425410231',
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=strip_leading_emoji(texts.t('BTN_MY_SUBSCRIPTION', '📱 Моя подписка')),
+                    callback_data='menu_subscription',
+                    icon_custom_emoji_id='5319272710688226013',
                 )
             ],
         ]
@@ -394,7 +420,10 @@ async def _process_single_subscription(
                         '✅ <b>Автоплатёж выполнен</b>\n\nБаланс пополнен на {amount} для продления подписки.',
                     ).format(amount=settings.format_price(topup_amount_kopeks))
                     if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
-                        msg += f'\n📦 Тариф: «{subscription.tariff.name}»'
+                        msg += (
+                            '\n<tg-emoji emoji-id="5251203410396458957">🛡</tg-emoji>'
+                            f' Тариф: «{subscription.tariff.name}»'
+                        )
                     await bot.send_message(
                         chat_id=user.telegram_id,
                         text=msg,
@@ -441,13 +470,16 @@ async def _process_single_subscription(
             from app.localization.texts import get_texts
 
             texts = get_texts(user.language)
-            keyboard = _build_extend_keyboard(texts, subscription.id)
+            keyboard = _build_autopay_failed_keyboard(texts)
             msg = texts.t(
                 'RECURRENT_TOPUP_FAILED',
                 '❌ <b>Автоплатёж не удался</b>\n\nНе удалось списать {amount} ни с одной сохранённой карты для продления подписки.\n\nПополните баланс вручную, чтобы подписка не прервалась.',
             ).format(amount=settings.format_price(topup_amount_kopeks))
             if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
-                msg += f'\n📦 Тариф: «{subscription.tariff.name}»'
+                msg += (
+                    '\n<tg-emoji emoji-id="5251203410396458957">🛡</tg-emoji>'
+                    f' Тариф: «{subscription.tariff.name}»'
+                )
             await bot.send_message(
                 chat_id=user.telegram_id,
                 text=msg,

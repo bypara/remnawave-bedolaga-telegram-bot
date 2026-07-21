@@ -627,40 +627,30 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
             logger.debug('Не удалось записать конкурсную регистрацию', exc=exc)
 
         if bot:
-            commission_percent = get_effective_referral_commission_percent(referrer)
-            referral_notification = (
-                f'🎉 <b>Добро пожаловать!</b>\n\n'
-                f'Вы перешли по реферальной ссылке пользователя <b>{html.escape(referrer.full_name)}</b>!'
-            )
-            if settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
-                referral_notification += (
-                    f'\n\n💰 При первом пополнении от {settings.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)} '
-                    f'вы получите бонус {settings.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)}!'
+            if str(new_user.language or '').lower().startswith('en'):
+                referral_notification = (
+                    '<tg-emoji emoji-id="5461117441612462242">🙂</tg-emoji> <b>Welcome!</b>'
+                    f'\n\n<tg-emoji emoji-id="5449683594425410231">🔼</tg-emoji> On your first top-up of '
+                    f'{settings.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)} or more, you will receive '
+                    f'a bonus of {settings.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)}!'
+                )
+            else:
+                referral_notification = (
+                    '<tg-emoji emoji-id="5461117441612462242">🙂</tg-emoji> <b>Добро пожаловать!</b>'
+                    f'\n\n<tg-emoji emoji-id="5449683594425410231">🔼</tg-emoji> При первом пополнении от '
+                    f'{settings.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)} вы получите бонус '
+                    f'{settings.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)}!'
                 )
             await send_referral_notification(bot, new_user.telegram_id, referral_notification, user=new_user)
 
             inviter_notification = (
-                f'👥 <b>Новый реферал!</b>\n\n'
-                f'По вашей ссылке зарегистрировался пользователь <b>{html.escape(new_user.full_name)}</b>!\n\n'
-                f'💰 Когда он пополнит баланс от {settings.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)}, '
+                '<tg-emoji emoji-id="5458603043203327669">🔔</tg-emoji> '
+                + (
+                    f'A user <b>{html.escape(new_user.full_name)}</b> registered through your link!'
+                    if str(referrer.language or '').lower().startswith('en')
+                    else f'По вашей ссылке зарегистрировался пользователь <b>{html.escape(new_user.full_name)}</b>!'
+                )
             )
-            if settings.REFERRAL_INVITER_BONUS_KOPEKS > 0 and commission_percent > 0:
-                inviter_notification += (
-                    f'вы получите {settings.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS)} + '
-                    f'{commission_percent}% от суммы пополнения.\n\n'
-                )
-            elif settings.REFERRAL_INVITER_BONUS_KOPEKS > 0:
-                inviter_notification += (
-                    f'вы получите {settings.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS)}.\n\n'
-                )
-            elif commission_percent > 0:
-                inviter_notification += f'вы получите {commission_percent}% от суммы.\n\n'
-            else:
-                inviter_notification += 'вы получите уведомление.\n\n'
-            if commission_percent > 0:
-                inviter_notification += (
-                    f'📈 С каждого последующего пополнения вы будете получать {commission_percent}% комиссии.'
-                )
             await send_referral_notification(
                 bot, referrer.telegram_id, inviter_notification, user=referrer, referral_name=new_user.full_name
             )
@@ -751,14 +741,24 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                         )
 
                         if bot:
-                            commission_notification = (
-                                f'💰 <b>Реферальная комиссия!</b>\n\n'
-                                f'Ваш реферал <b>{html.escape(user.full_name)}</b> пополнил баланс на '
-                                f'{settings.format_price(topup_amount_kopeks)}\n\n'
-                                f'🎁 Ваша комиссия ({commission_percent}%): '
-                                f'{settings.format_price(commission_amount)}\n\n'
-                                f'💎 Средства зачислены на ваш баланс.'
-                            )
+                            if str(referrer.language or '').lower().startswith('en'):
+                                commission_notification = (
+                                    '<tg-emoji emoji-id="5406756500108501710">🆓</tg-emoji> '
+                                    '<b>Referral commission!</b>'
+                                    f'\n\nYour referral <b>{html.escape(user.full_name)}</b> topped up by '
+                                    f'{settings.format_price(topup_amount_kopeks)}'
+                                    f'\n\n<tg-emoji emoji-id="5416081784641168838">🟢</tg-emoji> Your commission '
+                                    f'({commission_percent}%): {settings.format_price(commission_amount)}'
+                                )
+                            else:
+                                commission_notification = (
+                                    '<tg-emoji emoji-id="5406756500108501710">🆓</tg-emoji> '
+                                    '<b>Реферальная комиссия!</b>'
+                                    f'\n\nВаш реферал <b>{html.escape(user.full_name)}</b> пополнил баланс на '
+                                    f'{settings.format_price(topup_amount_kopeks)}'
+                                    f'\n\n<tg-emoji emoji-id="5416081784641168838">🟢</tg-emoji> Ваша комиссия '
+                                    f'({commission_percent}%): {settings.format_price(commission_amount)}'
+                                )
                             await send_referral_notification(
                                 bot,
                                 referrer.telegram_id,
@@ -809,12 +809,20 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                     )
 
                     if bot:
-                        bonus_notification = (
-                            f'🎉 <b>Бонус получен!</b>\n\n'
-                            f'За первое пополнение вы получили бонус '
-                            f'{settings.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)}!\n\n'
-                            f'💎 Средства зачислены на ваш баланс.'
-                        )
+                        if str(user.language or '').lower().startswith('en'):
+                            bonus_notification = (
+                                '<tg-emoji emoji-id="5406756500108501710">🆓</tg-emoji> '
+                                '<b>Bonus received!</b>'
+                                f'\n\nYou received {settings.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)} '
+                                'for your first top-up!'
+                            )
+                        else:
+                            bonus_notification = (
+                                '<tg-emoji emoji-id="5406756500108501710">🆓</tg-emoji> '
+                                '<b>Бонус получен!</b>'
+                                f'\n\nЗа первое пополнение вы получили бонус '
+                                f'{settings.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)}!'
+                            )
                         await send_referral_notification(
                             bot,
                             user.telegram_id,
@@ -858,28 +866,55 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                     )
 
                     if bot:
+                        is_english = str(referrer.language or '').lower().startswith('en')
                         bonus_parts = []
                         if settings.REFERRAL_INVITER_BONUS_KOPEKS > 0:
                             bonus_parts.append(
-                                f'фикс. бонус {settings.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS)}'
+                                (
+                                    'fixed bonus '
+                                    if is_english
+                                    else 'фикс. бонус '
+                                )
+                                + settings.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS)
                             )
                         if commission_amount > 0:
                             bonus_parts.append(
-                                f'комиссия {commission_percent}% = {settings.format_price(commission_amount)}'
+                                (
+                                    f'commission {commission_percent}% = '
+                                    if is_english
+                                    else f'комиссия {commission_percent}% = '
+                                )
+                                + settings.format_price(commission_amount)
                             )
                         bonus_breakdown = ' + '.join(bonus_parts)
-                        inviter_bonus_notification = (
-                            f'💰 <b>Реферальная награда!</b>\n\n'
-                            f'Ваш реферал <b>{html.escape(user.full_name)}</b> сделал первое пополнение '
-                            f'на {settings.format_price(topup_amount_kopeks)}!\n\n'
-                            f'🎁 Ваша награда: {settings.format_price(inviter_bonus)}'
-                            f' ({bonus_breakdown})'
-                        )
-                        if commission_percent > 0:
-                            inviter_bonus_notification += (
-                                f'\n\n📈 Теперь с каждого его пополнения вы будете получать '
-                                f'{commission_percent}% комиссии.'
+                        if is_english:
+                            inviter_bonus_notification = (
+                                '<tg-emoji emoji-id="5406756500108501710">🆓</tg-emoji> '
+                                '<b>Referral reward!</b>'
+                                f'\n\nYour referral <b>{html.escape(user.full_name)}</b> made their first top-up of '
+                                f'{settings.format_price(topup_amount_kopeks)}!\n\nYour reward: '
+                                f'{settings.format_price(inviter_bonus)} ({bonus_breakdown})'
                             )
+                        else:
+                            inviter_bonus_notification = (
+                                '<tg-emoji emoji-id="5406756500108501710">🆓</tg-emoji> '
+                                '<b>Реферальная награда!</b>'
+                                f'\n\nВаш реферал <b>{html.escape(user.full_name)}</b> сделал первое пополнение на '
+                                f'{settings.format_price(topup_amount_kopeks)}!\n\nВаша награда: '
+                                f'{settings.format_price(inviter_bonus)} ({bonus_breakdown})'
+                            )
+                        if commission_percent > 0:
+                            if is_english:
+                                inviter_bonus_notification += (
+                                    '\n\n<tg-emoji emoji-id="5231200819986047254">📊</tg-emoji> '
+                                    f'You will now receive {commission_percent}% from each of their top-ups.'
+                                )
+                            else:
+                                inviter_bonus_notification += (
+                                    '\n\n<tg-emoji emoji-id="5231200819986047254">📊</tg-emoji> '
+                                    'Теперь с каждого его пополнения вы будете получать '
+                                    f'{commission_percent}% комиссии.'
+                                )
                         await send_referral_notification(
                             bot,
                             referrer.telegram_id,
@@ -926,14 +961,24 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                 )
 
                 if bot:
-                    commission_notification = (
-                        f'💰 <b>Реферальная комиссия!</b>\n\n'
-                        f'Ваш реферал <b>{html.escape(user.full_name)}</b> пополнил баланс на '
-                        f'{settings.format_price(topup_amount_kopeks)}\n\n'
-                        f'🎁 Ваша комиссия ({commission_percent}%): '
-                        f'{settings.format_price(commission_amount)}\n\n'
-                        f'💎 Средства зачислены на ваш баланс.'
-                    )
+                    if str(referrer.language or '').lower().startswith('en'):
+                        commission_notification = (
+                            '<tg-emoji emoji-id="5406756500108501710">🆓</tg-emoji> '
+                            '<b>Referral commission!</b>'
+                            f'\n\nYour referral <b>{html.escape(user.full_name)}</b> topped up by '
+                            f'{settings.format_price(topup_amount_kopeks)}'
+                            f'\n\n<tg-emoji emoji-id="5416081784641168838">🟢</tg-emoji> Your commission '
+                            f'({commission_percent}%): {settings.format_price(commission_amount)}'
+                        )
+                    else:
+                        commission_notification = (
+                            '<tg-emoji emoji-id="5406756500108501710">🆓</tg-emoji> '
+                            '<b>Реферальная комиссия!</b>'
+                            f'\n\nВаш реферал <b>{html.escape(user.full_name)}</b> пополнил баланс на '
+                            f'{settings.format_price(topup_amount_kopeks)}'
+                            f'\n\n<tg-emoji emoji-id="5416081784641168838">🟢</tg-emoji> Ваша комиссия '
+                            f'({commission_percent}%): {settings.format_price(commission_amount)}'
+                        )
                     await send_referral_notification(
                         bot,
                         referrer.telegram_id,
