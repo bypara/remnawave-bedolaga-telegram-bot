@@ -1,5 +1,6 @@
 import asyncio
 import html
+import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -815,7 +816,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
             language = data.get('language', DEFAULT_LANGUAGE)
             texts = get_texts(language)
 
-            rules_text = await get_rules(language)
+            rules_text = _format_registration_rules_text(await get_rules(language), texts)
             await answer_long_text(message, rules_text, reply_markup=get_rules_keyboard(language))
             await state.set_state(RegistrationStates.waiting_for_rules_accept)
             logger.info('📋 Правила отправлены после ввода реферального кода')
@@ -850,7 +851,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
             language = data.get('language', DEFAULT_LANGUAGE)
             texts = get_texts(language)
 
-            rules_text = await get_rules(language)
+            rules_text = _format_registration_rules_text(await get_rules(language), texts)
             await answer_long_text(message, rules_text, reply_markup=get_rules_keyboard(language))
             await state.set_state(RegistrationStates.waiting_for_rules_accept)
             logger.info('📋 Правила отправлены после принятия промокода')
@@ -875,7 +876,35 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
 
 
 def _get_language_prompt_text() -> str:
-    return '🌐 Выберите язык / Choose your language:'
+    return '<tg-emoji emoji-id="5447410659077661506">🌐</tg-emoji> Выберите язык / Choose your language:'
+
+
+_RULES_HEADING_MARKERS = (
+    'правила использования сервиса',
+    'правила сервиса',
+    'service usage rules',
+    'service rules',
+)
+
+
+def _format_registration_rules_text(rules_text: str, texts) -> str:
+    """Add the branded onboarding header without duplicating a stored heading."""
+    content = (rules_text or '').strip()
+    lines = content.splitlines()
+
+    if lines:
+        first_line = re.sub(r'<[^>]+>', '', lines[0]).casefold()
+        if any(marker in first_line for marker in _RULES_HEADING_MARKERS):
+            lines = lines[1:]
+            while lines and not lines[0].strip():
+                lines.pop(0)
+            content = '\n'.join(lines).strip()
+
+    header = texts.t(
+        'RULES_HEADER',
+        '<tg-emoji emoji-id="5282843764451195532">🖥</tg-emoji> Правила использования сервиса',
+    )
+    return f'{header}\n\n{content}' if content else header
 
 
 async def _prompt_language_selection(message: types.Message, state: FSMContext) -> None:
@@ -938,7 +967,7 @@ async def _continue_registration_after_language(
                 await _complete_registration_wrapper()
         return
 
-    rules_text = await get_rules(language)
+    rules_text = _format_registration_rules_text(await get_rules(language), texts)
     try:
         await answer_long_text(target_message, rules_text, reply_markup=get_rules_keyboard(language))
     except TelegramForbiddenError:
@@ -3137,7 +3166,7 @@ async def required_sub_channel_check(
                     )
                     await state.set_state(RegistrationStates.waiting_for_referral_code)
             else:
-                rules_text = await get_rules(language)
+                rules_text = _format_registration_rules_text(await get_rules(language), texts)
 
                 if settings.ENABLE_LOGO_MODE and not caption_exceeds_telegram_limit(rules_text):
                     _result = await bot.send_photo(

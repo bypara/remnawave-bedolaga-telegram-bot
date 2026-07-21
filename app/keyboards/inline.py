@@ -244,8 +244,16 @@ def get_rules_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text=texts.RULES_ACCEPT, callback_data='rules_accept'),
-                InlineKeyboardButton(text=texts.RULES_DECLINE, callback_data='rules_decline'),
+                InlineKeyboardButton(
+                    text=strip_leading_emoji(texts.RULES_ACCEPT),
+                    icon_custom_emoji_id='5206607081334906820',
+                    callback_data='rules_accept',
+                ),
+                InlineKeyboardButton(
+                    text=strip_leading_emoji(texts.RULES_DECLINE),
+                    icon_custom_emoji_id='5210952531676504517',
+                    callback_data='rules_decline',
+                ),
             ]
         ]
     )
@@ -256,8 +264,16 @@ def get_privacy_policy_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeybo
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text=texts.PRIVACY_POLICY_ACCEPT, callback_data='privacy_policy_accept'),
-                InlineKeyboardButton(text=texts.PRIVACY_POLICY_DECLINE, callback_data='privacy_policy_decline'),
+                InlineKeyboardButton(
+                    text=strip_leading_emoji(texts.PRIVACY_POLICY_ACCEPT),
+                    icon_custom_emoji_id='5206607081334906820',
+                    callback_data='privacy_policy_accept',
+                ),
+                InlineKeyboardButton(
+                    text=strip_leading_emoji(texts.PRIVACY_POLICY_DECLINE),
+                    icon_custom_emoji_id='5210952531676504517',
+                    callback_data='privacy_policy_decline',
+                ),
             ]
         ]
     )
