@@ -72,6 +72,14 @@ from app.utils.subscription_utils import (
 from app.utils.timezone import format_local_datetime, format_telegram_datetime
 
 
+def _get_my_subscription_button_text(texts) -> str:
+    """Return a localized subscription button even for locales without the optional BTN key."""
+    return texts.t(
+        'BTN_MY_SUBSCRIPTION',
+        texts.t('MENU_SUBSCRIPTION', '📱 Моя подписка'),
+    )
+
+
 def resolve_autopay_period_candidate(candidate, tariff) -> int | None:
     """Return ``candidate`` only if it is a valid renewal period for ``tariff``.
 
@@ -1786,7 +1794,7 @@ class MonitoringService:
                     ],
                     [
                         build_miniapp_or_callback_button(
-                            text=texts.t('BTN_MY_SUBSCRIPTION'),
+                            text=_get_my_subscription_button_text(texts),
                             callback_data='menu_subscription',
                             icon_custom_emoji_id='5319272710688226013',
                         )
@@ -2398,7 +2406,7 @@ class MonitoringService:
                     ],
                     [
                         build_miniapp_or_callback_button(
-                            text=texts.t('BTN_MY_SUBSCRIPTION'),
+                            text=_get_my_subscription_button_text(texts),
                             callback_data='menu_subscription',
                             icon_custom_emoji_id='5319272710688226013',
                         )
