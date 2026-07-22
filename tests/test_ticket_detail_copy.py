@@ -14,7 +14,7 @@ BRAND_LOCALES = Path(__file__).parents[1] / 'app' / 'localization' / 'brand_loca
 def test_ticket_lists_and_details_use_requested_copy_in_both_languages():
     expected_ids = {
         'MY_TICKETS_TITLE': ('5260233433107407649',),
-        'CLOSED_TICKETS_TITLE': ('5210952531676504517',),
+        'CLOSED_TICKETS_TITLE': ('5240241223632954241',),
         'TICKET_DETAIL_HEADER': (
             '5258216851472654189',
             '5257965174979042426',
@@ -51,8 +51,8 @@ def test_open_and_closed_ticket_buttons_use_requested_icons():
 
     open_button, closed_button = (row[0] for row in apply_custom_emoji_icons(markup).inline_keyboard)
 
-    assert open_button.icon_custom_emoji_id == '5424818078833715060'
-    assert closed_button.icon_custom_emoji_id == '5210952531676504517'
+    assert open_button.icon_custom_emoji_id == '5416081784641168838'
+    assert closed_button.icon_custom_emoji_id == '5240241223632954241'
 
 
 def test_ticket_detail_does_not_render_status_emoji_and_uses_html():

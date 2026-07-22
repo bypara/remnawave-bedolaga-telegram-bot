@@ -147,7 +147,7 @@
   "SUPPORT_TOPUP_INFO": "<tg-emoji emoji-id=\"5341715473882955310\">⚙️</tg-emoji> Пополнение через поддержку\n\nДля пополнения баланса обратитесь в техподдержку: {contact}\n\nУкажите:\n• ID: {user_id}\n• Сумму пополнения\n• Способ оплаты\n\n<tg-emoji emoji-id=\"5334544901428229844\">ℹ️</tg-emoji> Время обработки: 1-24 часа\n\nДоступные способы:\n• Криптовалюта\n• Переводы между банками по номеру карты",
   "TICKET_CREATED_MESSAGE": "<tg-emoji emoji-id=\"5206607081334906820\">✔️</tg-emoji> Тикет #{ticket_id} создан\n\n<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> Заголовок: {title}\n<tg-emoji emoji-id=\"5323761960829862762\">⚡️</tg-emoji> Статус: {status}",
   "MY_TICKETS_TITLE": "<tg-emoji emoji-id=\"5260233433107407649\">↔️</tg-emoji> Тикеты",
-  "CLOSED_TICKETS_TITLE": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> Закрытые тикеты",
+  "CLOSED_TICKETS_TITLE": "<tg-emoji emoji-id=\"5240241223632954241\">🚫</tg-emoji> Закрытые тикеты",
   "TICKET_DETAIL_HEADER": "<tg-emoji emoji-id=\"5258216851472654189\">💡</tg-emoji> Тикет #{ticket_id}\n\n<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> Заголовок: {title}\n<tg-emoji emoji-id=\"5258474669769497337\">❗️</tg-emoji> Статус: {status}\n<tg-emoji emoji-id=\"5258096772776991776\">⚙️</tg-emoji> Создан: {created}\n\n",
   "TICKET_MESSAGES_HEADER": "<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> Сообщения ({count}):\n\n",
   "TICKET_MESSAGE_USER": "<tg-emoji emoji-id=\"5316727448644103237\">👤</tg-emoji> Вы ({date}):",

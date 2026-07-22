@@ -147,7 +147,7 @@
   "SUPPORT_TOPUP_INFO": "<tg-emoji emoji-id=\"5341715473882955310\">⚙️</tg-emoji> Top-up through support\n\nTo top up your balance, contact support: {contact}\n\nProvide:\n• ID: {user_id}\n• Top-up amount\n• Payment method\n\n<tg-emoji emoji-id=\"5334544901428229844\">ℹ️</tg-emoji> Processing time: 1–24 hours\n\nAvailable methods:\n• Cryptocurrency\n• Bank-to-bank card transfer",
   "TICKET_CREATED_MESSAGE": "<tg-emoji emoji-id=\"5206607081334906820\">✔️</tg-emoji> Ticket #{ticket_id} created\n\n<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> Title: {title}\n<tg-emoji emoji-id=\"5323761960829862762\">⚡️</tg-emoji> Status: {status}",
   "MY_TICKETS_TITLE": "<tg-emoji emoji-id=\"5260233433107407649\">↔️</tg-emoji> Tickets",
-  "CLOSED_TICKETS_TITLE": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> Closed tickets",
+  "CLOSED_TICKETS_TITLE": "<tg-emoji emoji-id=\"5240241223632954241\">🚫</tg-emoji> Closed tickets",
   "TICKET_DETAIL_HEADER": "<tg-emoji emoji-id=\"5258216851472654189\">💡</tg-emoji> Ticket #{ticket_id}\n\n<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> Title: {title}\n<tg-emoji emoji-id=\"5258474669769497337\">❗️</tg-emoji> Status: {status}\n<tg-emoji emoji-id=\"5258096772776991776\">⚙️</tg-emoji> Created: {created}\n\n",
   "TICKET_MESSAGES_HEADER": "<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> Messages ({count}):\n\n",
   "TICKET_MESSAGE_USER": "<tg-emoji emoji-id=\"5316727448644103237\">👤</tg-emoji> You ({date}):",
