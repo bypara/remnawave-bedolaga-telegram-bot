@@ -2861,12 +2861,15 @@ def get_change_devices_keyboard(
     end_range = min(max_devices + 1, max(current_devices + 4, 7))
 
     for devices_count in range(start_range, end_range):
+        button_custom_emoji_id = None
         if devices_count == current_devices:
-            emoji = '✅'
+            emoji = ''
+            button_custom_emoji_id = '5206607081334906820'
             action_text = ' (текущее)'
             price_text = ''
         elif devices_count > current_devices:
-            emoji = '➕'
+            emoji = ''
+            button_custom_emoji_id = '5397916757333654639'
 
             current_chargeable = max(0, current_devices - default_device_limit)
             new_chargeable = max(0, devices_count - default_device_limit)
@@ -2893,14 +2896,29 @@ def get_change_devices_keyboard(
             action_text = ''
             price_text = ' (без возврата)'
 
-        button_text = f'{emoji} {devices_count} устр.{action_text}{price_text}'
+        button_text = f'{emoji} {devices_count} устр.{action_text}{price_text}'.strip()
 
-        buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'change_devices_{devices_count}')])
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=button_text,
+                    icon_custom_emoji_id=button_custom_emoji_id,
+                    callback_data=f'change_devices_{devices_count}',
+                )
+            ]
+        )
 
     if current_devices < start_range or current_devices >= end_range:
-        current_button = f'✅ {current_devices} устр. (текущее)'
+        current_button = f'{current_devices} устр. (текущее)'
         buttons.insert(
-            0, [InlineKeyboardButton(text=current_button, callback_data=f'change_devices_{current_devices}')]
+            0,
+            [
+                InlineKeyboardButton(
+                    text=current_button,
+                    icon_custom_emoji_id='5206607081334906820',
+                    callback_data=f'change_devices_{current_devices}',
+                )
+            ],
         )
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
@@ -2920,7 +2938,8 @@ def get_confirm_change_devices_keyboard(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('CONFIRM_CHANGE_BUTTON', '✅ Подтвердить изменение'),
+                    text=strip_leading_emoji(texts.t('CONFIRM_CHANGE_BUTTON', '✅ Подтвердить изменение')),
+                    icon_custom_emoji_id='5206607081334906820',
                     callback_data=f'confirm_change_devices_{new_devices_count}_{price}',
                 )
             ],
@@ -3498,7 +3517,8 @@ def get_updated_subscription_settings_keyboard(
             keyboard.append(
                 [
                     InlineKeyboardButton(
-                        text=texts.t('CHANGE_DEVICES_BUTTON', '📱 Изменить устройства'),
+                        text=strip_leading_emoji(texts.t('CHANGE_DEVICES_BUTTON', '📱 Изменить устройства')),
+                        icon_custom_emoji_id='5341715473882955310',
                         callback_data='subscription_change_devices',
                     )
                 ]
@@ -3507,7 +3527,8 @@ def get_updated_subscription_settings_keyboard(
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('CHANGE_DEVICES_BUTTON', '📱 Изменить устройства'),
+                    text=strip_leading_emoji(texts.t('CHANGE_DEVICES_BUTTON', '📱 Изменить устройства')),
+                    icon_custom_emoji_id='5341715473882955310',
                     callback_data='subscription_change_devices',
                 )
             ]
