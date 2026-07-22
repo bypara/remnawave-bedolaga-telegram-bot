@@ -3625,6 +3625,7 @@ def get_my_tickets_keyboard(
     total_pages: int = 1,
     language: str = DEFAULT_LANGUAGE,
     page_prefix: str = 'my_tickets_page_',
+    ticket_icon_custom_emoji_id: str | None = None,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
@@ -3635,9 +3636,20 @@ def get_my_tickets_keyboard(
         if ticket.get('is_closed', False):
             status_emoji = '✅'
         title = ticket.get('title', 'Без названия')[:25]
-        button_text = f'{status_emoji} #{ticket["id"]} {title}'
+        if ticket_icon_custom_emoji_id:
+            button_text = f'#{ticket["id"]} {title}'
+        else:
+            button_text = f'{status_emoji} #{ticket["id"]} {title}'
 
-        keyboard.append([InlineKeyboardButton(text=button_text, callback_data=f'view_ticket_{ticket["id"]}')])
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=button_text,
+                    icon_custom_emoji_id=ticket_icon_custom_emoji_id,
+                    callback_data=f'view_ticket_{ticket["id"]}',
+                )
+            ]
+        )
 
     # Пагинация
     if total_pages > 1:

@@ -405,6 +405,7 @@ async def show_my_tickets(callback: types.CallbackQuery, db_user: User, db: Asyn
         total_pages=total_pages,
         language=db_user.language,
         page_prefix='my_tickets_page_',
+        ticket_icon_custom_emoji_id='5416081784641168838',
     )
     # Добавим кнопку перехода к закрытым
     keyboard.inline_keyboard.insert(
@@ -467,6 +468,7 @@ async def show_my_tickets_closed(callback: types.CallbackQuery, db_user: User, d
         total_pages=total_pages,
         language=db_user.language,
         page_prefix='my_tickets_closed_page_',
+        ticket_icon_custom_emoji_id='5240241223632954241',
     )
     kb.inline_keyboard.insert(
         0,
