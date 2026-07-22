@@ -238,6 +238,7 @@ async def handle_change_devices(
             ),
         ).format(current_devices=current_devices, price=price_text)
     else:
+        price_text = texts.format_price(settings.PRICE_PER_DEVICE)
         prompt_text = texts.t(
             'CHANGE_DEVICES_PROMPT',
             (
@@ -248,7 +249,7 @@ async def handle_change_devices(
                 '• При увеличении - доплата пропорционально оставшемуся времени\n'
                 '• При уменьшении - возврат средств не производится'
             ),
-        ).format(current_devices=current_devices)
+        ).format(current_devices=current_devices, price=price_text)
 
     # В мульти-тарифе кнопка "назад" ведёт к детальному виду подписки
     back_cb = f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings'
@@ -388,7 +389,7 @@ async def confirm_change_devices(
             missing_kopeks = price - db_user.balance_kopeks
             required_text = f'{texts.format_price(price)} (за {period_label})'
             message_text = texts.t(
-                'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
+                'DEVICE_CHANGE_INSUFFICIENT_FUNDS_MESSAGE',
                 (
                     '⚠️ <b>Недостаточно средств</b>\n\n'
                     'Стоимость услуги: {required}\n'
@@ -759,7 +760,7 @@ async def execute_change_devices(
                 '✅ Количество устройств увеличено!\n\n',
             )
             success_text += texts.t(
-                'DEVICE_CHANGE_RESULT_LINE',
+                'DEVICE_CHANGE_INCREASE_RESULT_LINE',
                 '📱 Было: {old} → Стало: {new}\n',
             ).format(old=current_devices, new=new_devices_count)
             if price > 0:
