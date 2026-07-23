@@ -475,7 +475,11 @@ async def show_withdrawal_info(callback: types.CallbackQuery, db_user: User, db:
                 + '\n'
             )
         else:
-            text += f'❌ {html_escape(str(reason))}\n'
+            error_prefix = texts.t(
+                'REFERRAL_WITHDRAWAL_ERROR_PREFIX',
+                '<tg-emoji emoji-id="5210952531676504517">❌</tg-emoji>',
+            )
+            text += f'{error_prefix} {html_escape(str(reason))}\n'
 
     keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_referrals')])
 
