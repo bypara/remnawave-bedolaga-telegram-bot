@@ -368,3 +368,14 @@ async def test_email_only_final_reminder_reason(monkeypatch):
 
     assert reasons[0] == 'Недостаточно средств на балансе'
     assert reasons[1].startswith('Последнее напоминание')
+
+
+def test_my_subscription_button_falls_back_for_every_supported_locale():
+    from app.localization.texts import get_texts
+    from app.services.monitoring_service import _get_my_subscription_button_text
+
+    for language in ('ru', 'en', 'ua', 'fa', 'zh'):
+        button_text = _get_my_subscription_button_text(get_texts(language))
+
+        assert button_text
+        assert button_text == get_texts(language).MENU_SUBSCRIPTION

@@ -37,6 +37,8 @@ def test_subscription_copy_uses_requested_custom_emoji():
         'TRIAL_ACTIVATED': '5461151367559141950',
         'SUBSCRIPTION_IMPORT_LINK_SECTION': '5260730055880876557',
         'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT': '5258328383183396223',
+        'SUBSCRIPTION_CONNECT_MINIAPP_MESSAGE': '5251203410396458957',
+        'TARIFF_RENEW_CHOOSE_TARIFF': '5348125953090403204',
         'SUBSCRIPTION_INSUFFICIENT_FUNDS_TEXT': '5210952531676504517',
         'PAYMENT_METHODS_TITLE': '5258204546391351475',
     }
@@ -44,6 +46,8 @@ def test_subscription_copy_uses_requested_custom_emoji():
     for locale in locales.values():
         for key, emoji_id in expected.items():
             assert f'emoji-id="{emoji_id}"' in locale[key], key
+
+        assert 'emoji-id="5271604874419647061"' in locale['SUBSCRIPTION_CONNECT_MINIAPP_MESSAGE']
 
 
 def test_subscription_copy_renders_dynamic_values_in_both_languages():
