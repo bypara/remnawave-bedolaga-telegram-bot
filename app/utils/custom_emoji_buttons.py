@@ -45,6 +45,7 @@ CUSTOM_EMOJI_IDS: dict[str, str] = {
     'show_qr': '5231012545799666522',
     'referral_list': '5440539497383087970',
     'referral_analytics': '5231200819986047254',
+    'referral_withdrawal': '5409048419211682843',
     'support': '5472304422669262481',
 }
 
@@ -98,6 +99,7 @@ CALLBACK_TO_ICON: dict[str, str] = {
     'referral_show_qr': 'show_qr',
     'referral_list': 'referral_list',
     'referral_analytics': 'referral_analytics',
+    'referral_withdrawal': 'referral_withdrawal',
     'menu_support': 'support',
 }
 

@@ -47,6 +47,7 @@ def test_requested_custom_emoji_icons_are_applied_by_button_action():
         ('📱 Показать QR код', 'referral_show_qr', 'show_qr'),
         ('👥 Список рефералов', 'referral_list', 'referral_list'),
         ('📊 Аналитика', 'referral_analytics', 'referral_analytics'),
+        ('💸 Запросить вывод', 'referral_withdrawal', 'referral_withdrawal'),
     ]
     markup = InlineKeyboardMarkup(
         inline_keyboard=[[_button(text, callback_data=callback)] for text, callback, _ in cases]
