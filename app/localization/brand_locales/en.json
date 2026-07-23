@@ -90,6 +90,8 @@
   "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE": "{status_emoji} {status_display}{warning}{tariff_info_block}\n\n<tg-emoji emoji-id=\"5258331647358540449\">✍️</tg-emoji> Subscription information\n<tg-emoji emoji-id=\"5325604415900504150\">🔞</tg-emoji> Type: {subscription_type}\n<tg-emoji emoji-id=\"5258115571848846212\">✈️</tg-emoji> Traffic: {traffic}\n{devices_line}",
   "SUBSCRIPTION_CONNECT_LINK_SECTION": "<tg-emoji emoji-id=\"5260730055880876557\">⛓️</tg-emoji> Connection link:\n{subscription_url}",
   "SUBSCRIPTION_CONNECT_LINK_PROMPT": "",
+  "SUBSCRIPTION_CONNECT_MINIAPP_MESSAGE": "<tg-emoji emoji-id=\"5251203410396458957\">🛡</tg-emoji> Connect subscription\n\n<tg-emoji emoji-id=\"5271604874419647061\">🔗</tg-emoji> Tap the button below to open the subscription in the Telegram mini app:",
+  "TARIFF_RENEW_CHOOSE_TARIFF": "<tg-emoji emoji-id=\"5348125953090403204\">▶️</tg-emoji> Choose a plan for renewal",
   "SUBSCRIPTION_PERIOD_ONE_DAY": "{days} day",
   "SUBSCRIPTION_PERIOD_FEW_DAYS": "{days} days",
   "SUBSCRIPTION_PERIOD_MANY_DAYS": "{days} days",

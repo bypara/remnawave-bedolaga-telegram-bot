@@ -90,6 +90,8 @@
   "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE": "{status_emoji} {status_display}{warning}{tariff_info_block}\n\n<tg-emoji emoji-id=\"5258331647358540449\">✍️</tg-emoji> Информация о подписке\n<tg-emoji emoji-id=\"5325604415900504150\">🔞</tg-emoji> Тип: {subscription_type}\n<tg-emoji emoji-id=\"5258115571848846212\">✈️</tg-emoji> Трафик: {traffic}\n{devices_line}",
   "SUBSCRIPTION_CONNECT_LINK_SECTION": "<tg-emoji emoji-id=\"5260730055880876557\">⛓️</tg-emoji> Ссылка для подключения:\n{subscription_url}",
   "SUBSCRIPTION_CONNECT_LINK_PROMPT": "",
+  "SUBSCRIPTION_CONNECT_MINIAPP_MESSAGE": "<tg-emoji emoji-id=\"5251203410396458957\">🛡</tg-emoji> Подключить подписку\n\n<tg-emoji emoji-id=\"5271604874419647061\">🔗</tg-emoji> Нажмите кнопку ниже, чтобы открыть подписку в мини-приложении Telegram:",
+  "TARIFF_RENEW_CHOOSE_TARIFF": "<tg-emoji emoji-id=\"5348125953090403204\">▶️</tg-emoji> Выберите тариф для продления",
   "SUBSCRIPTION_PERIOD_ONE_DAY": "{days} день",
   "SUBSCRIPTION_PERIOD_FEW_DAYS": "{days} дня",
   "SUBSCRIPTION_PERIOD_MANY_DAYS": "{days} дней",
