@@ -463,7 +463,23 @@ async def show_withdrawal_info(callback: types.CallbackQuery, db_user: User, db:
             ]
         )
     else:
-        text += f'❌ {html_escape(str(reason))}\n'
+        if stats['available_total'] < min_amount:
+            text += (
+                texts.t(
+                    'REFERRAL_WITHDRAWAL_MIN_AVAILABLE_ERROR',
+                    '❌ Минимальная сумма вывода: {minimum}. Доступно: {available}',
+                ).format(
+                    minimum=texts.format_price(min_amount),
+                    available=texts.format_price(stats['available_total']),
+                )
+                + '\n'
+            )
+        else:
+            error_prefix = texts.t(
+                'REFERRAL_WITHDRAWAL_ERROR_PREFIX',
+                '<tg-emoji emoji-id="5210952531676504517">❌</tg-emoji>',
+            )
+            text += f'{error_prefix} {html_escape(str(reason))}\n'
 
     keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_referrals')])
 
