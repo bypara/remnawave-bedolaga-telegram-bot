@@ -51,6 +51,8 @@
   "RULES_DECLINE": "I do not accept",
   "PRIVACY_POLICY_ACCEPT": "Accept",
   "PRIVACY_POLICY_DECLINE": "Decline",
+  "PRIVACY_POLICY_HEADER": "<tg-emoji emoji-id=\"5251203410396458957\">🛡</tg-emoji> <b>Privacy Policy</b>",
+  "PUBLIC_OFFER_HEADER": "<tg-emoji emoji-id=\"5282843764451195532\">🖥</tg-emoji> <b>Public Offer</b>",
   "CHANGE_DEVICES_BUTTON": "Change devices",
   "CHANGE_DEVICES_PROMPT": "<tg-emoji emoji-id=\"5341715473882955310\">⚙️</tg-emoji> Change device count\n\nCurrent limit: {current_devices} devices\nPrice per additional device: {price}/month\n\n<tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> Important:\n• When increasing, the extra charge is prorated for the remaining time\n• When decreasing, payments are not refunded",
   "CHANGE_DEVICES_PROMPT_TARIFF": "<tg-emoji emoji-id=\"5341715473882955310\">⚙️</tg-emoji> Change device count\n\nCurrent limit: {current_devices} devices\nPrice per additional device: {price}/month\n\n<tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> Important:\n• When increasing, the extra charge is prorated for the remaining time\n• When decreasing, payments are not refunded",
