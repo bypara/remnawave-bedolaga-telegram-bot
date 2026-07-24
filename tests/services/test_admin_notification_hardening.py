@@ -146,6 +146,27 @@ async def test_send_message_caps_retry_after_at_30s(
     assert sleeps == [30]
 
 
+@pytest.mark.asyncio
+async def test_send_message_uses_explicit_topic_override(
+    admin_service: AdminNotificationService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        'app.services.admin_notification_service.try_send_rich_admin_message',
+        AsyncMock(return_value=False),
+    )
+    admin_service.category_topics[NotificationCategory.PARTNERS] = 111
+    admin_service.bot.send_message = AsyncMock(return_value=None)
+
+    result = await admin_service._send_message(
+        'withdrawal',
+        category=NotificationCategory.PARTNERS,
+        topic_id_override=222,
+    )
+
+    assert result is True
+    assert admin_service.bot.send_message.await_args.kwargs['message_thread_id'] == 222
+
+
 # ---------------------------------------------------------------------------
 # RemnaWaveWebhookService node-event coalescing
 # ---------------------------------------------------------------------------

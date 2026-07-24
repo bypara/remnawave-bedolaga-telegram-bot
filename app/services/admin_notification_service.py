@@ -1464,6 +1464,7 @@ class AdminNotificationService:
         reply_markup: types.InlineKeyboardMarkup | None = None,
         *,
         category: NotificationCategory | None = None,
+        topic_id_override: int | None = None,
     ) -> bool:
         if not self.chat_id:
             logger.warning('ADMIN_NOTIFICATIONS_CHAT_ID не настроен')
@@ -1474,7 +1475,7 @@ class AdminNotificationService:
             logger.debug('Уведомление подавлено (категория отключена)', category=category.value)
             return False
 
-        thread_id = self._resolve_topic_id(category)
+        thread_id = topic_id_override if topic_id_override is not None else self._resolve_topic_id(category)
 
         # Rich-вид (Bot API 10.1): заголовок, разделители, footer с tg-time.
         # При недоступности/ошибке молча продолжаем классическим путём ниже
@@ -1583,11 +1584,17 @@ class AdminNotificationService:
         reply_markup: types.InlineKeyboardMarkup | None = None,
         *,
         category: NotificationCategory | None = None,
+        topic_id_override: int | None = None,
     ) -> bool:
         """Send a generic notification to admin chat with optional inline keyboard."""
         if not self._is_enabled():
             return False
-        return await self._send_message(text, reply_markup=reply_markup, category=category)
+        return await self._send_message(
+            text,
+            reply_markup=reply_markup,
+            category=category,
+            topic_id_override=topic_id_override,
+        )
 
     async def send_guest_purchase_notification(
         self,
