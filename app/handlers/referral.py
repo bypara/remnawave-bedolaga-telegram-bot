@@ -720,27 +720,24 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
         )
     admin_keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
-    try:
-        notification_service = AdminNotificationService(callback.bot)
-        await notification_service.send_admin_notification(
-            admin_text, reply_markup=admin_keyboard, category=NotificationCategory.PARTNERS
+    notification_service = AdminNotificationService(callback.bot)
+    topic_id = settings.REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID or None
+    sent = await notification_service.send_admin_notification(
+        admin_text,
+        reply_markup=admin_keyboard,
+        category=NotificationCategory.PARTNERS,
+        topic_id_override=topic_id,
+    )
+    if not sent and topic_id is not None:
+        logger.warning(
+            'Топик заявок на вывод недоступен, используем топик партнёров',
+            topic_id=topic_id,
         )
-    except Exception as e:
-        logger.error('Ошибка отправки уведомления админам о заявке на вывод', error=e)
-
-    # Уведомление в топик, если настроено
-    topic_id = settings.REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID
-    if topic_id and settings.ADMIN_NOTIFICATIONS_CHAT_ID:
-        try:
-            await callback.bot.send_message(
-                chat_id=settings.ADMIN_NOTIFICATIONS_CHAT_ID,
-                message_thread_id=topic_id,
-                text=admin_text,
-                reply_markup=admin_keyboard,
-                parse_mode='HTML',
-            )
-        except Exception as e:
-            logger.error('Ошибка отправки уведомления в топик о заявке на вывод', error=e)
+        await notification_service.send_admin_notification(
+            admin_text,
+            reply_markup=admin_keyboard,
+            category=NotificationCategory.PARTNERS,
+        )
 
     # Отвечаем пользователю
     text = texts.t(

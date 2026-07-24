@@ -348,7 +348,15 @@ async def show_pending_withdrawal_requests(callback: types.CallbackQuery, db_use
 
 @admin_required
 @error_handler
-async def view_withdrawal_request(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+@admin_required
+@error_handler
+async def view_withdrawal_request(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    *,
+    answer_text: str | None = None,
+):
     """Показывает детали заявки на вывод."""
     request_id = int(callback.data.split('_')[-1])
 
@@ -415,7 +423,7 @@ async def view_withdrawal_request(callback: types.CallbackQuery, db_user: User, 
     keyboard.append([types.InlineKeyboardButton(text='⬅️ К списку', callback_data='admin_withdrawal_requests')])
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
-    await callback.answer()
+    await callback.answer(answer_text)
 
 
 @admin_required
@@ -452,10 +460,13 @@ async def approve_withdrawal_request(callback: types.CallbackQuery, db_user: Use
             except Exception as e:
                 logger.error('Ошибка отправки уведомления пользователю', error=e)
 
-        await callback.answer('✅ Заявка одобрена, средства списаны с баланса')
-
         # Обновляем отображение
-        await view_withdrawal_request(callback, db_user, db)
+        await view_withdrawal_request(
+            callback,
+            db_user,
+            db,
+            answer_text='✅ Заявка одобрена, средства списаны с баланса',
+        )
     else:
         await callback.answer(f'❌ {error}', show_alert=True)
 
@@ -495,10 +506,8 @@ async def reject_withdrawal_request(callback: types.CallbackQuery, db_user: User
             except Exception as e:
                 logger.error('Ошибка отправки уведомления пользователю', error=e)
 
-        await callback.answer('❌ Заявка отклонена')
-
         # Обновляем отображение
-        await view_withdrawal_request(callback, db_user, db)
+        await view_withdrawal_request(callback, db_user, db, answer_text='❌ Заявка отклонена')
     else:
         await callback.answer('❌ Ошибка отклонения', show_alert=True)
 
@@ -536,10 +545,8 @@ async def complete_withdrawal_request(callback: types.CallbackQuery, db_user: Us
             except Exception as e:
                 logger.error('Ошибка отправки уведомления пользователю', error=e)
 
-        await callback.answer('✅ Заявка выполнена')
-
         # Обновляем отображение
-        await view_withdrawal_request(callback, db_user, db)
+        await view_withdrawal_request(callback, db_user, db, answer_text='✅ Заявка выполнена')
     else:
         await callback.answer('❌ Ошибка выполнения', show_alert=True)
 
