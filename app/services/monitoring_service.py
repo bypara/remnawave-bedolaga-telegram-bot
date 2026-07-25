@@ -2271,7 +2271,7 @@ class MonitoringService:
                         build_miniapp_or_callback_button(
                             text='🎁 Получить скидку',
                             callback_data=f'claim_discount_{offer_id}',
-                            icon_custom_emoji_id='5217822164362739968',
+                            icon_custom_emoji_id='5406683434124859552',
                         )
                     ],
                     [

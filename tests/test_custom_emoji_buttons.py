@@ -50,6 +50,8 @@ def test_requested_custom_emoji_icons_are_applied_by_button_action():
         ('💸 Запросить вывод', 'referral_withdrawal', 'referral_withdrawal'),
         ('📝 Оформить заявку', 'referral_withdrawal_start', 'referral_withdrawal_request'),
         ('✅ Подтвердить', 'referral_withdrawal_confirm', 'referral_withdrawal_confirm'),
+        ('✅ Я подписался', 'sub_channel_check', 'channel_check'),
+        ('🎁 Получить скидку', 'claim_discount_42', 'claim_discount'),
     ]
     markup = InlineKeyboardMarkup(
         inline_keyboard=[[_button(text, callback_data=callback)] for text, callback, _ in cases]
@@ -64,6 +66,27 @@ def test_requested_custom_emoji_icons_are_applied_by_button_action():
         assert button.icon_custom_emoji_id == CUSTOM_EMOJI_IDS[icon_name]
 
     assert CUSTOM_EMOJI_IDS['confirm_purchase'] == '5397916757333654639'
+    assert CUSTOM_EMOJI_IDS['channel_check'] == '5416081784641168838'
+    assert CUSTOM_EMOJI_IDS['claim_discount'] == '5406683434124859552'
+
+
+def test_claim_discount_requested_icon_overrides_legacy_explicit_icon():
+    markup = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text='🎁 Получить скидку',
+                    callback_data='claim_discount_42',
+                    icon_custom_emoji_id='5217822164362739968',
+                )
+            ]
+        ]
+    )
+
+    button = apply_custom_emoji_icons(markup).inline_keyboard[0][0]
+
+    assert button.text == 'Получить скидку'
+    assert button.icon_custom_emoji_id == CUSTOM_EMOJI_IDS['claim_discount']
 
 
 def test_url_contact_and_all_back_cancel_buttons_are_decorated():
