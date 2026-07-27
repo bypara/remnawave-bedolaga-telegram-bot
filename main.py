@@ -560,6 +560,7 @@ async def main():
                 settings.is_wata_enabled(),
                 settings.is_heleket_enabled(),
                 settings.is_apple_iap_enabled(),
+                settings.is_lava_enabled(),
             ]
         )
 
@@ -736,6 +737,8 @@ async def main():
             webhook_lines.append(f'Apple IAP: {_fmt(settings.APPLE_IAP_WEBHOOK_PATH)}')
         if settings.is_platega_enabled():
             webhook_lines.append(f'Platega: {_fmt(settings.PLATEGA_WEBHOOK_PATH)}')
+        if settings.is_lava_enabled():
+            webhook_lines.append(f'Lava: {_fmt(settings.LAVA_WEBHOOK_PATH)}')
         if settings.is_cloudpayments_enabled():
             webhook_lines.append(f'CloudPayments: {_fmt(settings.CLOUDPAYMENTS_WEBHOOK_PATH)}')
         if settings.is_freekassa_enabled():

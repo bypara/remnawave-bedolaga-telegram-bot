@@ -205,6 +205,7 @@ def create_unified_app(
         'apple_iap': settings.is_apple_iap_enabled(),
         'freekassa': settings.is_freekassa_enabled(),
         'riopay': settings.is_riopay_enabled(),
+        'lava': settings.is_lava_enabled(),
     }
 
     if enable_telegram_webhook:

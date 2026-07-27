@@ -125,7 +125,7 @@ async def _create_lava_payment_and_respond(
         'Сумма: <b>{amount}₽</b>\n\n'
         'Нажмите кнопку ниже для перехода к оплате.\n'
         'После подтверждения платежа баланс будет пополнен автоматически.',
-    ).format(name=name, amount=f'{amount_rub:.2f}')
+    ).format(name=name, amount=f'{amount_rub:.2f}'.rstrip('0').rstrip('.'))
 
     if edit_message:
         await message_or_callback.edit_text(response_text, reply_markup=keyboard, parse_mode='HTML')

@@ -49,6 +49,8 @@ CUSTOM_EMOJI_IDS: dict[str, str] = {
     'referral_withdrawal_request': '5253742260054409879',
     'referral_withdrawal_confirm': '5206607081334906820',
     'support': '5472304422669262481',
+    'channel_check': '5416081784641168838',
+    'claim_discount': '5406683434124859552',
 }
 
 PRIORITY_CALLBACK_TO_ICON: dict[str, str] = {
@@ -105,6 +107,11 @@ CALLBACK_TO_ICON: dict[str, str] = {
     'referral_withdrawal_start': 'referral_withdrawal_request',
     'referral_withdrawal_confirm': 'referral_withdrawal_confirm',
     'menu_support': 'support',
+    'sub_channel_check': 'channel_check',
+}
+
+CALLBACK_PREFIX_TO_ICON: dict[str, str] = {
+    'claim_discount_': 'claim_discount',
 }
 
 CALLBACK_TO_STYLE: dict[str, str] = {
@@ -169,6 +176,10 @@ def _resolve_icon_name(button: InlineKeyboardButton, plain_text: str) -> str | N
     priority_icon_name = PRIORITY_CALLBACK_TO_ICON.get(callback_name)
     if priority_icon_name:
         return priority_icon_name
+
+    for callback_prefix, icon_name in CALLBACK_PREFIX_TO_ICON.items():
+        if callback_name.startswith(callback_prefix):
+            return icon_name
 
     if any(marker in normalized_text for marker in BACK_TEXT_MARKERS):
         return 'back'
