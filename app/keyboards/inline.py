@@ -1691,7 +1691,43 @@ def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def _apply_payment_name_overrides(keyboard: list[list[InlineKeyboardButton]]) -> None:
+def _payment_method_from_callback(callback_data: str | None) -> str:
+    data = callback_data or ''
+    if data.startswith('topup_amount|'):
+        parts = data.split('|')
+        return parts[1] if len(parts) > 1 else ''
+    if data.startswith('topup_'):
+        return data[len('topup_') :]
+    return ''
+
+
+def _order_payment_method_rows(
+    keyboard: list[list[InlineKeyboardButton]],
+) -> list[list[InlineKeyboardButton]]:
+    """Keep the preferred checkout methods first and auxiliary methods last."""
+    preferred_order = {
+        'lava_sbp': 0,
+        'lava_card': 1,
+        'platega_m2': 2,
+    }
+
+    indexed_rows = list(enumerate(keyboard))
+
+    def _sort_key(item: tuple[int, list[InlineKeyboardButton]]) -> tuple[int, int]:
+        original_index, row = item
+        method = _payment_method_from_callback(row[0].callback_data if row else None)
+        if method in preferred_order:
+            return 0, preferred_order[method]
+        if method == 'stars':
+            return 2, original_index
+        if method == 'support':
+            return 3, original_index
+        return 1, original_index
+
+    return [row for _, row in sorted(indexed_rows, key=_sort_key)]
+
+
+def _apply_payment_name_overrides(keyboard: list[list[InlineKeyboardButton]], texts) -> None:
     """Replace payment-method button labels with cabinet-set display names.
 
     Bot keyboards build labels from locale strings / ``*_DISPLAY_NAME`` settings,
@@ -1704,19 +1740,22 @@ def _apply_payment_name_overrides(keyboard: list[list[InlineKeyboardButton]]) ->
 
     for row in keyboard:
         for idx, button in enumerate(row):
-            data = button.callback_data or ''
-            if data.startswith('topup_amount|'):
-                parts = data.split('|')
-                method = parts[1] if len(parts) > 1 else ''
-            elif data.startswith('topup_'):
-                method = data[len('topup_') :]
-            else:
+            method = _payment_method_from_callback(button.callback_data)
+            if not method:
                 continue
             override = get_display_name_override(method) if method else None
             if override:
                 row[idx] = button.model_copy(
                     update={
                         'text': strip_leading_emoji(override) if button.icon_custom_emoji_id else override,
+                    }
+                )
+                button = row[idx]
+
+            if method == 'platega_m2':
+                row[idx] = button.model_copy(
+                    update={
+                        'text': texts.t('PAYMENT_PLATEGA_SBP_BACKUP', 'СБП (запасной)'),
                     }
                 )
 
@@ -2332,6 +2371,8 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
             ]
         )
 
+    keyboard = _order_payment_method_rows(keyboard)
+
     if not keyboard:
         keyboard.append(
             [
@@ -2354,7 +2395,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
 
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
-    _apply_payment_name_overrides(keyboard)
+    _apply_payment_name_overrides(keyboard, texts)
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
