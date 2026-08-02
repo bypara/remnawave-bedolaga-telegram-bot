@@ -254,6 +254,7 @@ class ChannelSubscriptionService:
             await upsert_user_channel_sub(db, telegram_id, channel_id, True)
             await db.commit()
         await ChannelSubCache.set_sub_status(telegram_id, channel_id, True)
+        await ChannelSubCache.invalidate_reactivation_check(telegram_id)
 
     async def on_user_left(self, telegram_id: int, channel_id: str) -> None:
         """Called when ChatMemberUpdated fires: user unsubscribed."""
@@ -263,6 +264,7 @@ class ChannelSubscriptionService:
             await upsert_user_channel_sub(db, telegram_id, channel_id, False)
             await db.commit()
         await ChannelSubCache.set_sub_status(telegram_id, channel_id, False)
+        await ChannelSubCache.invalidate_reactivation_check(telegram_id)
 
     # -- Channel list management --------------------------------------------------
 
