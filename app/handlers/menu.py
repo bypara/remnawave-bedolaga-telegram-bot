@@ -194,8 +194,8 @@ async def show_main_menu(
 
     texts = get_texts(db_user.language)
 
-    db_user.last_activity = datetime.now(UTC)
-    await db.commit()
+    if not skip_callback_answer:
+        await callback.answer()
 
     # Multi-tariff aware: check if user has ANY active subscription
     # 'limited' (traffic exhausted) subscriptions are still active for UI purposes
@@ -249,8 +249,6 @@ async def show_main_menu(
             keyboard=keyboard,
             parse_mode='HTML',
         )
-    if not skip_callback_answer:
-        await callback.answer()
 
 
 async def handle_profile_unavailable(callback: types.CallbackQuery) -> None:
@@ -281,6 +279,7 @@ async def show_profile_menu(callback: types.CallbackQuery, db_user: User, state:
     # Opening the profile is an explicit exit from nested input flows (promo code,
     # support forms, etc.). Clear FSM so following messages are not consumed by
     # the handler the user just left.
+    await callback.answer()
     await state.clear()
 
     texts = get_texts(db_user.language)
@@ -300,7 +299,6 @@ async def show_profile_menu(callback: types.CallbackQuery, db_user: User, state:
         keyboard=get_profile_keyboard(db_user.language, db_user.balance_kopeks),
         parse_mode='HTML',
     )
-    await callback.answer()
 
 
 async def show_service_rules(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
@@ -401,6 +399,7 @@ async def show_info_menu(
         return
 
     texts = get_texts(db_user.language)
+    await callback.answer()
 
     header = texts.t('MENU_INFO_HEADER', 'ℹ️ <b>Инфо</b>')
     prompt = texts.t('MENU_INFO_PROMPT', 'Выберите раздел:')
@@ -435,7 +434,6 @@ async def show_info_menu(
         ),
         parse_mode='HTML',
     )
-    await callback.answer()
 
 
 async def show_promo_groups_info(
@@ -1168,6 +1166,7 @@ async def show_language_menu(
         )
         return
 
+    await callback.answer()
     await edit_or_answer_photo(
         callback=callback,
         caption=texts.t('LANGUAGE_PROMPT', '🌐 Выберите язык интерфейса:'),
@@ -1179,7 +1178,6 @@ async def show_language_menu(
         ),
         parse_mode='HTML',
     )
-    await callback.answer()
 
 
 async def process_language_change(
@@ -1263,6 +1261,7 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
         )
         return
 
+    await callback.answer()
     await state.clear()
 
     texts = get_texts(db_user.language)
@@ -1319,7 +1318,6 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
             keyboard=keyboard,
             parse_mode='HTML',
         )
-    await callback.answer()
 
 
 def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -> str:

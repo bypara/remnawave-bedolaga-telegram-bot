@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -20,6 +20,16 @@ from app.utils.validators import sanitize_telegram_name
 
 
 logger = structlog.get_logger(__name__)
+
+LAST_ACTIVITY_UPDATE_INTERVAL = timedelta(minutes=5)
+
+
+def _should_refresh_last_activity(last_activity: datetime | None, now: datetime) -> bool:
+    if last_activity is None:
+        return True
+    if last_activity.tzinfo is None:
+        last_activity = last_activity.replace(tzinfo=UTC)
+    return now - last_activity >= LAST_ACTIVITY_UPDATE_INTERVAL
 
 
 async def _refresh_remnawave_description(remnawave_uuid: str, description: str, telegram_id: int) -> None:
@@ -196,10 +206,12 @@ class AuthMiddleware(BaseMiddleware):
                     )
                     profile_updated = True
 
-                db_user.last_activity = datetime.now(UTC)
+                now = datetime.now(UTC)
+                if _should_refresh_last_activity(db_user.last_activity, now):
+                    db_user.last_activity = now
 
                 if profile_updated:
-                    db_user.updated_at = datetime.now(UTC)
+                    db_user.updated_at = now
                     logger.info('💾 [Middleware] Профиль пользователя обновлен в middleware', user_id=user.id)
 
                     if db_user.remnawave_uuid:

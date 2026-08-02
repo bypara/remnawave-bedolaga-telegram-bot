@@ -21,7 +21,7 @@ from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.channel_subscription_service import channel_subscription_service
 from app.services.subscription_service import SubscriptionService
-from app.utils.cache import cache
+from app.utils.cache import ChannelSubCache, cache
 from app.utils.check_reg_process import is_registration_process
 
 
@@ -141,8 +141,11 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
         if not unsubscribed:
             # All subscribed -- reactivate if needed
-            if self._any_channel_has_disable_flag(all_channels):
-                await self._reactivate_subscription_on_subscribe(telegram_id, bot)
+            if self._any_channel_has_disable_flag(
+                all_channels
+            ) and not await ChannelSubCache.was_reactivation_checked_recently(telegram_id):
+                if await self._reactivate_subscription_on_subscribe(telegram_id, bot):
+                    await ChannelSubCache.mark_reactivation_checked(telegram_id)
             return await handler(event, data)
 
         # User is NOT subscribed to all channels
@@ -171,7 +174,8 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             if not unsubscribed_fresh:
                 # Now subscribed to all channels
                 if self._any_channel_has_disable_flag(all_channels_fresh):
-                    await self._reactivate_subscription_on_subscribe(telegram_id, bot)
+                    if await self._reactivate_subscription_on_subscribe(telegram_id, bot):
+                        await ChannelSubCache.mark_reactivation_checked(telegram_id)
                 return await handler(event, data)
 
             # Still not all subscribed — update keyboard with colored buttons
@@ -540,19 +544,19 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
     # -- _reactivate -----------------------------------------------------------
 
-    async def _reactivate_subscription_on_subscribe(self, telegram_id: int, bot: Bot) -> None:
+    async def _reactivate_subscription_on_subscribe(self, telegram_id: int, bot: Bot) -> bool:
         """Reactivate subscription after user subscribes to all required channels."""
         async with AsyncSessionLocal() as db:
             try:
                 user = await get_user_by_telegram_id(db, telegram_id)
                 subs = getattr(user, 'subscriptions', None) or []
                 if not user or not subs:
-                    return
+                    return True
 
                 # Do NOT reactivate for blocked users
                 if user.status == UserStatus.BLOCKED.value:
                     logger.info('Skipping reactivation for blocked user', telegram_id=telegram_id)
-                    return
+                    return True
 
                 disabled_subs = [
                     s
@@ -561,7 +565,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                     and (not s.end_date or s.end_date > datetime.now(UTC))
                 ]
                 if not disabled_subs:
-                    return
+                    return True
 
                 for subscription in disabled_subs:
                     await reactivate_subscription(db, subscription)
@@ -613,9 +617,11 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                         notify_error=notify_error,
                     )
                 await db.commit()
+                return True
             except Exception as db_error:
                 logger.error('Error reactivating subscription', telegram_id=telegram_id, db_error=db_error)
                 await db.rollback()
+                return False
 
 
 def _normalize_channel_link(link: str) -> str:

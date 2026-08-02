@@ -179,6 +179,40 @@ async def edit_or_answer_photo(
             await _answer_text(callback, caption, keyboard, resolved_parse_mode, error)
         return
 
+    # The logo is constant throughout navigation, so update only the caption.
+    # This avoids re-sending and re-processing the same media on every click.
+    if callback.message.photo and not is_qr_message(callback.message):
+        for attempt in range(MAX_RETRIES):
+            try:
+                await callback.message.edit_caption(
+                    caption=caption,
+                    reply_markup=keyboard,
+                    parse_mode=resolved_parse_mode,
+                )
+                return
+            except TelegramNetworkError as net_error:
+                if attempt < MAX_RETRIES - 1:
+                    await asyncio.sleep(RETRY_DELAY * (attempt + 1))
+                    continue
+                logger.warning(
+                    'edit_caption failed after retries; falling back to edit_media',
+                    error=str(net_error),
+                )
+            except TelegramForbiddenError:
+                return
+            except TelegramBadRequest as error:
+                if 'message is not modified' in str(error).lower():
+                    return
+                if is_privacy_restricted_error(error):
+                    try:
+                        await callback.message.delete()
+                    except Exception:
+                        pass
+                    await _answer_text(callback, caption, keyboard, resolved_parse_mode, error)
+                    return
+                logger.debug('edit_caption unavailable; falling back to edit_media', error=str(error))
+            break
+
     media = _resolve_media(callback.message)
 
     # Logo file unavailable (missing / directory bind-mount) — fall back to text.

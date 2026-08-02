@@ -454,6 +454,7 @@ class ChannelSubCache:
 
     SUB_TTL = 600  # 10 min -- individual user subscription status
     CHANNELS_TTL = 60  # 1 min -- list of required channels
+    REACTIVATION_CHECK_TTL = 300  # 5 min -- avoid a DB check on every callback
 
     @staticmethod
     async def get_sub_status(telegram_id: int, channel_id: str) -> bool | None:
@@ -523,6 +524,21 @@ class ChannelSubCache:
             await cache.redis_client.delete(*keys)
         except Exception as e:
             logger.warning('Failed to invalidate user channel cache', telegram_id=telegram_id, error=e)
+
+    @staticmethod
+    async def was_reactivation_checked_recently(telegram_id: int) -> bool:
+        key = cache_key('channel_reactivation_checked', telegram_id)
+        return await cache.get(key) == 1
+
+    @staticmethod
+    async def mark_reactivation_checked(telegram_id: int) -> None:
+        key = cache_key('channel_reactivation_checked', telegram_id)
+        await cache.set(key, 1, expire=ChannelSubCache.REACTIVATION_CHECK_TTL)
+
+    @staticmethod
+    async def invalidate_reactivation_check(telegram_id: int) -> None:
+        key = cache_key('channel_reactivation_checked', telegram_id)
+        await cache.delete(key)
 
     @staticmethod
     async def get_required_channels() -> list[dict] | None:

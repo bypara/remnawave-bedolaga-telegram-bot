@@ -9,6 +9,9 @@ from aiogram.types import CallbackQuery, Message, TelegramObject
 
 logger = structlog.get_logger(__name__)
 
+SLOW_OPERATION_SECONDS = 1.0
+NOTICEABLE_CALLBACK_SECONDS = 0.3
+
 
 class LoggingMiddleware(BaseMiddleware):
     async def __call__(
@@ -32,8 +35,14 @@ class LoggingMiddleware(BaseMiddleware):
             result = await handler(event, data)
 
             execution_time = monotonic() - start_time
-            if execution_time > 1.0:
+            if execution_time > SLOW_OPERATION_SECONDS:
                 logger.warning('⏱️ Медленная операция', execution_time=round(execution_time, 2))
+            elif isinstance(event, CallbackQuery) and execution_time > NOTICEABLE_CALLBACK_SECONDS:
+                logger.info(
+                    'Callback обработан с задержкой',
+                    event_data=event.data,
+                    execution_time_ms=round(execution_time * 1000),
+                )
 
             return result
 
