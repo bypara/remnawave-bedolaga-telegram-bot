@@ -2,25 +2,19 @@
 
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
 
 from app.config import settings
-from app.middlewares.button_stats import ButtonStatsMiddleware
+from app.middlewares.button_stats import ButtonStatsMiddleware, button_click_batch_writer
 
 
 def _capture_log_calls(middleware, monkeypatch):
-    """Подменяет фоновую запись: возвращает список kwargs вызовов."""
+    """Подменяет пакетную очередь: возвращает список поставленных событий."""
     calls = []
 
-    def fake_log(**kwargs):
-        calls.append(kwargs)
+    def fake_enqueue(event):
+        calls.append(event)
 
-        async def _noop():
-            return None
-
-        return _noop()
-
-    monkeypatch.setattr(middleware, '_log_button_click_async', fake_log)
+    monkeypatch.setattr(button_click_batch_writer, 'enqueue', fake_enqueue)
     return calls
 
 
@@ -33,15 +27,14 @@ def test_start_command_logged(monkeypatch):
     middleware = ButtonStatsMiddleware()
     calls = _capture_log_calls(middleware, monkeypatch)
 
-    with patch('app.middlewares.button_stats.asyncio.create_task', MagicMock(side_effect=lambda coro: coro.close())):
-        middleware._log_command(_message('/start'))
+    middleware._log_command(_message('/start'))
 
     assert len(calls) == 1
-    assert calls[0]['button_id'] == '/start'
-    assert calls[0]['button_type'] == 'command'
-    assert calls[0]['button_text'] == '/start'
-    assert calls[0]['callback_data'] is None
-    assert calls[0]['user_id'] == 922920255
+    assert calls[0].button_id == '/start'
+    assert calls[0].button_type == 'command'
+    assert calls[0].button_text == '/start'
+    assert calls[0].callback_data is None
+    assert calls[0].user_telegram_id == 922920255
 
 
 def test_command_payload_not_stored(monkeypatch):
@@ -49,24 +42,22 @@ def test_command_payload_not_stored(monkeypatch):
     middleware = ButtonStatsMiddleware()
     calls = _capture_log_calls(middleware, monkeypatch)
 
-    with patch('app.middlewares.button_stats.asyncio.create_task', MagicMock(side_effect=lambda coro: coro.close())):
-        middleware._log_command(_message('/start webauth_SECRET_TOKEN_123'))
+    middleware._log_command(_message('/start webauth_SECRET_TOKEN_123'))
 
     assert len(calls) == 1
     serialized = str(calls[0])
     assert 'SECRET_TOKEN' not in serialized
-    assert calls[0]['button_id'] == '/start'
-    assert calls[0]['button_text'] == '/start …'
+    assert calls[0].button_id == '/start'
+    assert calls[0].button_text == '/start …'
 
 
 def test_command_with_bot_mention_normalized(monkeypatch):
     middleware = ButtonStatsMiddleware()
     calls = _capture_log_calls(middleware, monkeypatch)
 
-    with patch('app.middlewares.button_stats.asyncio.create_task', MagicMock(side_effect=lambda coro: coro.close())):
-        middleware._log_command(_message('/menu@my_vpn_bot'))
+    middleware._log_command(_message('/menu@my_vpn_bot'))
 
-    assert calls[0]['button_id'] == '/menu'
+    assert calls[0].button_id == '/menu'
 
 
 def test_plain_text_not_logged(monkeypatch):
@@ -74,10 +65,9 @@ def test_plain_text_not_logged(monkeypatch):
     middleware = ButtonStatsMiddleware()
     calls = _capture_log_calls(middleware, monkeypatch)
 
-    with patch('app.middlewares.button_stats.asyncio.create_task', MagicMock(side_effect=lambda coro: coro.close())):
-        middleware._log_command(_message('привет, мой промокод SUMMER25'))
-        middleware._log_command(_message(None))
-        middleware._log_command(_message('/'))
+    middleware._log_command(_message('привет, мой промокод SUMMER25'))
+    middleware._log_command(_message(None))
+    middleware._log_command(_message('/'))
 
     assert calls == []
 

@@ -38,6 +38,7 @@ from app.services.subscription_checkout_service import (
 )
 from app.services.support_settings_service import SupportSettingsService
 from app.services.user_cart_service import user_cart_service
+from app.utils.callback_answer import answer_callback_in_background
 from app.utils.display_mode import is_visible_in_bot
 from app.utils.photo_message import edit_or_answer_photo
 from app.utils.pricing_utils import format_period_description
@@ -195,7 +196,7 @@ async def show_main_menu(
     texts = get_texts(db_user.language)
 
     if not skip_callback_answer:
-        await callback.answer()
+        answer_callback_in_background(callback)
 
     # Multi-tariff aware: check if user has ANY active subscription
     # 'limited' (traffic exhausted) subscriptions are still active for UI purposes
@@ -279,7 +280,7 @@ async def show_profile_menu(callback: types.CallbackQuery, db_user: User, state:
     # Opening the profile is an explicit exit from nested input flows (promo code,
     # support forms, etc.). Clear FSM so following messages are not consumed by
     # the handler the user just left.
-    await callback.answer()
+    answer_callback_in_background(callback)
     await state.clear()
 
     texts = get_texts(db_user.language)
@@ -399,7 +400,7 @@ async def show_info_menu(
         return
 
     texts = get_texts(db_user.language)
-    await callback.answer()
+    answer_callback_in_background(callback)
 
     header = texts.t('MENU_INFO_HEADER', 'ℹ️ <b>Инфо</b>')
     prompt = texts.t('MENU_INFO_PROMPT', 'Выберите раздел:')
@@ -1166,7 +1167,7 @@ async def show_language_menu(
         )
         return
 
-    await callback.answer()
+    answer_callback_in_background(callback)
     await edit_or_answer_photo(
         callback=callback,
         caption=texts.t('LANGUAGE_PROMPT', '🌐 Выберите язык интерфейса:'),
@@ -1261,7 +1262,7 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
         )
         return
 
-    await callback.answer()
+    answer_callback_in_background(callback)
     await state.clear()
 
     texts = get_texts(db_user.language)

@@ -11,7 +11,7 @@ from aiogram.types import CallbackQuery, Message, TelegramObject, User as TgUser
 from sqlalchemy.exc import InterfaceError, OperationalError
 
 from app.config import settings
-from app.database.crud.user import get_user_by_telegram_id
+from app.database.crud.user import get_user_by_telegram_id, get_user_by_telegram_id_for_navigation
 from app.database.database import AsyncSessionLocal
 from app.services.remnawave_service import RemnaWaveService
 from app.states import RegistrationStates
@@ -22,6 +22,18 @@ from app.utils.validators import sanitize_telegram_name
 logger = structlog.get_logger(__name__)
 
 LAST_ACTIVITY_UPDATE_INTERVAL = timedelta(minutes=5)
+LIGHTWEIGHT_NAVIGATION_CALLBACKS = frozenset(
+    {
+        'back_to_menu',
+        'menu_profile',
+        'menu_info',
+        'menu_language',
+    }
+)
+
+
+def _is_lightweight_navigation(event: TelegramObject) -> bool:
+    return isinstance(event, CallbackQuery) and event.data in LIGHTWEIGHT_NAVIGATION_CALLBACKS
 
 
 def _should_refresh_last_activity(last_activity: datetime | None, now: datetime) -> bool:
@@ -70,7 +82,12 @@ class AuthMiddleware(BaseMiddleware):
 
         async with AsyncSessionLocal() as db:
             try:
-                db_user = await get_user_by_telegram_id(db, user.id)
+                user_loader = (
+                    get_user_by_telegram_id_for_navigation
+                    if _is_lightweight_navigation(event)
+                    else get_user_by_telegram_id
+                )
+                db_user = await user_loader(db, user.id)
 
                 if not db_user:
                     state: FSMContext = data.get('state')

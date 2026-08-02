@@ -1,10 +1,17 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from aiogram.types import CallbackQuery, User as TgUser
 
-from app.middlewares.auth import LAST_ACTIVITY_UPDATE_INTERVAL, _should_refresh_last_activity
+from app.middlewares.auth import (
+    LAST_ACTIVITY_UPDATE_INTERVAL,
+    _is_lightweight_navigation,
+    _should_refresh_last_activity,
+)
 from app.utils import photo_message
+from app.utils.callback_answer import answer_callback_in_background
 from app.utils.cache import ChannelSubCache, cache
 
 
@@ -14,6 +21,29 @@ def test_last_activity_is_refreshed_at_most_once_per_interval() -> None:
     assert _should_refresh_last_activity(None, now) is True
     assert _should_refresh_last_activity(now - LAST_ACTIVITY_UPDATE_INTERVAL + timedelta(seconds=1), now) is False
     assert _should_refresh_last_activity(now - LAST_ACTIVITY_UPDATE_INTERVAL, now) is True
+
+
+def test_only_safe_navigation_uses_lightweight_user_loader() -> None:
+    user = TgUser(id=123, is_bot=False, first_name='Test')
+
+    assert _is_lightweight_navigation(CallbackQuery(id='1', from_user=user, chat_instance='x', data='menu_profile'))
+    assert not _is_lightweight_navigation(
+        CallbackQuery(id='2', from_user=user, chat_instance='x', data='subscription_confirm')
+    )
+
+
+@pytest.mark.asyncio
+async def test_navigation_callback_answer_runs_in_background() -> None:
+    release = asyncio.Event()
+    callback = MagicMock()
+    callback.answer = AsyncMock(side_effect=lambda: release.wait())
+
+    answer_callback_in_background(callback)
+    await asyncio.sleep(0)
+
+    callback.answer.assert_awaited_once()
+    release.set()
+    await asyncio.sleep(0)
 
 
 @pytest.mark.asyncio

@@ -2,14 +2,17 @@
 
 import asyncio
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import Any
 
 import structlog
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject
+from sqlalchemy import select
 
 from app.config import settings
 from app.database.database import AsyncSessionLocal
+from app.database.models import ButtonClickLog, User
 
 
 logger = structlog.get_logger(__name__)
@@ -85,6 +88,92 @@ BUILTIN_CALLBACKS: set[str] = {
 }
 
 
+@dataclass(slots=True)
+class ButtonClickEvent:
+    button_id: str
+    user_telegram_id: int | None
+    callback_data: str | None
+    button_type: str | None
+    button_text: str | None
+
+
+class ButtonClickBatchWriter:
+    """Collect click events and persist them with one transaction per batch."""
+
+    def __init__(
+        self,
+        *,
+        max_batch_size: int = 100,
+        flush_interval: float = 0.25,
+        queue_size: int = 5000,
+    ) -> None:
+        self.max_batch_size = max_batch_size
+        self.flush_interval = flush_interval
+        self.queue: asyncio.Queue[ButtonClickEvent] = asyncio.Queue(maxsize=queue_size)
+        self._worker_task: asyncio.Task[None] | None = None
+
+    def enqueue(self, event: ButtonClickEvent) -> None:
+        try:
+            self.queue.put_nowait(event)
+        except asyncio.QueueFull:
+            logger.warning('Button click log queue is full; dropping event', button_id=event.button_id)
+            return
+
+        if self._worker_task is None or self._worker_task.done():
+            self._worker_task = asyncio.create_task(self._run())
+
+    async def _run(self) -> None:
+        while True:
+            first = await self.queue.get()
+            batch = [first]
+            deadline = asyncio.get_running_loop().time() + self.flush_interval
+
+            while len(batch) < self.max_batch_size:
+                remaining = deadline - asyncio.get_running_loop().time()
+                if remaining <= 0:
+                    break
+                try:
+                    batch.append(await asyncio.wait_for(self.queue.get(), timeout=remaining))
+                except TimeoutError:
+                    break
+
+            try:
+                await self._write_batch(batch)
+            finally:
+                for _ in batch:
+                    self.queue.task_done()
+
+    async def _write_batch(self, batch: list[ButtonClickEvent]) -> None:
+        try:
+            async with AsyncSessionLocal() as db:
+                telegram_ids = {event.user_telegram_id for event in batch if event.user_telegram_id is not None}
+                user_ids_by_telegram: dict[int, int] = {}
+                if telegram_ids:
+                    result = await db.execute(
+                        select(User.telegram_id, User.id).where(User.telegram_id.in_(telegram_ids))
+                    )
+                    user_ids_by_telegram = dict(result.all())
+
+                db.add_all(
+                    [
+                        ButtonClickLog(
+                            button_id=event.button_id,
+                            user_id=user_ids_by_telegram.get(event.user_telegram_id),
+                            callback_data=event.callback_data,
+                            button_type=event.button_type,
+                            button_text=event.button_text,
+                        )
+                        for event in batch
+                    ]
+                )
+                await db.commit()
+        except Exception as error:
+            logger.warning('Could not persist button click batch', batch_size=len(batch), error=str(error))
+
+
+button_click_batch_writer = ButtonClickBatchWriter()
+
+
 class ButtonStatsMiddleware(BaseMiddleware):
     """Middleware для автоматического логирования кликов по кнопкам и команд бота."""
 
@@ -118,16 +207,14 @@ class ButtonStatsMiddleware(BaseMiddleware):
 
             user_id = event.from_user.id if event.from_user else None
             button_type = self._determine_button_type(callback_data)
-
-            # Получаем текст кнопки, если возможно
             button_text = None
             if event.message and hasattr(event.message, 'reply_markup'):
                 button_text = self._extract_button_text(event.message.reply_markup, callback_data)
 
-            asyncio.create_task(
-                self._log_button_click_async(
+            button_click_batch_writer.enqueue(
+                ButtonClickEvent(
                     button_id=callback_data,
-                    user_id=user_id,
+                    user_telegram_id=user_id,
                     callback_data=callback_data,
                     button_type=button_type,
                     button_text=button_text,
@@ -158,10 +245,10 @@ class ButtonStatsMiddleware(BaseMiddleware):
 
             user_id = event.from_user.id if event.from_user else None
 
-            asyncio.create_task(
-                self._log_button_click_async(
+            button_click_batch_writer.enqueue(
+                ButtonClickEvent(
                     button_id=command,
-                    user_id=user_id,
+                    user_telegram_id=user_id,
                     callback_data=None,
                     button_type='command',
                     button_text=f'{command} …' if has_payload else command,
@@ -211,30 +298,3 @@ class ButtonStatsMiddleware(BaseMiddleware):
         except Exception:
             pass
         return None
-
-    async def _log_button_click_async(
-        self,
-        button_id: str,
-        user_id: int = None,
-        callback_data: str = None,
-        button_type: str = None,
-        button_text: str = None,
-    ):
-        """Асинхронно логирует клик по кнопке."""
-        try:
-            async with AsyncSessionLocal() as db:
-                try:
-                    from app.services.menu_layout_service import MenuLayoutService
-
-                    await MenuLayoutService.log_button_click(
-                        db,
-                        button_id=button_id,
-                        user_id=user_id,
-                        callback_data=callback_data,
-                        button_type=button_type,
-                        button_text=button_text,
-                    )
-                except Exception as e:
-                    logger.warning('Ошибка записи клика в БД', button_id=button_id, error=e)
-        except Exception as e:
-            logger.warning('Ошибка создания сессии БД для логирования клика', error=e)
