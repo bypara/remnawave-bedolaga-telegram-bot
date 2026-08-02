@@ -52,6 +52,9 @@ def test_requested_custom_emoji_icons_are_applied_by_button_action():
         ('✅ Подтвердить', 'referral_withdrawal_confirm', 'referral_withdrawal_confirm'),
         ('✅ Я подписался', 'sub_channel_check', 'channel_check'),
         ('🎁 Получить скидку', 'claim_discount_42', 'claim_discount'),
+        ('✅ Подтвердить переключение', 'instant_sw_confirm:2', 'confirm_switch'),
+        ('✅ Подтвердить переключение', 'tariff_sw_confirm:2:30', 'confirm_switch'),
+        ('✅ Подтвердить переключение', 'daily_tariff_switch_confirm:2', 'confirm_switch'),
     ]
     markup = InlineKeyboardMarkup(
         inline_keyboard=[[_button(text, callback_data=callback)] for text, callback, _ in cases]
@@ -68,6 +71,7 @@ def test_requested_custom_emoji_icons_are_applied_by_button_action():
     assert CUSTOM_EMOJI_IDS['confirm_purchase'] == '5397916757333654639'
     assert CUSTOM_EMOJI_IDS['channel_check'] == '5416081784641168838'
     assert CUSTOM_EMOJI_IDS['claim_discount'] == '5406683434124859552'
+    assert CUSTOM_EMOJI_IDS['confirm_switch'] == '5206607081334906820'
 
 
 def test_claim_discount_requested_icon_overrides_legacy_explicit_icon():

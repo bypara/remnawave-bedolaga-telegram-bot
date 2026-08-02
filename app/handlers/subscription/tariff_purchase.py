@@ -48,6 +48,19 @@ def _format_tariff_traffic(texts, limit_gb: float | int) -> str:
     return texts.t('TARIFF_TRAFFIC_LIMITED', '{limit} ГБ').format(limit=_format_gb(limit_gb))
 
 
+def _format_tariff_summary_line(texts, tariff: Tariff) -> str:
+    """Format a compact tariff line shared by purchase and instant-switch lists."""
+    return texts.t(
+        'TARIFF_SUMMARY_LINE',
+        '<b>{name}</b> — {traffic} / {devices} {device_emoji}',
+    ).format(
+        name=html.escape(tariff.name),
+        traffic=_format_tariff_traffic(texts, tariff.traffic_limit_gb),
+        devices=tariff.device_limit,
+        device_emoji='<tg-emoji emoji-id="5460814281345888114">📱</tg-emoji>',
+    )
+
+
 def _format_insufficient_funds_text(
     texts,
     *,
@@ -212,13 +225,18 @@ def format_tariffs_list_text(
     has_period_discounts: bool = False,
     purchased_tariff_ids: set[int] | None = None,
 ) -> str:
-    """Форматирует компактный заголовок списка; параметры показываются после выбора."""
+    """Форматирует компактный список тарифов и их основных параметров."""
     language = getattr(db_user, 'language', 'ru') if db_user else 'ru'
     texts = get_texts(language)
-    return texts.t(
-        'TARIFF_LIST_TITLE',
-        '<tg-emoji emoji-id="5258477770735885832">📄</tg-emoji> Выберите тариф',
-    )
+    lines = [
+        texts.t(
+            'TARIFF_LIST_TITLE',
+            '<tg-emoji emoji-id="5258477770735885832">📄</tg-emoji> Выберите тариф',
+        ),
+        '',
+    ]
+    lines.extend(_format_tariff_summary_line(texts, tariff) for tariff in tariffs)
+    return '\n'.join(lines)
 
 
 def get_tariffs_keyboard(
@@ -4142,7 +4160,6 @@ def format_instant_switch_list_text(
 
     texts = get_texts(db_user.language if db_user else 'ru')
     lines = [
-        texts.t('TARIFF_SWITCH_INSTANT_TITLE', '📦 <b>Мгновенная смена тарифа</b>'),
         texts.t('TARIFF_SWITCH_CURRENT_LINE', '📌 Текущий: <b>{name}</b>').format(
             name=html.escape(current_tariff.name)
         ),
@@ -4160,25 +4177,7 @@ def format_instant_switch_list_text(
         if tariff.id == current_tariff.id:
             continue
 
-        traffic_gb = tariff.traffic_limit_gb
-        traffic = (
-            '∞' if traffic_gb == 0 else texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=traffic_gb)
-        )
-
-        # Рассчитываем стоимость переключения
-        cost, is_upgrade = _calculate_instant_switch_cost(current_tariff, tariff, remaining_days, db_user)
-
-        if is_upgrade:
-            cost_text = f'⬆️ +{format_price_kopeks(cost, compact=True)}'
-        else:
-            cost_text = texts.t('TARIFF_SWITCH_FREE_LABEL', '⬇️ Бесплатно')
-
-        lines.append(f'<b>{html.escape(tariff.name)}</b> — {traffic} / {tariff.device_limit} 📱 {cost_text}')
-
-        if tariff.description:
-            lines.append(f'<i>{html.escape(tariff.description)}</i>')
-
-        lines.append('')
+        lines.append(_format_tariff_summary_line(texts, tariff))
 
     return '\n'.join(lines)
 
