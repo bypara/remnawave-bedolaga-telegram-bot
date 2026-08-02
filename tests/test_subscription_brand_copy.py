@@ -33,6 +33,7 @@ def test_subscription_copy_uses_requested_custom_emoji():
         'TARIFF_SWITCH_UPGRADE_NOTE': '5323761960829862762',
         'TARIFF_SWITCH_DOWNGRADE_NOTE': '5323761960829862762',
         'TARIFF_SWITCH_UPGRADE_PREVIEW': '5323761960829862762',
+        'TARIFF_SWITCH_DOWNGRADE_PREVIEW': '5406745015365943482',
         'TARIFF_SWITCH_UPGRADE_INSUFFICIENT': '5210952531676504517',
         'TARIFF_SWITCH_INSTANT_SUCCESS': '5461151367559141950',
         'TARIFF_INFO_TEXT': '5260730055880876557',
@@ -125,6 +126,15 @@ def test_subscription_copy_renders_dynamic_values_in_both_languages():
             'name': 'Standard Plus',
             'cost': '333 ₽',
             'balance': '9 ₽',
+        },
+        'TARIFF_SWITCH_DOWNGRADE_PREVIEW': {
+            'current': 'Standard',
+            'current_traffic': '499 GB',
+            'current_devices': 5,
+            'name': 'Minimum',
+            'traffic': '100 GB',
+            'devices': 1,
+            'days': 233,
         },
     }
 
