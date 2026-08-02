@@ -160,6 +160,21 @@ async def get_user_by_telegram_id(db: AsyncSession, telegram_id: int) -> User | 
     return user
 
 
+async def get_user_by_telegram_id_for_navigation(db: AsyncSession, telegram_id: int) -> User | None:
+    """Load only relationships used by the main, profile, info and language menus."""
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
+        .where(User.telegram_id == telegram_id)
+    )
+    user = result.scalar_one_or_none()
+
+    if user and user.subscription:
+        _ = user.subscription.is_active
+
+    return user
+
+
 async def find_phantom_user_by_username(db: AsyncSession, username: str) -> User | None:
     """Find a phantom user created by guest purchase (no telegram_id, auth_type=telegram).
 
