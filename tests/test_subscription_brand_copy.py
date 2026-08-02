@@ -33,6 +33,7 @@ def test_subscription_copy_uses_requested_custom_emoji():
         'TARIFF_SWITCH_UPGRADE_NOTE': '5323761960829862762',
         'TARIFF_SWITCH_DOWNGRADE_NOTE': '5323761960829862762',
         'TARIFF_SWITCH_UPGRADE_PREVIEW': '5323761960829862762',
+        'TARIFF_SWITCH_UPGRADE_INSUFFICIENT': '5210952531676504517',
         'TARIFF_SWITCH_INSTANT_SUCCESS': '5461151367559141950',
         'TARIFF_INFO_TEXT': '5260730055880876557',
         'TARIFF_INFO_DESCRIPTION': '5257965174979042426',
@@ -119,6 +120,11 @@ def test_subscription_copy_renders_dynamic_values_in_both_languages():
             'devices': 5,
             'days': 233,
             'cost_text': 'Charged: 666 ₽',
+        },
+        'TARIFF_SWITCH_UPGRADE_INSUFFICIENT': {
+            'name': 'Standard Plus',
+            'cost': '333 ₽',
+            'balance': '9 ₽',
         },
     }
 

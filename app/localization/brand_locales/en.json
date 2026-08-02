@@ -168,6 +168,7 @@
   "TARIFF_SWITCH_UPGRADE_NOTE": "<tg-emoji emoji-id=\"5323761960829862762\">⚡️</tg-emoji> Upgrade = pay the difference",
   "TARIFF_SWITCH_DOWNGRADE_NOTE": "<tg-emoji emoji-id=\"5323761960829862762\">⚡️</tg-emoji> Downgrade = free",
   "TARIFF_SWITCH_UPGRADE_PREVIEW": "📈 <b>Plan upgrade</b>\n\n<tg-emoji emoji-id=\"5323761960829862762\">⚡️</tg-emoji> Current: <b>{current}</b>\n   • Traffic: <b>{current_traffic}</b>\n   • Devices: <b>{current_devices}</b>\n\n<tg-emoji emoji-id=\"5359719332542718652\">💎</tg-emoji> New: <b>{name}</b>\n   • Traffic: <b>{traffic}</b>\n   • Devices: <b>{devices}</b>\n\n<tg-emoji emoji-id=\"5258258882022612173\">⏲️</tg-emoji> Days remaining: <b>{days}</b>\n<b>Surcharge: {cost}</b>\n\nYour balance: <b>{balance}</b>\nAfter payment: <b>{after}</b>",
+  "TARIFF_SWITCH_UPGRADE_INSUFFICIENT": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> <b>Insufficient funds</b>\n\nNew plan: {name}\nSurcharge required: {cost}\n\nYour balance: {balance}",
   "TARIFF_SWITCH_INSTANT_SUCCESS": "<tg-emoji emoji-id=\"5461151367559141950\">🎉</tg-emoji> <b>Plan changed successfully!</b>\n\nNew plan: {name}\nTraffic: {traffic}\nDevices: {devices}\nDays remaining: {days}\n{cost_text}",
   "TARIFF_SWITCH_CHARGED_LINE": "Charged: {price}",
   "TARIFF_SWITCH_FREE_COST_LINE": "Charged: 0 ₽",
