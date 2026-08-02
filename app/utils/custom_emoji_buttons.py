@@ -51,6 +51,7 @@ CUSTOM_EMOJI_IDS: dict[str, str] = {
     'support': '5472304422669262481',
     'channel_check': '5416081784641168838',
     'claim_discount': '5406683434124859552',
+    'confirm_switch': '5206607081334906820',
 }
 
 PRIORITY_CALLBACK_TO_ICON: dict[str, str] = {
@@ -86,6 +87,9 @@ CALLBACK_TO_ICON: dict[str, str] = {
     'subscription_settings': 'subscription_settings',
     'instant_switch': 'tariff',
     'tariff_switch': 'tariff',
+    'instant_sw_confirm': 'confirm_switch',
+    'tariff_sw_confirm': 'confirm_switch',
+    'daily_tariff_switch_confirm': 'confirm_switch',
     'buy_traffic': 'buy_traffic',
     'autopay_enable': 'enable',
     'autopay_disable': 'disable',
