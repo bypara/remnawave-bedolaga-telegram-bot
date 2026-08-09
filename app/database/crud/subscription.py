@@ -116,6 +116,17 @@ def is_active_paid_subscription(subscription: Subscription | None) -> bool:
     )
 
 
+def apply_default_autopay_on_trial_conversion(subscription: Subscription) -> None:
+    """Apply the configured autopay default when a trial becomes paid.
+
+    Trial subscriptions are deliberately created with autopay disabled.  When
+    the same database row is reused for the first paid period, that value must
+    be replaced with the paid-subscription default just like it is for a newly
+    created paid subscription.
+    """
+    subscription.autopay_enabled = settings.is_autopay_enabled_by_default()
+
+
 async def get_subscription_by_user_id(db: AsyncSession, user_id: int) -> Subscription | None:
     """Get primary subscription for user.
 
@@ -348,8 +359,11 @@ async def _revive_paid_subscription(
     """
     now = datetime.now(UTC)
     was_alive = subscription.end_date is not None and subscription.end_date > now
+    was_trial = bool(subscription.is_trial)
 
     subscription.is_trial = False
+    if was_trial:
+        apply_default_autopay_on_trial_conversion(subscription)
     subscription.status = SubscriptionStatus.ACTIVE.value
     subscription.traffic_limit_gb = traffic_limit_gb
     if device_limit is not None:
@@ -1190,6 +1204,7 @@ async def extend_subscription(
         # попадёт в авто-продление (баг #629889).
         if subscription.is_trial and convert_trial:
             subscription.is_trial = False
+            apply_default_autopay_on_trial_conversion(subscription)
             # Transient marker (not persisted): lets purchase handlers report the
             # payment as a trial→paid conversion without a signature change.
             subscription._converted_from_trial = True

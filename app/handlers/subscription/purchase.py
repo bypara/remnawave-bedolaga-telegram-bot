@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.subscription import (
+    apply_default_autopay_on_trial_conversion,
     create_paid_subscription,
     create_pending_trial_subscription,
     create_trial_subscription,
@@ -2386,6 +2387,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
             if existing_subscription.is_trial:
                 logger.info('Конверсия из триала в платную для пользователя', telegram_id=db_user.telegram_id)
                 was_trial_conversion = True
+                apply_default_autopay_on_trial_conversion(existing_subscription)
 
                 trial_duration = (current_time - existing_subscription.start_date).days
 
@@ -4509,6 +4511,7 @@ async def _extend_existing_subscription(
     if current_subscription.is_trial:
         # При продлении триальной подписки переводим её в обычную
         current_subscription.is_trial = False
+        apply_default_autopay_on_trial_conversion(current_subscription)
         current_subscription.status = 'active'
         # Убираем ограничения с триальной подписки
         current_subscription.traffic_limit_gb = traffic_limit_gb

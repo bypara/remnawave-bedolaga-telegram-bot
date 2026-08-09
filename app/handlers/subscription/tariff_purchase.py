@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.subscription import (
+    apply_default_autopay_on_trial_conversion,
     create_paid_subscription,
     extend_subscription,
     get_active_subscriptions_by_user_id,
@@ -2130,6 +2131,8 @@ async def confirm_daily_tariff_purchase(
             )
             existing_subscription.connected_squads = squads
             existing_subscription.status = 'active'
+            if existing_subscription.is_trial:
+                apply_default_autopay_on_trial_conversion(existing_subscription)
             existing_subscription.is_trial = False  # Сбрасываем триальный статус
             existing_subscription.is_daily_paused = False
             existing_subscription.last_daily_charge_at = datetime.now(UTC)
@@ -3922,6 +3925,8 @@ async def confirm_daily_tariff_switch(
         )
         subscription.connected_squads = squads
         subscription.status = 'active'
+        if subscription.is_trial:
+            apply_default_autopay_on_trial_conversion(subscription)
         subscription.is_trial = False  # Сбрасываем триальный статус
         subscription.is_daily_paused = False
         subscription.last_daily_charge_at = datetime.now(UTC)
@@ -4810,6 +4815,8 @@ async def confirm_instant_switch(
                         logger.error('Ошибка отправки уведомления админу', error=e)
 
             subscription.end_date = datetime.now(UTC) + timedelta(days=1)
+            if subscription.is_trial:
+                apply_default_autopay_on_trial_conversion(subscription)
             subscription.is_trial = False
             subscription.is_daily_paused = False
             subscription.last_daily_charge_at = datetime.now(UTC)
