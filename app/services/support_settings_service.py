@@ -51,8 +51,24 @@ class SupportSettingsService:
     # Mode
     @classmethod
     def get_system_mode(cls) -> str:
+        settings_mode = settings.get_support_system_mode()
+
+        # SUPPORT_SYSTEM_MODE configured through ENV or the global settings
+        # storage is authoritative.  Older versions also persisted the mode in
+        # data/support_settings.json; a stale value there could make the bot show
+        # tickets only while the cabinet correctly reported `both`.
+        try:
+            from app.services.system_settings_service import bot_configuration_service
+
+            if bot_configuration_service.is_env_overridden(
+                'SUPPORT_SYSTEM_MODE'
+            ) or bot_configuration_service.has_override('SUPPORT_SYSTEM_MODE'):
+                return settings_mode
+        except Exception as error:
+            logger.debug('Failed to resolve authoritative support mode', error=error)
+
         cls._load()
-        mode = (cls._data.get('system_mode') or settings.get_support_system_mode()).strip().lower()
+        mode = (cls._data.get('system_mode') or settings_mode).strip().lower()
         return mode if mode in {'tickets', 'contact', 'both'} else 'both'
 
     @classmethod
