@@ -15,6 +15,7 @@ from app.database.crud.server_squad import (
 )
 from app.database.crud.subscription import (
     add_subscription_servers,
+    apply_default_autopay_on_trial_conversion,
     create_paid_subscription,
     should_carry_trial_remaining_days,
 )
@@ -1077,6 +1078,7 @@ class MiniAppSubscriptionPurchaseService:
             bonus_period = timedelta()
             if subscription.is_trial:
                 was_trial_conversion = True
+                apply_default_autopay_on_trial_conversion(subscription)
                 trial_duration = (now - subscription.start_date).days
                 if should_carry_trial_remaining_days() and subscription.end_date:
                     remaining = subscription.end_date - now

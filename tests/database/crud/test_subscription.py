@@ -88,10 +88,12 @@ async def test_extend_subscription_convert_trial_false_keeps_trial(monkeypatch):
 
 
 async def test_extend_subscription_default_converts_trial_on_purchase(monkeypatch):
-    """Default convert_trial=True (a real tariff purchase) still clears is_trial."""
+    """A real trial purchase applies DEFAULT_AUTOPAY_ENABLED."""
     from datetime import UTC, datetime, timedelta
 
-    from app.database.crud.subscription import extend_subscription
+    import app.database.crud.subscription as subscription_crud
+
+    extend_subscription = subscription_crud.extend_subscription
 
     monkeypatch.setattr('app.database.crud.subscription._lock_subscription_row', AsyncMock())
     monkeypatch.setattr('app.database.crud.subscription._housekeep_expired_purchases', AsyncMock())
@@ -102,6 +104,7 @@ async def test_extend_subscription_default_converts_trial_on_purchase(monkeypatc
     monkeypatch.setattr(
         'app.database.crud.subscription.deactivate_user_trial_subscriptions', AsyncMock(return_value=[])
     )
+    monkeypatch.setattr(type(subscription_crud.settings), 'is_autopay_enabled_by_default', Mock(return_value=True))
 
     db = AsyncMock()
     db.flush = AsyncMock()
@@ -120,12 +123,58 @@ async def test_extend_subscription_default_converts_trial_on_purchase(monkeypatc
         device_limit=1,
         connected_squads=[],
         purchased_traffic_gb=0,
+        autopay_enabled=False,
         updated_at=now,
     )
 
     result = await extend_subscription(db, sub, 14, tariff_id=2, commit=False)
 
     assert result.is_trial is False  # genuine purchase converts the trial
+    assert result.autopay_enabled is True
+
+
+async def test_extend_paid_subscription_preserves_user_autopay_choice(monkeypatch):
+    """Renewing an already-paid subscription must not overwrite the user's choice."""
+    from datetime import UTC, datetime, timedelta
+
+    import app.database.crud.subscription as subscription_crud
+
+    extend_subscription = subscription_crud.extend_subscription
+
+    monkeypatch.setattr('app.database.crud.subscription._lock_subscription_row', AsyncMock())
+    monkeypatch.setattr('app.database.crud.subscription._housekeep_expired_purchases', AsyncMock())
+    monkeypatch.setattr('app.database.crud.subscription.clear_notifications', AsyncMock())
+    monkeypatch.setattr(
+        'app.database.crud.subscription.deactivate_user_trial_subscriptions', AsyncMock(return_value=[])
+    )
+    default_autopay_mock = Mock(return_value=True)
+    monkeypatch.setattr(type(subscription_crud.settings), 'is_autopay_enabled_by_default', default_autopay_mock)
+
+    db = AsyncMock()
+    db.flush = AsyncMock()
+    now = datetime.now(UTC)
+    sub = SimpleNamespace(
+        id=2,
+        user_id=7,
+        status='active',
+        is_trial=False,
+        start_date=now,
+        end_date=now + timedelta(days=14),
+        tariff_id=1,
+        traffic_limit_gb=100,
+        traffic_used_gb=0.0,
+        device_limit=1,
+        connected_squads=[],
+        purchased_traffic_gb=0,
+        autopay_enabled=False,
+        updated_at=now,
+    )
+
+    result = await extend_subscription(db, sub, 30, commit=False)
+
+    assert result.is_trial is False
+    assert result.autopay_enabled is False
+    default_autopay_mock.assert_not_called()
 
 
 def _trial_sub(sub_id, user_id, panel_uuid):

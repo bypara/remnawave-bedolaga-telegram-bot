@@ -14,7 +14,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.subscription import extend_subscription
+from app.database.crud.subscription import (
+    apply_default_autopay_on_trial_conversion,
+    extend_subscription,
+)
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
 from app.database.models import Subscription, SubscriptionStatus, TransactionType, User
@@ -33,8 +36,8 @@ from app.services.subscription_purchase_service import (
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 from app.utils.formatters import format_days_declension
-from app.utils.pricing_utils import format_period_description
 from app.utils.miniapp_buttons import strip_leading_emoji
+from app.utils.pricing_utils import format_period_description
 from app.utils.timezone import format_email_datetime, format_local_datetime, format_telegram_datetime
 
 
@@ -589,6 +592,7 @@ async def _auto_extend_subscription(
         # Конвертируем триал в платную подписку ТОЛЬКО после успешного продления
         if was_trial and subscription.is_trial:
             subscription.is_trial = False
+            apply_default_autopay_on_trial_conversion(subscription)
             subscription.status = 'active'
             await db.commit()
             logger.info(
@@ -981,6 +985,7 @@ async def _auto_purchase_tariff(
             was_trial_conversion = existing_subscription.is_trial
             if was_trial_conversion:
                 subscription.is_trial = False
+                apply_default_autopay_on_trial_conversion(subscription)
                 subscription.status = 'active'
                 await db.commit()
         else:
@@ -2441,6 +2446,7 @@ async def try_auto_extend_expired_after_topup(
         # Convert trial to paid if needed
         if was_trial and subscription.is_trial:
             subscription.is_trial = False
+            apply_default_autopay_on_trial_conversion(subscription)
             subscription.status = 'active'
             await db.commit()
             logger.info(
