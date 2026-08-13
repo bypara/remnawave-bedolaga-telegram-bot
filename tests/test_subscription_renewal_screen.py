@@ -80,15 +80,25 @@ def test_tariff_list_packs_short_plans_two_per_row():
             name=name,
             is_daily=False,
             period_prices={'14': price},
+            traffic_limit_gb=traffic,
+            device_limit=devices,
         )
-        for index, (name, price) in enumerate((('Минимум', 50000), ('Стандарт', 90000)), start=1)
+        for index, (name, price, traffic, devices) in enumerate(
+            (('Минимум', 50000, 100, 1), ('Стандарт', 90000, 499, 5)),
+            start=1,
+        )
     ]
 
     keyboard = tariff_purchase.get_tariffs_keyboard(tariffs, 'ru')
+    rendered = tariff_purchase.format_tariffs_list_text(tariffs)
 
     assert len(keyboard.inline_keyboard[0]) == 2
-    assert keyboard.inline_keyboard[0][0].text == 'Минимум · от 500₽'
-    assert keyboard.inline_keyboard[0][1].text == 'Стандарт · от 900₽'
+    assert keyboard.inline_keyboard[0][0].text == 'Минимум'
+    assert keyboard.inline_keyboard[0][1].text == 'Стандарт'
+    assert '<b>Минимум</b> — 100 ГБ / 1' in rendered
+    assert '— от 500₽' in rendered
+    assert '<b>Стандарт</b> — 499 ГБ / 5' in rendered
+    assert '— от 900₽' in rendered
 
 
 def test_tariff_info_uses_localized_copy_and_custom_emoji():
