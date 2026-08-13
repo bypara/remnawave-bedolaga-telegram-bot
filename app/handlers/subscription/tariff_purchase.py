@@ -49,9 +49,42 @@ def _format_tariff_traffic(texts, limit_gb: float | int) -> str:
     return texts.t('TARIFF_TRAFFIC_LIMITED', '{limit} ГБ').format(limit=_format_gb(limit_gb))
 
 
-def _format_tariff_summary_line(texts, tariff: Tariff) -> str:
+def _format_tariff_starting_price(texts, tariff: Tariff, db_user: User | None = None) -> str:
+    """Return the same starting price that used to be displayed on tariff buttons."""
+    if getattr(tariff, 'is_daily', False):
+        price = getattr(tariff, 'daily_price_kopeks', 0)
+        period_days = 1
+        localization_key = 'TARIFF_BUTTON_DAILY_PRICE'
+        fallback = '{price}/день'
+    else:
+        prices = tariff.period_prices or {}
+        if not prices:
+            return ''
+        min_period = min(prices, key=int)
+        period_days = int(min_period)
+        price = prices[min_period]
+        localization_key = 'TARIFF_BUTTON_FROM_PRICE'
+        fallback = 'от {price}'
+
+    if db_user:
+        group_pct, offer_pct, discount = _get_user_period_discount(db_user, period_days)
+        if discount > 0:
+            price = _apply_promo_discount(price, group_pct, offer_pct)
+
+    return texts.t(localization_key, fallback).format(
+        price=format_price_kopeks(price, compact=True),
+    )
+
+
+def _format_tariff_summary_line(
+    texts,
+    tariff: Tariff,
+    db_user: User | None = None,
+    *,
+    include_starting_price: bool = False,
+) -> str:
     """Format a compact tariff line shared by purchase and instant-switch lists."""
-    return texts.t(
+    line = texts.t(
         'TARIFF_SUMMARY_LINE',
         '<b>{name}</b> — {traffic} / {devices} {device_emoji}',
     ).format(
@@ -60,6 +93,11 @@ def _format_tariff_summary_line(texts, tariff: Tariff) -> str:
         devices=tariff.device_limit,
         device_emoji='<tg-emoji emoji-id="5460814281345888114">📱</tg-emoji>',
     )
+    if include_starting_price:
+        price_text = _format_tariff_starting_price(texts, tariff, db_user)
+        if price_text:
+            line += f' — {price_text}'
+    return line
 
 
 def _format_insufficient_funds_text(
@@ -236,7 +274,15 @@ def format_tariffs_list_text(
         ),
         '',
     ]
-    lines.extend(_format_tariff_summary_line(texts, tariff) for tariff in tariffs)
+    lines.extend(
+        _format_tariff_summary_line(
+            texts,
+            tariff,
+            db_user,
+            include_starting_price=True,
+        )
+        for tariff in tariffs
+    )
     return '\n'.join(lines)
 
 
@@ -254,33 +300,8 @@ def get_tariffs_keyboard(
     pending_row: list[InlineKeyboardButton] = []
 
     for tariff in tariffs:
-        price_text = ''
-        if getattr(tariff, 'is_daily', False):
-            price = getattr(tariff, 'daily_price_kopeks', 0)
-            if db_user:
-                group_pct, offer_pct, discount = _get_user_period_discount(db_user, 1)
-                if discount > 0:
-                    price = _apply_promo_discount(price, group_pct, offer_pct)
-            price_text = texts.t('TARIFF_BUTTON_DAILY_PRICE', '{price}/день').format(
-                price=format_price_kopeks(price, compact=True)
-            )
-        else:
-            prices = tariff.period_prices or {}
-            if prices:
-                min_period = min(prices, key=int)
-                price = prices[min_period]
-                if db_user:
-                    group_pct, offer_pct, discount = _get_user_period_discount(db_user, int(min_period))
-                    if discount > 0:
-                        price = _apply_promo_discount(price, group_pct, offer_pct)
-                price_text = texts.t('TARIFF_BUTTON_FROM_PRICE', 'от {price}').format(
-                    price=format_price_kopeks(price, compact=True)
-                )
-
         purchased_mark = '✅ ' if tariff.id in purchased_tariff_ids else ''
         label = f'{purchased_mark}{tariff.name}'
-        if price_text:
-            label += f' · {price_text}'
         button = InlineKeyboardButton(text=label, callback_data=f'tariff_select:{tariff.id}')
 
         if len(label) > 24:
