@@ -153,7 +153,18 @@ async def test_tariff_period_selection_does_not_require_subscription(monkeypatch
 
     monkeypatch.setattr(type(tariff_purchase.settings), 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr(tariff_purchase, 'get_tariff_by_id', AsyncMock(return_value=tariff))
-    monkeypatch.setattr(tariff_purchase, '_get_user_period_discount', lambda _user, _period: (0, 0, 0))
+    monkeypatch.setattr(tariff_purchase, 'get_subscription_by_user_id', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'app.services.pricing_engine.pricing_engine.calculate_tariff_purchase_price',
+        AsyncMock(
+            return_value=SimpleNamespace(
+                final_total=50000,
+                original_total=50000,
+                promo_group_discount=0,
+                promo_offer_discount=0,
+            )
+        ),
+    )
     monkeypatch.setattr(
         tariff_purchase,
         'get_tariff_confirm_keyboard',
