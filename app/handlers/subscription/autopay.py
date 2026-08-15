@@ -399,11 +399,13 @@ async def handle_sbp_recurring_menu(
         action_button = types.InlineKeyboardButton(
             text=texts.t('SBP_RECURRING_CANCEL_BUTTON', '❌ Отменить автооплату'),
             callback_data='sbp_recurring_cancel',
+            icon_custom_emoji_id='5210952531676504517',
         )
     else:
         action_button = types.InlineKeyboardButton(
             text=texts.t('SBP_RECURRING_ENABLE_BUTTON', '✅ Подключить'),
             callback_data='sbp_recurring_enable',
+            icon_custom_emoji_id='5271604874419647061',
         )
 
     keyboard = types.InlineKeyboardMarkup(
@@ -506,6 +508,7 @@ async def handle_sbp_recurring_enable(
                 types.InlineKeyboardButton(
                     text=texts.t('SBP_RECURRING_CONFIRM_BUTTON', '🏦 Подтвердить в банке'),
                     url=redirect_url,
+                    icon_custom_emoji_id='5271604874419647061',
                 )
             ],
             [types.InlineKeyboardButton(text=texts.BACK, callback_data='sbp_recurring_menu')],

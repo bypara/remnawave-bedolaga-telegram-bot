@@ -416,6 +416,7 @@ def get_tariff_confirm_keyboard(
                 InlineKeyboardButton(
                     text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оформить с автооплатой СБП'),
                     callback_data=f'tariff_sbp:{tariff_id}',
+                    icon_custom_emoji_id='5271604874419647061',
                 )
             ]
         )
@@ -425,6 +426,7 @@ def get_tariff_confirm_keyboard(
                 InlineKeyboardButton(
                     text=texts.t('LAVA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Lava'),
                     callback_data=f'tariff_lava:{tariff_id}',
+                    icon_custom_emoji_id='5271604874419647061',
                 )
             ]
         )
@@ -484,6 +486,7 @@ def _sbp_purchase_rows(tariff_id: int, texts) -> list[list[InlineKeyboardButton]
                 InlineKeyboardButton(
                     text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оформить с автооплатой СБП'),
                     callback_data=f'tariff_sbp:{tariff_id}',
+                    icon_custom_emoji_id='5271604874419647061',
                 )
             ]
         )
@@ -493,6 +496,7 @@ def _sbp_purchase_rows(tariff_id: int, texts) -> list[list[InlineKeyboardButton]
                 InlineKeyboardButton(
                     text=texts.t('LAVA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Lava'),
                     callback_data=f'tariff_lava:{tariff_id}',
+                    icon_custom_emoji_id='5271604874419647061',
                 )
             ]
         )
@@ -562,6 +566,7 @@ def get_daily_tariff_confirm_keyboard(
                 InlineKeyboardButton(
                     text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оформить с автооплатой СБП'),
                     callback_data=f'tariff_sbp:{tariff_id}',
+                    icon_custom_emoji_id='5271604874419647061',
                 )
             ]
         )
@@ -571,6 +576,7 @@ def get_daily_tariff_confirm_keyboard(
                 InlineKeyboardButton(
                     text=texts.t('LAVA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Lava'),
                     callback_data=f'tariff_lava:{tariff_id}',
+                    icon_custom_emoji_id='5271604874419647061',
                 )
             ]
         )
@@ -4796,7 +4802,13 @@ async def purchase_tariff_with_lava(
     buttons = []
     if redirect_url:
         buttons.append(
-            [InlineKeyboardButton(text=texts.t('LAVA_RECURRING_PAY_BUTTON', '💳 Оплатить'), url=redirect_url)]
+            [
+                InlineKeyboardButton(
+                    text=texts.t('LAVA_RECURRING_PAY_BUTTON', '💳 Оплатить'),
+                    url=redirect_url,
+                    icon_custom_emoji_id='5271604874419647061',
+                )
+            ]
         )
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
 
@@ -5454,7 +5466,9 @@ async def purchase_tariff_with_sbp(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('SBP_RECURRING_CONFIRM_BUTTON', '🏦 Подтвердить в банке'), url=redirect_url
+                    text=texts.t('SBP_RECURRING_CONFIRM_BUTTON', '🏦 Подтвердить в банке'),
+                    url=redirect_url,
+                    icon_custom_emoji_id='5271604874419647061',
                 )
             ]
         )
