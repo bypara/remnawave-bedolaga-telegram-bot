@@ -26,6 +26,7 @@ import pytest
 
 from app.config import settings
 from app.services.support_settings_service import SupportSettingsService
+from app.services.system_settings_service import bot_configuration_service
 
 
 @pytest.fixture
@@ -71,6 +72,21 @@ def test_mode_survives_restart_for_cabinet(support_storage, monkeypatch):
 
     assert settings.SUPPORT_SYSTEM_MODE == 'contact'
     assert settings.is_support_tickets_enabled() is False
+
+
+def test_env_mode_is_not_clobbered_by_stale_json_on_first_load(support_storage, monkeypatch):
+    """ENV остаётся источником истины даже если legacy JSON загрузился первым."""
+    support_storage.write_text(json.dumps({'system_mode': 'tickets'}), encoding='utf-8')
+    monkeypatch.setattr(settings, 'SUPPORT_SYSTEM_MODE', 'both')
+    monkeypatch.setattr(bot_configuration_service, 'is_env_overridden', lambda key: key == 'SUPPORT_SYSTEM_MODE')
+    monkeypatch.setattr(bot_configuration_service, 'has_override', lambda key: False)
+
+    SupportSettingsService._load()
+
+    assert settings.SUPPORT_SYSTEM_MODE == 'both'
+    assert SupportSettingsService.get_system_mode() == 'both'
+    assert SupportSettingsService.is_tickets_enabled() is True
+    assert SupportSettingsService.is_contact_enabled() is True
 
 
 def test_load_syncs_menu_enabled_into_settings(support_storage):
