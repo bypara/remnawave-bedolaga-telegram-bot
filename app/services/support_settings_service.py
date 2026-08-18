@@ -52,11 +52,13 @@ class SupportSettingsService:
         переживал рестарт только для бота, и тикеты в кабинете снова
         открывались.
 
-        JSON здесь — источник истины: он пишется только явным действием
-        админа, ``.env`` задаёт лишь начальное значение.
+        Legacy JSON остаётся источником истины только когда режим не задан
+        через ENV или глобальное хранилище настроек. Иначе старое значение из
+        ``support_settings.json`` не должно затирать более приоритетную
+        конфигурацию во время первого обращения к сервису.
         """
         mode = cls._data.get('system_mode')
-        if isinstance(mode, str):
+        if isinstance(mode, str) and not cls._is_system_mode_globally_managed():
             mode_clean = mode.strip().lower()
             if mode_clean in {'tickets', 'contact', 'both'}:
                 settings.SUPPORT_SYSTEM_MODE = mode_clean
@@ -75,6 +77,19 @@ class SupportSettingsService:
 
     # Mode
     @classmethod
+    def _is_system_mode_globally_managed(cls) -> bool:
+        """Return whether ENV/global settings own the support mode."""
+        try:
+            from app.services.system_settings_service import bot_configuration_service
+
+            return bot_configuration_service.is_env_overridden(
+                'SUPPORT_SYSTEM_MODE'
+            ) or bot_configuration_service.has_override('SUPPORT_SYSTEM_MODE')
+        except Exception as error:
+            logger.debug('Failed to resolve authoritative support mode', error=error)
+            return False
+
+    @classmethod
     def get_system_mode(cls) -> str:
         settings_mode = settings.get_support_system_mode()
 
@@ -82,15 +97,8 @@ class SupportSettingsService:
         # storage is authoritative.  Older versions also persisted the mode in
         # data/support_settings.json; a stale value there could make the bot show
         # tickets only while the cabinet correctly reported `both`.
-        try:
-            from app.services.system_settings_service import bot_configuration_service
-
-            if bot_configuration_service.is_env_overridden(
-                'SUPPORT_SYSTEM_MODE'
-            ) or bot_configuration_service.has_override('SUPPORT_SYSTEM_MODE'):
-                return settings_mode
-        except Exception as error:
-            logger.debug('Failed to resolve authoritative support mode', error=error)
+        if cls._is_system_mode_globally_managed():
+            return settings_mode
 
         cls._load()
         mode = (cls._data.get('system_mode') or settings_mode).strip().lower()
