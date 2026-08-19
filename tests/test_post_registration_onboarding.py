@@ -100,6 +100,50 @@ async def test_registration_continues_without_separate_legal_acceptance(monkeypa
 
 
 @pytest.mark.asyncio
+async def test_referred_user_is_sent_to_channel_gate_after_language(monkeypatch):
+    message = AsyncMock()
+    message.from_user.id = 42
+    state = AsyncMock()
+    state.get_data.return_value = {'language': 'ru', 'referral_code': 'friend'}
+    referrer = SimpleNamespace(id=7)
+    show_gate = AsyncMock(return_value=True)
+    complete_registration = AsyncMock()
+
+    monkeypatch.setattr(start, 'get_user_by_referral_code', AsyncMock(return_value=referrer))
+    monkeypatch.setattr(start, '_show_referral_channel_gate', show_gate)
+    monkeypatch.setattr(start, 'complete_registration', complete_registration)
+
+    await start._continue_registration_after_language(
+        message=message,
+        callback=None,
+        state=state,
+        db=AsyncMock(),
+    )
+
+    show_gate.assert_awaited_once_with(message, state, 'ru')
+    complete_registration.assert_not_awaited()
+    assert state.set_data.await_args.args[0]['referrer_id'] == 7
+
+
+@pytest.mark.asyncio
+async def test_repeated_start_cannot_bypass_referral_channel_gate(monkeypatch):
+    message = AsyncMock()
+    message.from_user.id = 42
+    state = AsyncMock()
+    state.get_data.return_value = {
+        'language': 'ru',
+        'referral_channel_gate_pending': True,
+    }
+    repeat_gate = AsyncMock()
+
+    monkeypatch.setattr(start, '_repeat_referral_channel_gate', repeat_gate)
+
+    await start.cmd_start(message, state, AsyncMock())
+
+    repeat_gate.assert_awaited_once_with(message, state, state.get_data.return_value)
+
+
+@pytest.mark.asyncio
 async def test_back_to_menu_cannot_bypass_required_post_registration_choice():
     callback = AsyncMock()
     callback.message.message_id = 101

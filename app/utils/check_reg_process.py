@@ -6,6 +6,7 @@ from app.states import RegistrationStates
 def is_registration_process(event: TelegramObject, current_state: str | None) -> bool:
     registration_states = [
         RegistrationStates.waiting_for_language.state,
+        RegistrationStates.waiting_for_channel_subscription.state,
         RegistrationStates.waiting_for_rules_accept.state,
         RegistrationStates.waiting_for_privacy_policy_accept.state,
         RegistrationStates.waiting_for_referral_code.state,

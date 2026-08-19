@@ -42,11 +42,11 @@ DB_FRESHNESS_SECONDS = 1800  # 30 min
 
 
 def is_channel_subscription_required_for_user(user) -> bool:
-    """Global channel gate, plus the referral-only retention programme gate."""
+    """Global channel gate, plus the mandatory gate for every referred user."""
     return bool(
         settings.CHANNEL_IS_REQUIRED_SUB
         or (
-            settings.REFERRAL_RETENTION_REWARD_ENABLED
+            settings.is_referral_program_enabled()
             and user is not None
             and getattr(user, 'referred_by_id', None) is not None
         )
