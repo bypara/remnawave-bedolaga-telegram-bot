@@ -55,6 +55,7 @@ CUSTOM_EMOJI_IDS: dict[str, str] = {
     'language': '5388632425314140043',
     'balance_history': '5282843764451195532',
     'balance_topup': '5449683594425410231',
+    'payment_pay': '5271604874419647061',
     'create_invite': '5397916757333654639',
     'show_qr': '5231012545799666522',
     'referral_list': '5440539497383087970',
@@ -206,6 +207,18 @@ def _resolve_icon_name(button: InlineKeyboardButton, plain_text: str) -> str | N
 
     if button.icon_custom_emoji_id:
         return None
+
+    # Provider integrations created before Bot API custom button icons still
+    # build ordinary URL/callback buttons. Give all of them the shared payment
+    # icons without overriding provider-specific icons that are already set.
+    if callback_name.startswith('topup_'):
+        return 'balance_topup'
+    if button.url and (
+        normalized_text.startswith('оплатить')
+        or normalized_text.startswith('pay')
+        or normalized_text.startswith('сплатити')
+    ):
+        return 'payment_pay'
 
     icon_name = CALLBACK_TO_ICON.get(callback_name)
     if icon_name:
