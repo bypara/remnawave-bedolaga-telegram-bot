@@ -681,6 +681,16 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
             )
             return False
 
+        if topup_amount_kopeks < settings.REFERRAL_MINIMUM_TOPUP_KOPEKS:
+            logger.info(
+                'Пополнение меньше реферального минимума, все начисления пропущены',
+                user_id=user_id,
+                referrer_id=referrer.id,
+                topup_amount_kopeks=topup_amount_kopeks,
+                minimum_topup_kopeks=settings.REFERRAL_MINIMUM_TOPUP_KOPEKS,
+            )
+            return True
+
         campaign_id = await get_user_campaign_id(db, user.id)
         prior_reward_payments = await get_referral_reward_payment_count(db, referrer.id, user.id)
         commission_percent = await calculate_referral_commission_percent(
@@ -698,84 +708,11 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
             commission_percent=commission_percent,
             has_made_first_topup=user.has_made_first_topup,
         )
-        qualifies_for_first_bonus = topup_amount_kopeks >= settings.REFERRAL_MINIMUM_TOPUP_KOPEKS
         commission_amount = 0
         if commission_percent > 0:
             commission_amount = int(topup_amount_kopeks * commission_percent / 100)
 
         if not user.has_made_first_topup:
-            if not qualifies_for_first_bonus:
-                logger.info(
-                    'Пополнение на ₽ меньше минимума для первого бонуса, но комиссия будет начислена',
-                    user_id=user_id,
-                    topup_amount_kopeks=topup_amount_kopeks / 100,
-                )
-
-                if commission_amount > 0 and await _is_commission_limit_reached(db, referrer.id, user.id):
-                    return True
-
-                if commission_amount > 0:
-                    balance_ok = await add_user_balance(
-                        db,
-                        referrer,
-                        commission_amount,
-                        f'Комиссия {commission_percent}% с пополнения {user.full_name}',
-                        transaction_type=TransactionType.REFERRAL_REWARD,
-                        bot=bot,
-                    )
-
-                    if balance_ok:
-                        await create_referral_earning(
-                            db=db,
-                            user_id=referrer.id,
-                            referral_id=user.id,
-                            amount_kopeks=commission_amount,
-                            reason='referral_commission_topup',
-                            campaign_id=campaign_id,
-                        )
-
-                        logger.info(
-                            '💰 Комиссия с пополнения: получил ₽ (до первого бонуса)',
-                            telegram_id=referrer.telegram_id,
-                            commission_amount=commission_amount / 100,
-                        )
-
-                        if bot:
-                            if str(referrer.language or '').lower().startswith('en'):
-                                commission_notification = (
-                                    '<tg-emoji emoji-id="5406756500108501710">🆓</tg-emoji> '
-                                    '<b>Referral commission!</b>'
-                                    f'\n\nYour referral <b>{html.escape(user.full_name)}</b> topped up by '
-                                    f'{settings.format_price(topup_amount_kopeks)}'
-                                    f'\n\n<tg-emoji emoji-id="5416081784641168838">🟢</tg-emoji> Your commission '
-                                    f'({commission_percent}%): {settings.format_price(commission_amount)}'
-                                )
-                            else:
-                                commission_notification = (
-                                    '<tg-emoji emoji-id="5406756500108501710">🆓</tg-emoji> '
-                                    '<b>Реферальная комиссия!</b>'
-                                    f'\n\nВаш реферал <b>{html.escape(user.full_name)}</b> пополнил баланс на '
-                                    f'{settings.format_price(topup_amount_kopeks)}'
-                                    f'\n\n<tg-emoji emoji-id="5416081784641168838">🟢</tg-emoji> Ваша комиссия '
-                                    f'({commission_percent}%): {settings.format_price(commission_amount)}'
-                                )
-                            await send_referral_notification(
-                                bot,
-                                referrer.telegram_id,
-                                commission_notification,
-                                user=referrer,
-                                bonus_kopeks=commission_amount,
-                                referral_name=user.full_name,
-                            )
-                    else:
-                        logger.error(
-                            'Не удалось начислить комиссию на баланс, ReferralEarning не создан',
-                            referrer_id=referrer.id,
-                            commission_amount=commission_amount,
-                        )
-
-                return True
-
             user.has_made_first_topup = True
             await db.commit()
 

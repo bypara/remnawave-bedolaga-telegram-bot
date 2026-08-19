@@ -13,7 +13,7 @@ if str(ROOT_DIR) not in sys.path:
 from app.services import referral_service
 
 
-async def test_commission_accrues_before_minimum_first_topup(monkeypatch):
+async def test_no_referral_rewards_before_minimum_first_topup(monkeypatch):
     user = SimpleNamespace(
         id=1,
         telegram_id=101,
@@ -55,19 +55,8 @@ async def test_commission_accrues_before_minimum_first_topup(monkeypatch):
     assert result is True
     assert user.has_made_first_topup is False
 
-    add_user_balance_mock.assert_awaited_once()
-    add_call = add_user_balance_mock.await_args
-    assert add_call is not None
-    assert add_call.args[1] is referrer
-    assert add_call.args[2] == 3750
-    assert 'Комиссия' in add_call.args[3]
-    assert add_call.kwargs.get('bot') is None
-
-    create_referral_earning_mock.assert_awaited_once()
-    earning_call = create_referral_earning_mock.await_args
-    assert earning_call is not None
-    assert earning_call.kwargs['amount_kopeks'] == 3750
-    assert earning_call.kwargs['reason'] == 'referral_commission_topup'
+    add_user_balance_mock.assert_not_awaited()
+    create_referral_earning_mock.assert_not_awaited()
 
 
 async def test_first_topup_inviter_gets_fixed_plus_commission(monkeypatch):
@@ -166,7 +155,7 @@ async def test_recurring_commission_percent_uses_paid_referrals_tier(monkeypatch
     assert percent == 15
 
 
-async def test_second_small_topup_uses_recurring_tier_not_first_payment_percent(monkeypatch):
+async def test_small_topup_after_previous_rewards_still_pays_nothing(monkeypatch):
     user = SimpleNamespace(
         id=1,
         telegram_id=101,
@@ -207,11 +196,8 @@ async def test_second_small_topup_uses_recurring_tier_not_first_payment_percent(
     result = await referral_service.process_referral_topup(db, user.id, 15000)
 
     assert result is True
-    add_user_balance_mock.assert_awaited_once()
-    add_call = add_user_balance_mock.await_args
-    assert add_call is not None
-    assert add_call.args[2] == 2250
-    assert 'Комиссия 15%' in add_call.args[3]
+    add_user_balance_mock.assert_not_awaited()
+    create_referral_earning_mock.assert_not_awaited()
 
 
 @pytest.mark.parametrize(
