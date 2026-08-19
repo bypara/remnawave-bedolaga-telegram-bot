@@ -170,7 +170,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
     escaped_bot_link = html_escape(bot_referral_link, quote=True)
     referral_text += (
         texts.t('REFERRAL_BOT_LINK_TITLE', '🤖 <b>Ссылка на бота:</b>')
-        + f'\n<a href="{escaped_bot_link}">{escaped_bot_link}</a>\n\n'
+        + f'\n<code>{escaped_bot_link}</code>\n\n'
     )
 
     # Show cabinet link if configured
@@ -178,7 +178,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
         escaped_cabinet_link = html_escape(cabinet_referral_link, quote=True)
         referral_text += (
             texts.t('REFERRAL_CABINET_LINK_TITLE', '🌐 <b>Ссылка на кабинет:</b>')
-            + f'\n<a href="{escaped_cabinet_link}">{escaped_cabinet_link}</a>\n\n'
+            + f'\n<code>{escaped_cabinet_link}</code>\n\n'
         )
 
     referral_text += (

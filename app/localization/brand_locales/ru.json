@@ -65,7 +65,7 @@
   "REFERRAL_REWARD_RETENTION": "• Вы получаете {bonus} за реферала, который подписан на канал и не блокирует бота в течение {period}",
   "REFERRAL_BOT_LINK_TITLE": "<tg-emoji emoji-id=\"5257991477358763590\">↗️</tg-emoji> Ссылка на бота:",
   "REFERRAL_CABINET_LINK_TITLE": "<tg-emoji emoji-id=\"5257991477358763590\">↗️</tg-emoji> Ссылка на веб кабинет:",
-  "REFERRAL_CODE_TITLE": "<tg-emoji emoji-id=\"5260341314095947411\">👀</tg-emoji> Ваш код: {code}",
+  "REFERRAL_CODE_TITLE": "<tg-emoji emoji-id=\"5260341314095947411\">👀</tg-emoji> Ваш код: <code>{code}</code>",
   "REFERRAL_INVITE_CREATED_TITLE": "",
   "REFERRAL_INVITE_CREATED_INSTRUCTION": "Нажмите на текст ниже, чтобы скопировать:",
   "REFERRAL_INVITE_TEXT": "Привет! Я использую Hunt VPN и не жалею\n\n— Быстрые сервера\n— Отзывчивая поддержка\n— Самая щедрая реферальная система\n\n👇 Переходи по ссылке:\n{bot_link}",
