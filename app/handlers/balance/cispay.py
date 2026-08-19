@@ -1,21 +1,28 @@
 """Handler for cisPay balance top-up (api.cispay.app)."""
 
-import html
-
 import structlog
 from aiogram import types
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
 from app.keyboards.inline import get_back_keyboard
-from app.keyboards.topup_amounts import get_topup_amount_keyboard
-from app.localization.texts import get_texts
+from app.keyboards.topup_amounts import get_topup_amount_keyboard, get_topup_amount_limits
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+
+from .payment_ui import (
+    build_amount_error,
+    build_payment_create_error,
+    build_payment_created_text,
+    build_payment_keyboard,
+    build_payment_processing_text,
+    build_topup_prompt,
+    build_topup_restriction_keyboard,
+    build_topup_restriction_text,
+)
 
 
 logger = structlog.get_logger(__name__)
@@ -32,19 +39,6 @@ CISPAY_SERVICE_MAP: dict[str, str | None] = {
 
 def _extract_service_type(payment_method: str) -> str | None:
     return CISPAY_SERVICE_MAP.get(payment_method)
-
-
-def _check_topup_restriction(db_user: User, texts) -> InlineKeyboardMarkup | None:
-    """Проверяет ограничение на пополнение."""
-    if not getattr(db_user, 'restriction_topup', False):
-        return None
-
-    keyboard = []
-    support_url = settings.get_support_contact_url()
-    if support_url:
-        keyboard.append([InlineKeyboardButton(text='\U0001f198 Обжаловать', url=support_url)])
-    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def _display_name_for_method(payment_method: str) -> str:
@@ -64,7 +58,6 @@ async def _create_cispay_payment_and_respond(
     payment_method_type: str | None = None,
 ):
     """Создаёт платёж cisPay и отправляет ссылку на страницу оплаты пользователю."""
-    texts = get_texts(db_user.language)
     amount_rub = amount_kopeks / 100
 
     payment_service = PaymentService()
@@ -84,10 +77,7 @@ async def _create_cispay_payment_and_respond(
     )
 
     if not result:
-        error_text = texts.t(
-            'PAYMENT_CREATE_ERROR',
-            'Не удалось создать платёж. Попробуйте позже.',
-        )
+        error_text = build_payment_create_error(db_user.language)
         if edit_message:
             await message_or_callback.edit_text(
                 error_text,
@@ -95,45 +85,23 @@ async def _create_cispay_payment_and_respond(
                 parse_mode='HTML',
             )
         else:
-            await message_or_callback.answer(error_text, parse_mode='HTML')
+            await message_or_callback.answer(
+                error_text,
+                reply_markup=get_back_keyboard(db_user.language),
+                parse_mode='HTML',
+            )
         return
 
     payment_url = result.get('payment_url')
-    display_name = settings.get_cispay_display_name()
-
-    pay_button_text = texts.t('PAY_BUTTON', '\U0001f4b3 Оплатить {amount}₽').format(
-        amount=f'{amount_rub:.0f}',
+    display_name = _display_name_for_method(
+        f'cispay_{payment_method_type}' if payment_method_type else 'cispay'
     )
-
-    keyboard_buttons: list[list[InlineKeyboardButton]] = []
-    if payment_url:
-        keyboard_buttons.append([InlineKeyboardButton(text=pay_button_text, url=payment_url)])
-    keyboard_buttons.append(
-        [
-            InlineKeyboardButton(
-                text=texts.t('BACK_BUTTON', '◀️ Назад'),
-                callback_data='menu_balance',
-            )
-        ]
-    )
-    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+    keyboard = build_payment_keyboard(db_user.language, payment_url, amount_kopeks)
 
     if payment_url:
-        response_text = texts.t(
-            'CISPAY_PAYMENT_CREATED',
-            '\U0001f4b3 <b>Оплата через {name}</b>\n\n'
-            'Сумма: <b>{amount}₽</b>\n\n'
-            'Нажмите кнопку ниже, чтобы перейти на страницу оплаты.\n'
-            'Счёт действителен 30 минут.\n'
-            'Баланс будет пополнен автоматически после подтверждения платежа.',
-        ).format(name=display_name, amount=f'{amount_rub:.2f}')
+        response_text = build_payment_created_text(db_user.language, display_name, amount_kopeks)
     else:
-        response_text = texts.t(
-            'CISPAY_PAYMENT_PROCESSING',
-            '\U0001f4b3 <b>Платёж создан через {name}</b>\n\n'
-            'Сумма: <b>{amount}₽</b>\n\n'
-            'Платёж в обработке. Ссылка на оплату будет отправлена отдельным сообщением.',
-        ).format(name=display_name, amount=f'{amount_rub:.2f}')
+        response_text = build_payment_processing_text(db_user.language, display_name, amount_kopeks)
 
     if edit_message:
         await message_or_callback.edit_text(response_text, reply_markup=keyboard, parse_mode='HTML')
@@ -152,28 +120,22 @@ async def process_cispay_payment_amount(
     state: FSMContext,
 ):
     """Обрабатывает сумму, введённую пользователем для cisPay."""
-    texts = get_texts(db_user.language)
-
-    restriction_kb = _check_topup_restriction(db_user, texts)
-    if restriction_kb:
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+    if getattr(db_user, 'restriction_topup', False):
         await message.answer(
-            f'\U0001f6ab <b>Пополнение ограничено</b>\n\n{reason}',
+            build_topup_restriction_text(db_user.language, getattr(db_user, 'restriction_reason', None)),
             parse_mode='HTML',
-            reply_markup=restriction_kb,
+            reply_markup=build_topup_restriction_keyboard(db_user.language),
         )
         await state.clear()
         return
 
-    min_amount = settings.CISPAY_MIN_AMOUNT_KOPEKS
-    max_amount = settings.CISPAY_MAX_AMOUNT_KOPEKS
+    data = await state.get_data()
+    payment_method = data.get('payment_method', 'cispay')
+    min_amount, max_amount = await get_topup_amount_limits(payment_method, db)
 
     if amount_kopeks < min_amount:
         await message.answer(
-            texts.t(
-                'PAYMENT_AMOUNT_TOO_LOW',
-                'Минимальная сумма пополнения: {min_amount}₽',
-            ).format(min_amount=min_amount // 100),
+            build_amount_error(db_user.language, min_amount, minimum=True),
             reply_markup=get_back_keyboard(db_user.language),
             parse_mode='HTML',
         )
@@ -181,17 +143,12 @@ async def process_cispay_payment_amount(
 
     if amount_kopeks > max_amount:
         await message.answer(
-            texts.t(
-                'PAYMENT_AMOUNT_TOO_HIGH',
-                'Максимальная сумма пополнения: {max_amount}₽',
-            ).format(max_amount=max_amount // 100),
+            build_amount_error(db_user.language, max_amount, minimum=False),
             reply_markup=get_back_keyboard(db_user.language),
             parse_mode='HTML',
         )
         return
 
-    data = await state.get_data()
-    payment_method = data.get('payment_method', 'cispay')
     payment_method_type = _extract_service_type(payment_method)
 
     await state.clear()
@@ -213,39 +170,29 @@ async def _start_cispay_topup_impl(
     payment_method: str,
 ):
     """Стартует FSM ввода суммы для cisPay."""
-    texts = get_texts(db_user.language)
-
-    restriction_kb = _check_topup_restriction(db_user, texts)
-    if restriction_kb:
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+    if getattr(db_user, 'restriction_topup', False):
         await callback.message.edit_text(
-            f'\U0001f6ab <b>Пополнение ограничено</b>\n\n{reason}',
+            build_topup_restriction_text(db_user.language, getattr(db_user, 'restriction_reason', None)),
             parse_mode='HTML',
-            reply_markup=restriction_kb,
+            reply_markup=build_topup_restriction_keyboard(db_user.language),
         )
         return
 
     await state.set_state(BalanceStates.waiting_for_amount)
     await state.update_data(payment_method=payment_method)
 
-    min_amount = settings.CISPAY_MIN_AMOUNT_KOPEKS // 100
-    max_amount = settings.CISPAY_MAX_AMOUNT_KOPEKS // 100
+    min_amount_kopeks, max_amount_kopeks = await get_topup_amount_limits(payment_method)
 
     display_name = _display_name_for_method(payment_method)
 
     keyboard = await get_topup_amount_keyboard(payment_method, db_user.language)
 
     await callback.message.edit_text(
-        texts.t(
-            'CISPAY_ENTER_AMOUNT',
-            '\U0001f4b3 <b>Пополнение через {name}</b>\n\n'
-            'Введите сумму пополнения в рублях.\n\n'
-            'Минимум: {min_amount}₽\n'
-            'Максимум: {max_amount}₽',
-        ).format(
-            name=display_name,
-            min_amount=min_amount,
-            max_amount=f'{max_amount:,}'.replace(',', ' '),
+        build_topup_prompt(
+            db_user.language,
+            display_name,
+            min_amount_kopeks,
+            max_amount_kopeks,
         ),
         parse_mode='HTML',
         reply_markup=keyboard,
