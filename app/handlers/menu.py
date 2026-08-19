@@ -406,12 +406,13 @@ async def show_info_menu(
     prompt = texts.t('MENU_INFO_PROMPT', 'Выберите раздел:')
     caption = f'{header}\n\n{prompt}' if prompt else header
 
-    privacy_enabled = is_visible_in_bot(
-        settings.PRIVACY_POLICY_DISPLAY_MODE
-    ) and await PrivacyPolicyService.is_policy_enabled(db, db_user.language)
-    public_offer_enabled = is_visible_in_bot(
-        settings.PUBLIC_OFFER_DISPLAY_MODE
-    ) and await PublicOfferService.is_offer_enabled(db, db_user.language)
+    from app.services.legal_document_link_service import get_active_legal_document_links
+
+    legal_links = await get_active_legal_document_links(db, db_user.language)
+    privacy_policy_url = (
+        legal_links.privacy_policy if is_visible_in_bot(settings.PRIVACY_POLICY_DISPLAY_MODE) else None
+    )
+    public_offer_url = legal_links.public_offer if is_visible_in_bot(settings.PUBLIC_OFFER_DISPLAY_MODE) else None
     faq_enabled = is_visible_in_bot(settings.FAQ_DISPLAY_MODE) and await FaqService.is_enabled(db, db_user.language)
     rules_enabled = is_visible_in_bot(settings.SERVICE_RULES_DISPLAY_MODE)
     promo_groups_available = await has_auto_assign_promo_groups(db)
@@ -426,8 +427,8 @@ async def show_info_menu(
         caption=caption,
         keyboard=get_info_menu_keyboard(
             language=db_user.language,
-            show_privacy_policy=privacy_enabled,
-            show_public_offer=public_offer_enabled,
+            privacy_policy_url=privacy_policy_url,
+            public_offer_url=public_offer_url,
             show_faq=faq_enabled,
             show_promo_groups=promo_groups_available,
             show_rules=rules_enabled,

@@ -82,3 +82,43 @@ def test_require_language_rejects_unknown(monkeypatch):
         admin_legal_pages._require_language('xx')
     assert exc_info.value.status_code == 422
     assert exc_info.value.detail == 'Unsupported language: xx'
+
+
+def test_require_document_url_accepts_http_and_https():
+    from app.cabinet.routes import admin_legal_pages
+
+    assert (
+        admin_legal_pages._require_document_url(
+            ' https://example.com/privacy ',
+            document='Privacy policy',
+            enabled=True,
+        )
+        == 'https://example.com/privacy'
+    )
+    assert (
+        admin_legal_pages._require_document_url(
+            'http://example.com/offer',
+            document='Public offer',
+            enabled=True,
+        )
+        == 'http://example.com/offer'
+    )
+
+
+def test_require_document_url_rejects_text_for_enabled_document():
+    from app.cabinet.routes import admin_legal_pages
+
+    with pytest.raises(HTTPException) as exc_info:
+        admin_legal_pages._require_document_url(
+            'Полный текст вместо ссылки',
+            document='Privacy policy',
+            enabled=True,
+        )
+
+    assert exc_info.value.status_code == 422
+
+
+def test_require_document_url_allows_empty_disabled_document():
+    from app.cabinet.routes import admin_legal_pages
+
+    assert admin_legal_pages._require_document_url('', document='Public offer', enabled=False) == ''

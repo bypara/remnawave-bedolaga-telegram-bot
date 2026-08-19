@@ -10,11 +10,12 @@ from app.config import settings
 from app.database.models import User
 from app.handlers.admin.display_mode_button import cycle_display_mode_setting
 from app.localization.texts import get_texts
+from app.services.legal_document_link_service import extract_legal_document_url, normalize_legal_document_url
 from app.services.public_offer_service import PublicOfferService
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 from app.utils.display_mode import display_mode_label
-from app.utils.validators import get_html_help_text, validate_html_tags
+from app.utils.validators import get_html_help_text
 
 
 logger = structlog.get_logger(__name__)
@@ -41,7 +42,8 @@ async def _build_overview(
     )
 
     normalized_language = PublicOfferService.normalize_language(db_user.language)
-    has_content = bool(offer and offer.content and offer.content.strip())
+    offer_url = extract_legal_document_url(offer.content if offer else None)
+    has_url = offer_url is not None
 
     description = texts.t(
         'ADMIN_PUBLIC_OFFER_DESCRIPTION',
@@ -52,7 +54,7 @@ async def _build_overview(
         'ADMIN_PUBLIC_OFFER_STATUS_DISABLED',
         '⚠️ Показ оферты выключен или текст отсутствует.',
     )
-    if offer and offer.is_enabled and has_content:
+    if offer and offer.is_enabled and has_url:
         status_text = texts.t(
             'ADMIN_PUBLIC_OFFER_STATUS_ENABLED',
             '✅ Оферта активна и показывается пользователям.',
@@ -73,18 +75,14 @@ async def _build_overview(
 
     preview_block = texts.t(
         'ADMIN_PUBLIC_OFFER_PREVIEW_EMPTY',
-        'Текст ещё не задан.',
+        'Ссылка ещё не задана.',
     )
-    if has_content:
+    if has_url:
         preview_title = texts.t(
             'ADMIN_PUBLIC_OFFER_PREVIEW_TITLE',
-            '<b>Превью текста:</b>',
+            '<b>Текущая ссылка:</b>',
         )
-        preview_raw = offer.content.strip()
-        preview_trimmed = preview_raw[:400]
-        if len(preview_raw) > 400:
-            preview_trimmed += '...'
-        preview_block = f'{preview_title}\n<code>{html.escape(preview_trimmed)}</code>'
+        preview_block = f'{preview_title}\n<code>{html.escape(offer_url)}</code>'
 
     language_block = texts.t(
         'ADMIN_PUBLIC_OFFER_LANGUAGE',
@@ -122,22 +120,22 @@ async def _build_overview(
             types.InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PUBLIC_OFFER_EDIT_BUTTON',
-                    '✏️ Изменить текст',
+                    '✏️ Изменить ссылку',
                 ),
                 callback_data='admin_public_offer_edit',
             )
         ]
     )
 
-    if has_content:
+    if has_url:
         buttons.append(
             [
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'ADMIN_PUBLIC_OFFER_VIEW_BUTTON',
-                        '👀 Просмотреть текущий текст',
+                        '🔗 Открыть текущую ссылку',
                     ),
-                    callback_data='admin_public_offer_view',
+                    url=offer_url,
                 )
             ]
         )
@@ -169,18 +167,6 @@ async def _build_overview(
                     '👁 Отображение: {mode}',
                 ).format(mode=display_mode_label(settings.PUBLIC_OFFER_DISPLAY_MODE)),
                 callback_data='admin_public_offer_display_mode',
-            )
-        ]
-    )
-
-    buttons.append(
-        [
-            types.InlineKeyboardButton(
-                text=texts.t(
-                    'ADMIN_PUBLIC_OFFER_HTML_HELP',
-                    'ℹ️ HTML помощь',
-                ),
-                callback_data='admin_public_offer_help',
             )
         ]
     )
@@ -283,26 +269,25 @@ async def start_edit_public_offer(
     )
 
     current_preview = ''
-    if offer and offer.content:
-        preview = offer.content.strip()[:400]
-        if len(offer.content.strip()) > 400:
-            preview += '...'
+    current_url = extract_legal_document_url(offer.content if offer else None)
+    if current_url:
+        preview = current_url
         current_preview = (
             texts.t(
                 'ADMIN_PUBLIC_OFFER_CURRENT_PREVIEW',
-                'Текущий текст (превью):',
+                'Текущая ссылка:',
             )
             + f'\n<code>{html.escape(preview)}</code>\n\n'
         )
 
     prompt = texts.t(
         'ADMIN_PUBLIC_OFFER_EDIT_PROMPT',
-        'Отправьте новый текст публичной оферты. Допускается HTML-разметка.',
+        'Отправьте прямую ссылку на публичную оферту.',
     )
 
     hint = texts.t(
         'ADMIN_PUBLIC_OFFER_EDIT_HINT',
-        'Используйте /html_help для справки по тегам.',
+        'Поддерживаются ссылки http:// и https://.',
     )
 
     message_text = (
@@ -312,15 +297,6 @@ async def start_edit_public_offer(
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t(
-                        'ADMIN_PUBLIC_OFFER_HTML_HELP',
-                        'ℹ️ HTML помощь',
-                    ),
-                    callback_data='admin_public_offer_help',
-                )
-            ],
             [
                 types.InlineKeyboardButton(
                     text=texts.t('ADMIN_PUBLIC_OFFER_CANCEL', '❌ Отмена'),
@@ -366,30 +342,30 @@ async def process_public_offer_edit(
     db: AsyncSession,
 ):
     texts = get_texts(db_user.language)
-    new_text = message.text or ''
+    new_url = (message.text or '').strip()
 
-    if len(new_text) > 4000:
+    if len(new_url) > 2048:
         await message.answer(
             texts.t(
                 'ADMIN_PUBLIC_OFFER_TOO_LONG',
-                '❌ Текст оферты слишком длинный. Максимум 4000 символов.',
+                '❌ Ссылка слишком длинная. Максимум 2048 символов.',
             )
         )
         return
 
-    is_valid, error_message = validate_html_tags(new_text)
-    if not is_valid:
+    normalized_url = normalize_legal_document_url(new_url)
+    if not normalized_url:
         await message.answer(
             texts.t(
-                'ADMIN_PUBLIC_OFFER_HTML_ERROR',
-                '❌ Ошибка в HTML: {error}',
-            ).format(error=error_message)
+                'ADMIN_PUBLIC_OFFER_URL_ERROR',
+                '❌ Укажите корректную ссылку, начинающуюся с http:// или https://.',
+            )
         )
         return
 
-    await PublicOfferService.save_offer(db, db_user.language, new_text)
+    await PublicOfferService.save_offer(db, db_user.language, normalized_url)
     logger.info(
-        'Админ обновил текст публичной оферты (символов)', telegram_id=db_user.telegram_id, new_text_count=len(new_text)
+        'Админ обновил ссылку публичной оферты', telegram_id=db_user.telegram_id, url=normalized_url
     )
     await state.clear()
 

@@ -6,6 +6,7 @@ import pytest
 from app.config import settings
 from app.handlers import start
 from app.keyboards.inline import get_post_registration_keyboard
+from app.localization.texts import get_texts
 
 
 def _trial_user(**overrides):
@@ -26,7 +27,10 @@ def test_post_registration_keyboard_opens_trial_details_before_activation():
         ['menu_trial'],
         ['back_to_menu'],
     ]
-    assert keyboard.inline_keyboard[0][0].text == 'Попробовать тестовую подписку'
+    assert keyboard.inline_keyboard[0][0].text == get_texts('ru').t(
+        'POST_REGISTRATION_TRIAL_BUTTON',
+        'Попробовать тестовую подписку',
+    )
     assert keyboard.inline_keyboard[0][0].style == 'danger'
     assert keyboard.inline_keyboard[1][0].text == 'Я пока тут осмотрюсь'
 
@@ -70,3 +74,26 @@ async def test_language_selection_is_removed_without_confirmation_message(monkey
     callback.message.answer.assert_not_awaited()
     callback.message.edit_reply_markup.assert_not_awaited()
     continue_registration.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_registration_continues_without_separate_legal_acceptance(monkeypatch):
+    message = AsyncMock()
+    message.from_user.id = 42
+    state = AsyncMock()
+    state.get_data.return_value = {'language': 'ru'}
+    complete_registration = AsyncMock()
+
+    monkeypatch.setattr(settings, 'SKIP_REFERRAL_CODE', True)
+    monkeypatch.setattr(start, 'complete_registration', complete_registration)
+
+    await start._continue_registration_after_language(
+        message=message,
+        callback=None,
+        state=state,
+        db=AsyncMock(),
+    )
+
+    complete_registration.assert_awaited_once()
+    state.set_state.assert_not_awaited()
+    message.answer.assert_not_awaited()

@@ -8,7 +8,7 @@ from typing import Any
 import structlog
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -900,16 +900,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
             from_user_id=message.from_user.id,
         )
 
-        if current_state != RegistrationStates.waiting_for_referral_code.state:
-            language = data.get('language', DEFAULT_LANGUAGE)
-            texts = get_texts(language)
-
-            rules_text = _format_registration_rules_text(await get_rules(language), texts)
-            await answer_long_text(message, rules_text, reply_markup=get_rules_keyboard(language))
-            await state.set_state(RegistrationStates.waiting_for_rules_accept)
-            logger.info('📋 Правила отправлены после ввода реферального кода')
-        else:
-            await complete_registration(message, state, db)
+        await complete_registration(message, state, db)
 
         return True
 
@@ -935,16 +926,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
             from_user_id=message.from_user.id,
         )
 
-        if current_state != RegistrationStates.waiting_for_referral_code.state:
-            language = data.get('language', DEFAULT_LANGUAGE)
-            texts = get_texts(language)
-
-            rules_text = _format_registration_rules_text(await get_rules(language), texts)
-            await answer_long_text(message, rules_text, reply_markup=get_rules_keyboard(language))
-            await state.set_state(RegistrationStates.waiting_for_rules_accept)
-            logger.info('📋 Правила отправлены после принятия промокода')
-        else:
-            await complete_registration(message, state, db)
+        await complete_registration(message, state, db)
 
         return True
 
@@ -1027,45 +1009,34 @@ async def _continue_registration_after_language(
         else:
             await complete_registration(message, state, db)
 
-    if settings.SKIP_RULES_ACCEPT:
-        logger.info('⚙️ LANGUAGE: SKIP_RULES_ACCEPT включен - пропускаем правила')
+    # Согласие больше не запрашивается отдельными экранами во время регистрации.
+    # Пользователь видит документы и принимает их непосредственно перед активацией
+    # триала или подтверждением покупки — тем действием, к которому относится согласие.
+    logger.info('⚙️ LANGUAGE: юридические экраны регистрации отключены')
 
-        if data.get('referral_code'):
-            referrer = await get_user_by_referral_code(db, data['referral_code'])
-            if referrer:
-                data['referrer_id'] = referrer.id
-                await state.set_data(data)
-                logger.info('✅ LANGUAGE: Реферер найден', referrer_id=referrer.id)
+    if data.get('referral_code'):
+        referrer = await get_user_by_referral_code(db, data['referral_code'])
+        if referrer:
+            data['referrer_id'] = referrer.id
+            await state.set_data(data)
+            logger.info('✅ LANGUAGE: Реферер найден', referrer_id=referrer.id)
 
-        if settings.SKIP_REFERRAL_CODE or data.get('referral_code') or data.get('referrer_id'):
+    if settings.SKIP_REFERRAL_CODE or data.get('referral_code') or data.get('referrer_id'):
+        await _complete_registration_wrapper()
+    else:
+        try:
+            await target_message.answer(
+                texts.t(
+                    'REFERRAL_CODE_QUESTION',
+                    "У вас есть реферальный код? Введите его или нажмите 'Пропустить'",
+                ),
+                reply_markup=get_referral_code_keyboard(language),
+            )
+            await state.set_state(RegistrationStates.waiting_for_referral_code)
+            logger.info('🔍 LANGUAGE: Ожидание ввода реферального кода')
+        except Exception as error:
+            logger.error('Ошибка при показе вопроса о реферальном коде после выбора языка', error=error)
             await _complete_registration_wrapper()
-        else:
-            try:
-                await target_message.answer(
-                    texts.t(
-                        'REFERRAL_CODE_QUESTION',
-                        "У вас есть реферальный код? Введите его или нажмите 'Пропустить'",
-                    ),
-                    reply_markup=get_referral_code_keyboard(language),
-                )
-                await state.set_state(RegistrationStates.waiting_for_referral_code)
-                logger.info('🔍 LANGUAGE: Ожидание ввода реферального кода')
-            except Exception as error:
-                logger.error('Ошибка при показе вопроса о реферальном коде после выбора языка', error=error)
-                await _complete_registration_wrapper()
-        return
-
-    rules_text = _format_registration_rules_text(await get_rules(language), texts)
-    try:
-        await answer_long_text(target_message, rules_text, reply_markup=get_rules_keyboard(language))
-    except TelegramForbiddenError:
-        logger.warning(
-            '⚠️ Пользователь заблокировал бота, пропускаем отправку правил',
-            from_user_id=callback.from_user.id if callback else message.from_user.id,
-        )
-        return
-    await state.set_state(RegistrationStates.waiting_for_rules_accept)
-    logger.info('📋 LANGUAGE: Правила отправлены после выбора языка')
 
 
 async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession, db_user=None):
@@ -3066,7 +3037,10 @@ async def required_sub_channel_check(
             state_data['language'] = language
             await state.set_data(state_data)
 
-            if settings.SKIP_RULES_ACCEPT:
+            # Канальная проверка может завершать регистрацию отдельным путём.
+            # Здесь также не возвращаем старые экраны принятия документов.
+            registration_legal_prompts_enabled = False
+            if not registration_legal_prompts_enabled:
                 if settings.SKIP_REFERRAL_CODE or state_data.get('referral_code') or state_data.get('referrer_id'):
                     from app.utils.user_utils import generate_unique_referral_code
 

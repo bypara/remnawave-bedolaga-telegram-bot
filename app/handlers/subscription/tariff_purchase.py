@@ -26,6 +26,10 @@ from app.database.database import AsyncSessionLocal
 from app.database.models import Tariff, Transaction, TransactionType, User
 from app.localization.texts import Texts, get_texts
 from app.services.admin_notification_service import AdminNotificationService
+from app.services.legal_document_link_service import (
+    build_implicit_consent_notice,
+    record_implicit_legal_consent,
+)
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 from app.utils.decorators import error_handler
@@ -34,6 +38,16 @@ from app.utils.promo_offer import get_user_active_promo_discount_percent
 
 
 logger = structlog.get_logger(__name__)
+
+
+async def _append_purchase_consent_notice(db: AsyncSession, texts: Texts, message: str) -> str:
+    notice = await build_implicit_consent_notice(
+        db,
+        texts,
+        action_key='LEGAL_ACTION_CONFIRM_PURCHASE',
+        action_fallback='«Подтвердить покупку»',
+    )
+    return f'{message}\n\n{notice}' if notice else message
 
 
 def _format_gb(value: float | int) -> str:
@@ -931,8 +945,7 @@ async def select_tariff(
         traffic = format_traffic(tariff.traffic_limit_gb)
 
         if user_balance >= daily_price:
-            await callback.message.edit_text(
-                texts.t(
+            confirmation_text = texts.t(
                     'TARIFF_PURCHASE_DAILY_CONFIRM',
                     '✅ <b>Подтверждение покупки</b>\n\n'
                     '📦 Тариф: <b>{name}</b>\n'
@@ -950,9 +963,13 @@ async def select_tariff(
                     price=format_price_kopeks(daily_price),
                     discount=discount_text,
                     balance=format_price_kopeks(user_balance),
-                ),
+                )
+            confirmation_text = await _append_purchase_consent_notice(db, texts, confirmation_text)
+            await callback.message.edit_text(
+                confirmation_text,
                 reply_markup=get_daily_tariff_confirm_keyboard(tariff_id, db_user.language),
                 parse_mode='HTML',
+                disable_web_page_preview=True,
             )
         else:
             missing = daily_price - user_balance
@@ -1618,8 +1635,7 @@ async def select_tariff_period(
                 'TARIFF_PURCHASE_DISCOUNT_SHORT_LINE', '\n🎁 Скидка: {percent}% (-{amount})'
             ).format(percent=discount_percent, amount=format_price_kopeks(total_discount))
 
-        await callback.message.edit_text(
-            texts.t(
+        confirmation_text = texts.t(
                 'SUBSCRIPTION_PURCHASE_CONFIRM_TEXT',
                 (
                     '✅ <b>Подтверждение покупки</b>\n\n'
@@ -1641,9 +1657,13 @@ async def select_tariff_period(
                 total=format_price_kopeks(final_price),
                 balance=format_price_kopeks(user_balance),
                 balance_after=format_price_kopeks(user_balance - final_price),
-            ),
+            )
+        confirmation_text = await _append_purchase_consent_notice(db, texts, confirmation_text)
+        await callback.message.edit_text(
+            confirmation_text,
             reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language),
             parse_mode='HTML',
+            disable_web_page_preview=True,
         )
     else:
         # Недостаточно средств - сохраняем корзину для автопокупки
@@ -1724,6 +1744,13 @@ async def confirm_tariff_purchase(
     if str(period) not in (tariff.period_prices or {}):
         await callback.answer(texts.t('TARIFF_PURCHASE_PERIOD_UNAVAILABLE', 'Период недоступен'), show_alert=True)
         return
+
+    await record_implicit_legal_consent(
+        db,
+        db_user,
+        language=db_user.language,
+        source='bot_purchase',
+    )
 
     # Lock user BEFORE price computation to prevent TOCTOU on promo offer
     from app.database.crud.user import lock_user_for_pricing
@@ -2172,6 +2199,13 @@ async def confirm_daily_tariff_purchase(
     if daily_price <= 0:
         await callback.answer(texts.t('TARIFF_PURCHASE_INVALID_PRICE', 'Некорректная цена тарифа'), show_alert=True)
         return
+
+    await record_implicit_legal_consent(
+        db,
+        db_user,
+        language=db_user.language,
+        source='bot_purchase',
+    )
 
     # Lock user BEFORE price computation to prevent TOCTOU on promo offer
     from app.database.crud.user import lock_user_for_pricing
@@ -5319,8 +5353,7 @@ async def return_to_saved_tariff_cart(
     if cart_mode == 'daily_tariff_purchase':
         daily_price = cart_data.get('daily_price_kopeks', total_price)
 
-        await callback.message.edit_text(
-            texts.t(
+        confirmation_text = texts.t(
                 'TARIFF_PURCHASE_DAILY_CART_CONFIRM',
                 '✅ <b>Подтверждение покупки</b>\n\n'
                 '📦 Тариф: <b>{name}</b>\n'
@@ -5337,9 +5370,13 @@ async def return_to_saved_tariff_cart(
                 price=format_price_kopeks(daily_price),
                 balance=format_price_kopeks(user_balance),
                 after=format_price_kopeks(user_balance - daily_price),
-            ),
+            )
+        confirmation_text = await _append_purchase_consent_notice(db, texts, confirmation_text)
+        await callback.message.edit_text(
+            confirmation_text,
             reply_markup=get_daily_tariff_confirm_keyboard(tariff_id, db_user.language),
             parse_mode='HTML',
+            disable_web_page_preview=True,
         )
     elif cart_mode == 'extend':
         period = cart_data.get('period_days', 30)
@@ -5412,8 +5449,7 @@ async def return_to_saved_tariff_cart(
                 amount=format_price_kopeks(original_price - total_price),
             )
 
-        await callback.message.edit_text(
-            texts.t(
+        confirmation_text = texts.t(
                 'SUBSCRIPTION_PURCHASE_CONFIRM_TEXT',
                 (
                     '✅ <b>Подтверждение покупки</b>\n\n'
@@ -5432,9 +5468,13 @@ async def return_to_saved_tariff_cart(
                 price=format_price_kopeks(total_price),
                 balance=format_price_kopeks(user_balance),
                 balance_after=format_price_kopeks(user_balance - total_price),
-            ),
+            )
+        confirmation_text = await _append_purchase_consent_notice(db, texts, confirmation_text)
+        await callback.message.edit_text(
+            confirmation_text,
             reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language),
             parse_mode='HTML',
+            disable_web_page_preview=True,
         )
 
     await callback.answer(texts.t('TARIFF_PURCHASE_CART_RESTORED', '✅ Корзина восстановлена!'))
@@ -5460,6 +5500,13 @@ async def purchase_tariff_with_sbp(
     if not tariff or not tariff.is_active:
         await callback.answer(texts.t('TARIFF_PURCHASE_UNAVAILABLE', 'Тариф недоступен'), show_alert=True)
         return
+
+    await record_implicit_legal_consent(
+        db,
+        db_user,
+        language=db_user.language,
+        source='bot_purchase',
+    )
 
     from app.services.payment.platega import purchase_tariff_with_sbp_recurring
 

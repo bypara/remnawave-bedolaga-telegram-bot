@@ -530,7 +530,7 @@ async def select_traffic(callback: types.CallbackQuery, state: FSMContext, db_us
         await callback.answer()
         return
 
-    if await present_subscription_summary(callback, state, db_user, texts):
+    if await present_subscription_summary(callback, state, db_user, db, texts):
         await callback.answer()
 
 
