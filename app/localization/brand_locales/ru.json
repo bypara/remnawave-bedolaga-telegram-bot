@@ -62,6 +62,7 @@
   "REFERRAL_REWARD_INVITER": "• Вы получаете при первом пополнении реферала: {bonus}",
   "REFERRAL_REWARD_COMMISSION": "• Комиссия с каждого пополнения реферала: {percent}%",
   "REFERRAL_REWARD_COMMISSION_LIMITED": "• Комиссия с первых {max_payments} пополнений реферала: {percent}%",
+  "REFERRAL_REWARD_RETENTION": "• Вы получаете {bonus} за реферала, который подписан на канал и не блокирует бота в течение {period}",
   "REFERRAL_BOT_LINK_TITLE": "<tg-emoji emoji-id=\"5257991477358763590\">↗️</tg-emoji> Ссылка на бота:",
   "REFERRAL_CABINET_LINK_TITLE": "<tg-emoji emoji-id=\"5257991477358763590\">↗️</tg-emoji> Ссылка на веб кабинет:",
   "REFERRAL_CODE_TITLE": "<tg-emoji emoji-id=\"5260341314095947411\">👀</tg-emoji> Ваш код: {code}",

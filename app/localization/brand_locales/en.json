@@ -62,6 +62,7 @@
   "REFERRAL_REWARD_INVITER": "• You receive after a referral's first top-up: {bonus}",
   "REFERRAL_REWARD_COMMISSION": "• Commission from every referral top-up: {percent}%",
   "REFERRAL_REWARD_COMMISSION_LIMITED": "• Commission from a referral's first {max_payments} top-ups: {percent}%",
+  "REFERRAL_REWARD_RETENTION": "• You receive {bonus} for a referral who remains subscribed to the channel and does not block the bot for {period}",
   "REFERRAL_BOT_LINK_TITLE": "<tg-emoji emoji-id=\"5257991477358763590\">↗️</tg-emoji> Bot link:",
   "REFERRAL_CABINET_LINK_TITLE": "<tg-emoji emoji-id=\"5257991477358763590\">↗️</tg-emoji> Web dashboard link:",
   "REFERRAL_CODE_TITLE": "<tg-emoji emoji-id=\"5260341314095947411\">👀</tg-emoji> Your code: {code}",

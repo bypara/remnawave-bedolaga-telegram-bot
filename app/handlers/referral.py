@@ -18,6 +18,7 @@ from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
 from app.services.referral_withdrawal_service import referral_withdrawal_service
 from app.states import ReferralWithdrawalStates
+from app.utils.formatters import format_days_declension
 from app.utils.photo_message import edit_or_answer_photo
 from app.utils.user_utils import (
     get_detailed_referral_list,
@@ -28,6 +29,75 @@ from app.utils.user_utils import (
 
 
 logger = structlog.get_logger(__name__)
+
+
+def _build_referral_stats_text(texts, summary: dict) -> str:
+    return (
+        texts.t('REFERRAL_STATS_HEADER', '📊 <b>Ваша статистика:</b>')
+        + '\n'
+        + texts.t('REFERRAL_STATS_INVITED', '• Приглашено пользователей: <b>{count}</b>').format(
+            count=summary['invited_count']
+        )
+        + '\n'
+        + texts.t('REFERRAL_STATS_FIRST_TOPUPS', '• Сделали первое пополнение: <b>{count}</b>').format(
+            count=summary['paid_referrals_count']
+        )
+        + '\n'
+        + texts.t('REFERRAL_STATS_ACTIVE', '• Активных рефералов: <b>{count}</b>').format(
+            count=summary['active_referrals_count']
+        )
+        + '\n'
+        + texts.t('REFERRAL_STATS_CONVERSION', '• Конверсия: <b>{rate}%</b>').format(
+            rate=summary['conversion_rate']
+        )
+        + '\n'
+        + texts.t('REFERRAL_STATS_TOTAL_EARNED', '• Заработано всего: <b>{amount}</b>').format(
+            amount=texts.format_price(summary['total_earned_kopeks'])
+        )
+        + '\n'
+        + texts.t('REFERRAL_STATS_MONTH_EARNED', '• За последний месяц: <b>{amount}</b>').format(
+            amount=texts.format_price(summary['month_earned_kopeks'])
+        )
+    )
+
+
+def _get_referral_qr_path(user_id: int, referral_link: str) -> Path:
+    qr_dir = Path('data') / 'referral_qr'
+    qr_dir.mkdir(parents=True, exist_ok=True)
+
+    link_hash = hashlib.md5(referral_link.encode(), usedforsecurity=False).hexdigest()[:8]
+    file_path = qr_dir / f'{user_id}_{link_hash}.png'
+    if not file_path.exists():
+        image = qrcode.make(referral_link)
+        image.save(file_path)
+    return file_path
+
+
+async def _show_referral_screen_with_qr(
+    callback: types.CallbackQuery,
+    *,
+    qr_path: Path,
+    caption: str,
+    keyboard: types.InlineKeyboardMarkup,
+) -> None:
+    photo = FSInputFile(qr_path)
+    media = types.InputMediaPhoto(media=photo, caption=caption, parse_mode='HTML')
+
+    try:
+        await callback.message.edit_media(media, reply_markup=keyboard)
+    except TelegramBadRequest as error:
+        if 'message is not modified' in str(error).lower():
+            return
+        try:
+            await callback.message.delete()
+        except TelegramBadRequest:
+            pass
+        await callback.message.answer_photo(
+            FSInputFile(qr_path),
+            caption=caption,
+            reply_markup=keyboard,
+            parse_mode='HTML',
+        )
 
 
 async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
@@ -43,46 +113,12 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
         await callback.answer(texts.t('REFERRAL_CODE_NOT_ASSIGNED', 'Реферальный код не назначен'), show_alert=True)
         return
 
-    summary = await get_user_referral_summary(db, db_user.id)
-
     bot_username = (await callback.bot.get_me()).username
     bot_referral_link = settings.get_bot_referral_link(db_user.referral_code, bot_username)
     cabinet_referral_link = settings.get_cabinet_referral_link(db_user.referral_code)
 
     referral_text = (
         texts.t('REFERRAL_PROGRAM_TITLE', '👥 <b>Реферальная программа</b>')
-        + '\n\n'
-        + texts.t('REFERRAL_STATS_HEADER', '📊 <b>Ваша статистика:</b>')
-        + '\n'
-        + texts.t(
-            'REFERRAL_STATS_INVITED',
-            '• Приглашено пользователей: <b>{count}</b>',
-        ).format(count=summary['invited_count'])
-        + '\n'
-        + texts.t(
-            'REFERRAL_STATS_FIRST_TOPUPS',
-            '• Сделали первое пополнение: <b>{count}</b>',
-        ).format(count=summary['paid_referrals_count'])
-        + '\n'
-        + texts.t(
-            'REFERRAL_STATS_ACTIVE',
-            '• Активных рефералов: <b>{count}</b>',
-        ).format(count=summary['active_referrals_count'])
-        + '\n'
-        + texts.t(
-            'REFERRAL_STATS_CONVERSION',
-            '• Конверсия: <b>{rate}%</b>',
-        ).format(rate=summary['conversion_rate'])
-        + '\n'
-        + texts.t(
-            'REFERRAL_STATS_TOTAL_EARNED',
-            '• Заработано всего: <b>{amount}</b>',
-        ).format(amount=texts.format_price(summary['total_earned_kopeks']))
-        + '\n'
-        + texts.t(
-            'REFERRAL_STATS_MONTH_EARNED',
-            '• За последний месяц: <b>{amount}</b>',
-        ).format(amount=texts.format_price(summary['month_earned_kopeks']))
         + '\n\n'
         + texts.t('REFERRAL_REWARDS_HEADER', '🎁 <b>Как работают награды:</b>')
     )
@@ -116,18 +152,33 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
             '• Комиссия с каждого пополнения реферала: <b>{percent}%</b>',
         ).format(percent=get_effective_referral_commission_percent(db_user))
 
-    referral_text += '\n' + commission_line + '\n\n'
+    referral_text += '\n' + commission_line
 
+    if settings.REFERRAL_RETENTION_REWARD_ENABLED and settings.REFERRAL_RETENTION_REWARD_KOPEKS > 0:
+        referral_text += '\n' + (
+            texts.t(
+                'REFERRAL_REWARD_RETENTION',
+                '• Вы получаете <b>{bonus}</b> за реферала, который подписан на канал и не блокирует бота в течение {period}',
+            ).format(
+                period=format_days_declension(settings.REFERRAL_RETENTION_DAYS, db_user.language),
+                bonus=texts.format_price(settings.REFERRAL_RETENTION_REWARD_KOPEKS),
+            )
+        )
+
+    referral_text += '\n\n'
+
+    escaped_bot_link = html_escape(bot_referral_link, quote=True)
     referral_text += (
         texts.t('REFERRAL_BOT_LINK_TITLE', '🤖 <b>Ссылка на бота:</b>')
-        + f'\n{html_escape(bot_referral_link)}\n\n'
+        + f'\n<a href="{escaped_bot_link}">{escaped_bot_link}</a>\n\n'
     )
 
     # Show cabinet link if configured
     if cabinet_referral_link:
+        escaped_cabinet_link = html_escape(cabinet_referral_link, quote=True)
         referral_text += (
             texts.t('REFERRAL_CABINET_LINK_TITLE', '🌐 <b>Ссылка на кабинет:</b>')
-            + f'\n{html_escape(cabinet_referral_link)}\n\n'
+            + f'\n<a href="{escaped_cabinet_link}">{escaped_cabinet_link}</a>\n\n'
         )
 
     referral_text += (
@@ -136,10 +187,11 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
         )
     )
 
-    await edit_or_answer_photo(
+    await _show_referral_screen_with_qr(
         callback,
-        referral_text,
-        get_referral_keyboard(db_user.language),
+        qr_path=_get_referral_qr_path(db_user.id, bot_referral_link),
+        caption=referral_text,
+        keyboard=get_referral_keyboard(db_user.language),
     )
     await callback.answer()
 
@@ -159,14 +211,7 @@ async def show_referral_qr(
     bot_username = (await callback.bot.get_me()).username
     bot_referral_link = settings.get_bot_referral_link(db_user.referral_code, bot_username)
 
-    qr_dir = Path('data') / 'referral_qr'
-    qr_dir.mkdir(parents=True, exist_ok=True)
-
-    link_hash = hashlib.md5(bot_referral_link.encode()).hexdigest()[:8]
-    file_path = qr_dir / f'{db_user.id}_{link_hash}.png'
-    if not file_path.exists():
-        img = qrcode.make(bot_referral_link)
-        img.save(file_path)
+    file_path = _get_referral_qr_path(db_user.id, bot_referral_link)
 
     photo = FSInputFile(file_path)
     keyboard = types.InlineKeyboardMarkup(
@@ -300,9 +345,12 @@ async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: Us
 async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     texts = get_texts(db_user.language)
 
+    summary = await get_user_referral_summary(db, db_user.id)
     analytics = await get_referral_analytics(db, db_user.id)
 
     text = texts.t('REFERRAL_ANALYTICS_TITLE', '📊 <b>Аналитика рефералов</b>') + '\n\n'
+
+    text += _build_referral_stats_text(texts, summary) + '\n\n'
 
     text += (
         texts.t(
