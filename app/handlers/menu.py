@@ -4,6 +4,7 @@ from decimal import Decimal
 
 import structlog
 from aiogram import Dispatcher, F, types
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,10 +26,12 @@ from app.keyboards.inline import (
     get_interface_languages,
     get_language_selection_keyboard,
     get_main_menu_keyboard_async,
+    get_post_registration_keyboard,
     get_profile_keyboard,
 )
 from app.localization.texts import get_rules, get_texts
 from app.services.faq_service import FaqService
+from app.services.legal_document_link_service import build_browsing_consent_warning
 from app.services.main_menu_button_service import MainMenuButtonService
 from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
@@ -180,6 +183,7 @@ async def show_main_menu(
     db: AsyncSession,
     *,
     skip_callback_answer: bool = False,
+    notice: str = '',
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
@@ -242,8 +246,10 @@ async def show_main_menu(
         custom_buttons=custom_buttons,
     )
 
-    if not await try_edit_rich_main_menu(callback, db_user, texts, db, keyboard):
+    if not await try_edit_rich_main_menu(callback, db_user, texts, db, keyboard, notice=notice):
         menu_text = await get_main_menu_text(db_user, texts, db)
+        if notice:
+            menu_text = f'{notice}\n\n{menu_text}'
         await edit_or_answer_photo(
             callback=callback,
             caption=menu_text,
@@ -406,12 +412,13 @@ async def show_info_menu(
     prompt = texts.t('MENU_INFO_PROMPT', 'Выберите раздел:')
     caption = f'{header}\n\n{prompt}' if prompt else header
 
-    privacy_enabled = is_visible_in_bot(
-        settings.PRIVACY_POLICY_DISPLAY_MODE
-    ) and await PrivacyPolicyService.is_policy_enabled(db, db_user.language)
-    public_offer_enabled = is_visible_in_bot(
-        settings.PUBLIC_OFFER_DISPLAY_MODE
-    ) and await PublicOfferService.is_offer_enabled(db, db_user.language)
+    from app.services.legal_document_link_service import get_active_legal_document_links
+
+    legal_links = await get_active_legal_document_links(db, db_user.language)
+    privacy_policy_url = (
+        legal_links.privacy_policy if is_visible_in_bot(settings.PRIVACY_POLICY_DISPLAY_MODE) else None
+    )
+    public_offer_url = legal_links.public_offer if is_visible_in_bot(settings.PUBLIC_OFFER_DISPLAY_MODE) else None
     faq_enabled = is_visible_in_bot(settings.FAQ_DISPLAY_MODE) and await FaqService.is_enabled(db, db_user.language)
     rules_enabled = is_visible_in_bot(settings.SERVICE_RULES_DISPLAY_MODE)
     promo_groups_available = await has_auto_assign_promo_groups(db)
@@ -426,8 +433,8 @@ async def show_info_menu(
         caption=caption,
         keyboard=get_info_menu_keyboard(
             language=db_user.language,
-            show_privacy_policy=privacy_enabled,
-            show_public_offer=public_offer_enabled,
+            privacy_policy_url=privacy_policy_url,
+            public_offer_url=public_offer_url,
             show_faq=faq_enabled,
             show_promo_groups=promo_groups_available,
             show_rules=rules_enabled,
@@ -1262,10 +1269,45 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
         )
         return
 
+    texts = get_texts(db_user.language)
+
+    state_data = await state.get_data()
+    if not isinstance(state_data, dict):
+        state_data = {}
+    if state_data.get('post_registration_choice_pending'):
+        offer_text = state_data.get('post_registration_offer_text') or texts.t(
+            'POST_REGISTRATION_OFFER',
+            'Попробуйте VPN перед покупкой',
+        )
+        keyboard = get_post_registration_keyboard(db_user.language)
+        try:
+            await callback.message.edit_text(
+                offer_text,
+                reply_markup=keyboard,
+                parse_mode='HTML',
+                disable_web_page_preview=True,
+            )
+        except TelegramBadRequest as error:
+            if 'parse entities' not in str(error).lower() and "can't parse" not in str(error).lower():
+                raise
+            await callback.message.edit_text(
+                offer_text,
+                reply_markup=keyboard,
+                parse_mode=None,
+                disable_web_page_preview=True,
+            )
+        await state.update_data(post_registration_offer_message_id=callback.message.message_id)
+        await callback.answer(
+            texts.t(
+                'POST_REGISTRATION_CHOICE_REQUIRED',
+                'Сначала выберите один из двух вариантов.',
+            ),
+            show_alert=True,
+        )
+        return
+
     answer_callback_in_background(callback)
     await state.clear()
-
-    texts = get_texts(db_user.language)
 
     # Multi-tariff aware: check if user has ANY active subscription
     # 'limited' (traffic exhausted) subscriptions are still active for UI purposes
@@ -1319,6 +1361,30 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
             keyboard=keyboard,
             parse_mode='HTML',
         )
+
+
+async def handle_post_registration_explore(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    db_user: User,
+    db: AsyncSession,
+):
+    if db_user is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
+        await callback.answer(texts.t('USER_NOT_FOUND_ERROR', 'Ошибка: пользователь не найден.'), show_alert=True)
+        return
+
+    texts = get_texts(db_user.language)
+    notice = await build_browsing_consent_warning(db, texts)
+    await state.clear()
+    await show_main_menu(
+        callback,
+        db_user,
+        db,
+        skip_callback_answer=True,
+        notice=notice,
+    )
+    await callback.answer()
 
 
 def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -> str:
@@ -1829,6 +1895,7 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
 
 
 def register_handlers(dp: Dispatcher):
+    dp.callback_query.register(handle_post_registration_explore, F.data == 'post_registration_explore')
     dp.callback_query.register(handle_back_to_menu, F.data == 'back_to_menu')
 
     dp.callback_query.register(show_profile_menu, F.data == 'menu_profile')

@@ -10,11 +10,12 @@ from app.config import settings
 from app.database.models import User
 from app.handlers.admin.display_mode_button import cycle_display_mode_setting
 from app.localization.texts import get_texts
+from app.services.legal_document_link_service import extract_legal_document_url, normalize_legal_document_url
 from app.services.privacy_policy_service import PrivacyPolicyService
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 from app.utils.display_mode import display_mode_label
-from app.utils.validators import get_html_help_text, validate_html_tags
+from app.utils.validators import get_html_help_text
 
 
 logger = structlog.get_logger(__name__)
@@ -41,7 +42,8 @@ async def _build_overview(
     )
 
     normalized_language = PrivacyPolicyService.normalize_language(db_user.language)
-    has_content = bool(policy and policy.content and policy.content.strip())
+    policy_url = extract_legal_document_url(policy.content if policy else None)
+    has_url = policy_url is not None
 
     description = texts.t(
         'ADMIN_PRIVACY_POLICY_DESCRIPTION',
@@ -52,7 +54,7 @@ async def _build_overview(
         'ADMIN_PRIVACY_POLICY_STATUS_DISABLED',
         '⚠️ Показ политики выключен или текст отсутствует.',
     )
-    if policy and policy.is_enabled and has_content:
+    if policy and policy.is_enabled and has_url:
         status_text = texts.t(
             'ADMIN_PRIVACY_POLICY_STATUS_ENABLED',
             '✅ Политика активна и показывается пользователям.',
@@ -73,18 +75,14 @@ async def _build_overview(
 
     preview_block = texts.t(
         'ADMIN_PRIVACY_POLICY_PREVIEW_EMPTY',
-        'Текст ещё не задан.',
+        'Ссылка ещё не задана.',
     )
-    if has_content:
+    if has_url:
         preview_title = texts.t(
             'ADMIN_PRIVACY_POLICY_PREVIEW_TITLE',
-            '<b>Превью текста:</b>',
+            '<b>Текущая ссылка:</b>',
         )
-        preview_raw = policy.content.strip()
-        preview_trimmed = preview_raw[:400]
-        if len(preview_raw) > 400:
-            preview_trimmed += '...'
-        preview_block = f'{preview_title}\n<code>{html.escape(preview_trimmed)}</code>'
+        preview_block = f'{preview_title}\n<code>{html.escape(policy_url)}</code>'
 
     language_block = texts.t(
         'ADMIN_PRIVACY_POLICY_LANGUAGE',
@@ -122,22 +120,22 @@ async def _build_overview(
             types.InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PRIVACY_POLICY_EDIT_BUTTON',
-                    '✏️ Изменить текст',
+                    '✏️ Изменить ссылку',
                 ),
                 callback_data='admin_privacy_policy_edit',
             )
         ]
     )
 
-    if has_content:
+    if has_url:
         buttons.append(
             [
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'ADMIN_PRIVACY_POLICY_VIEW_BUTTON',
-                        '👀 Просмотреть текущий текст',
+                        '🔗 Открыть текущую ссылку',
                     ),
-                    callback_data='admin_privacy_policy_view',
+                    url=policy_url,
                 )
             ]
         )
@@ -169,18 +167,6 @@ async def _build_overview(
                     '👁 Отображение: {mode}',
                 ).format(mode=display_mode_label(settings.PRIVACY_POLICY_DISPLAY_MODE)),
                 callback_data='admin_privacy_policy_display_mode',
-            )
-        ]
-    )
-
-    buttons.append(
-        [
-            types.InlineKeyboardButton(
-                text=texts.t(
-                    'ADMIN_PRIVACY_POLICY_HTML_HELP',
-                    'ℹ️ HTML помощь',
-                ),
-                callback_data='admin_privacy_policy_help',
             )
         ]
     )
@@ -283,26 +269,25 @@ async def start_edit_privacy_policy(
     )
 
     current_preview = ''
-    if policy and policy.content:
-        preview = policy.content.strip()[:400]
-        if len(policy.content.strip()) > 400:
-            preview += '...'
+    current_url = extract_legal_document_url(policy.content if policy else None)
+    if current_url:
+        preview = current_url
         current_preview = (
             texts.t(
                 'ADMIN_PRIVACY_POLICY_CURRENT_PREVIEW',
-                'Текущий текст (превью):',
+                'Текущая ссылка:',
             )
             + f'\n<code>{html.escape(preview)}</code>\n\n'
         )
 
     prompt = texts.t(
         'ADMIN_PRIVACY_POLICY_EDIT_PROMPT',
-        'Отправьте новый текст политики конфиденциальности. Допускается HTML-разметка.',
+        'Отправьте прямую ссылку на политику конфиденциальности.',
     )
 
     hint = texts.t(
         'ADMIN_PRIVACY_POLICY_EDIT_HINT',
-        'Используйте /html_help для справки по тегам.',
+        'Поддерживаются ссылки http:// и https://.',
     )
 
     message_text = (
@@ -312,15 +297,6 @@ async def start_edit_privacy_policy(
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t(
-                        'ADMIN_PRIVACY_POLICY_HTML_HELP',
-                        'ℹ️ HTML помощь',
-                    ),
-                    callback_data='admin_privacy_policy_help',
-                )
-            ],
             [
                 types.InlineKeyboardButton(
                     text=texts.t('ADMIN_PRIVACY_POLICY_CANCEL', '❌ Отмена'),
@@ -361,32 +337,32 @@ async def process_privacy_policy_edit(
     db: AsyncSession,
 ):
     texts = get_texts(db_user.language)
-    new_text = message.text or ''
+    new_url = (message.text or '').strip()
 
-    if len(new_text) > 4000:
+    if len(new_url) > 2048:
         await message.answer(
             texts.t(
                 'ADMIN_PRIVACY_POLICY_TOO_LONG',
-                '❌ Текст политики слишком длинный. Максимум 4000 символов.',
+                '❌ Ссылка слишком длинная. Максимум 2048 символов.',
             )
         )
         return
 
-    is_valid, error_message = validate_html_tags(new_text)
-    if not is_valid:
+    normalized_url = normalize_legal_document_url(new_url)
+    if not normalized_url:
         await message.answer(
             texts.t(
-                'ADMIN_PRIVACY_POLICY_HTML_ERROR',
-                '❌ Ошибка в HTML: {error}',
-            ).format(error=error_message)
+                'ADMIN_PRIVACY_POLICY_URL_ERROR',
+                '❌ Укажите корректную ссылку, начинающуюся с http:// или https://.',
+            )
         )
         return
 
-    await PrivacyPolicyService.save_policy(db, db_user.language, new_text)
+    await PrivacyPolicyService.save_policy(db, db_user.language, normalized_url)
     logger.info(
-        'Админ обновил текст политики конфиденциальности (символов)',
+        'Админ обновил ссылку политики конфиденциальности',
         telegram_id=db_user.telegram_id,
-        new_text_count=len(new_text),
+        url=normalized_url,
     )
     await state.clear()
 

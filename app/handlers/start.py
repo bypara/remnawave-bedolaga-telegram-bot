@@ -8,7 +8,7 @@ from typing import Any
 import structlog
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -103,6 +103,65 @@ def _get_default_post_registration_offer(texts) -> str:
         '🌍 Доступ к нужным сервисам\n\n'
         'Сначала попробуйте — потом решите, подходит ли вам сервис.',
     )
+
+
+async def _remember_post_registration_offer(
+    state: FSMContext,
+    sent_message: types.Message,
+    offer_text: str,
+) -> None:
+    await state.update_data(
+        post_registration_choice_pending=True,
+        post_registration_offer_message_id=sent_message.message_id,
+        post_registration_offer_text=offer_text,
+    )
+
+
+async def _repeat_required_post_registration_choice(
+    message: types.Message,
+    state: FSMContext,
+    user,
+    texts,
+    state_data: dict[str, Any],
+) -> None:
+    """Replace the stale onboarding offer when /start is pressed before a choice."""
+    previous_message_id = state_data.get('post_registration_offer_message_id')
+    if previous_message_id:
+        try:
+            await message.bot.delete_message(message.chat.id, int(previous_message_id))
+        except Exception as error:
+            logger.debug('Не удалось удалить предыдущее сообщение выбора после регистрации', error=str(error))
+
+    try:
+        await message.delete()
+    except Exception as error:
+        logger.debug('Не удалось удалить повторную команду /start', error=str(error))
+
+    warning = texts.t(
+        'POST_REGISTRATION_CHOICE_REQUIRED',
+        'Сначала выберите один из двух вариантов ниже.',
+    )
+    offer_text = state_data.get('post_registration_offer_text') or _get_default_post_registration_offer(texts)
+    message_text = f'{warning}\n\n{offer_text}'
+    try:
+        sent_message = await message.bot.send_message(
+            chat_id=message.chat.id,
+            text=message_text,
+            reply_markup=get_post_registration_keyboard(user.language),
+            parse_mode='HTML',
+            disable_web_page_preview=True,
+        )
+    except TelegramBadRequest as error:
+        if 'parse entities' not in str(error).lower() and "can't parse" not in str(error).lower():
+            raise
+        sent_message = await message.bot.send_message(
+            chat_id=message.chat.id,
+            text=message_text,
+            reply_markup=get_post_registration_keyboard(user.language),
+            parse_mode=None,
+            disable_web_page_preview=True,
+        )
+    await _remember_post_registration_offer(state, sent_message, offer_text)
 
 
 def _split_start_param_subid(param: str | None) -> tuple[str | None, str | None]:
@@ -900,16 +959,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
             from_user_id=message.from_user.id,
         )
 
-        if current_state != RegistrationStates.waiting_for_referral_code.state:
-            language = data.get('language', DEFAULT_LANGUAGE)
-            texts = get_texts(language)
-
-            rules_text = _format_registration_rules_text(await get_rules(language), texts)
-            await answer_long_text(message, rules_text, reply_markup=get_rules_keyboard(language))
-            await state.set_state(RegistrationStates.waiting_for_rules_accept)
-            logger.info('📋 Правила отправлены после ввода реферального кода')
-        else:
-            await complete_registration(message, state, db)
+        await complete_registration(message, state, db)
 
         return True
 
@@ -935,16 +985,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
             from_user_id=message.from_user.id,
         )
 
-        if current_state != RegistrationStates.waiting_for_referral_code.state:
-            language = data.get('language', DEFAULT_LANGUAGE)
-            texts = get_texts(language)
-
-            rules_text = _format_registration_rules_text(await get_rules(language), texts)
-            await answer_long_text(message, rules_text, reply_markup=get_rules_keyboard(language))
-            await state.set_state(RegistrationStates.waiting_for_rules_accept)
-            logger.info('📋 Правила отправлены после принятия промокода')
-        else:
-            await complete_registration(message, state, db)
+        await complete_registration(message, state, db)
 
         return True
 
@@ -1027,51 +1068,61 @@ async def _continue_registration_after_language(
         else:
             await complete_registration(message, state, db)
 
-    if settings.SKIP_RULES_ACCEPT:
-        logger.info('⚙️ LANGUAGE: SKIP_RULES_ACCEPT включен - пропускаем правила')
+    # Согласие больше не запрашивается отдельными экранами во время регистрации.
+    # Пользователь видит документы и принимает их непосредственно перед активацией
+    # триала или подтверждением покупки — тем действием, к которому относится согласие.
+    logger.info('⚙️ LANGUAGE: юридические экраны регистрации отключены')
 
-        if data.get('referral_code'):
-            referrer = await get_user_by_referral_code(db, data['referral_code'])
-            if referrer:
-                data['referrer_id'] = referrer.id
-                await state.set_data(data)
-                logger.info('✅ LANGUAGE: Реферер найден', referrer_id=referrer.id)
+    if data.get('referral_code'):
+        referrer = await get_user_by_referral_code(db, data['referral_code'])
+        if referrer:
+            data['referrer_id'] = referrer.id
+            await state.set_data(data)
+            logger.info('✅ LANGUAGE: Реферер найден', referrer_id=referrer.id)
 
-        if settings.SKIP_REFERRAL_CODE or data.get('referral_code') or data.get('referrer_id'):
+    if settings.SKIP_REFERRAL_CODE or data.get('referral_code') or data.get('referrer_id'):
+        await _complete_registration_wrapper()
+    else:
+        try:
+            await target_message.answer(
+                texts.t(
+                    'REFERRAL_CODE_QUESTION',
+                    "У вас есть реферальный код? Введите его или нажмите 'Пропустить'",
+                ),
+                reply_markup=get_referral_code_keyboard(language),
+            )
+            await state.set_state(RegistrationStates.waiting_for_referral_code)
+            logger.info('🔍 LANGUAGE: Ожидание ввода реферального кода')
+        except Exception as error:
+            logger.error('Ошибка при показе вопроса о реферальном коде после выбора языка', error=error)
             await _complete_registration_wrapper()
-        else:
-            try:
-                await target_message.answer(
-                    texts.t(
-                        'REFERRAL_CODE_QUESTION',
-                        "У вас есть реферальный код? Введите его или нажмите 'Пропустить'",
-                    ),
-                    reply_markup=get_referral_code_keyboard(language),
-                )
-                await state.set_state(RegistrationStates.waiting_for_referral_code)
-                logger.info('🔍 LANGUAGE: Ожидание ввода реферального кода')
-            except Exception as error:
-                logger.error('Ошибка при показе вопроса о реферальном коде после выбора языка', error=error)
-                await _complete_registration_wrapper()
-        return
-
-    rules_text = _format_registration_rules_text(await get_rules(language), texts)
-    try:
-        await answer_long_text(target_message, rules_text, reply_markup=get_rules_keyboard(language))
-    except TelegramForbiddenError:
-        logger.warning(
-            '⚠️ Пользователь заблокировал бота, пропускаем отправку правил',
-            from_user_id=callback.from_user.id if callback else message.from_user.id,
-        )
-        return
-    await state.set_state(RegistrationStates.waiting_for_rules_accept)
-    logger.info('📋 LANGUAGE: Правила отправлены после выбора языка')
 
 
 async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession, db_user=None):
     logger.info('🚀 START: Обработка /start от', from_user_id=message.from_user.id)
 
     data = await state.get_data() or {}
+
+    if data.get('post_registration_choice_pending'):
+        pending_user = db_user or await get_user_by_telegram_id(db, message.from_user.id)
+        if pending_user is None:
+            await state.clear()
+            data = {}
+        else:
+            try:
+                await db.refresh(pending_user, ['subscriptions'])
+            except Exception as error:
+                logger.debug('Не удалось обновить подписки перед проверкой обязательного выбора', error=str(error))
+
+            if _can_offer_post_registration_trial(pending_user):
+                texts = get_texts(pending_user.language)
+                await _repeat_required_post_registration_choice(message, state, pending_user, texts, data)
+                return
+
+            # A trial/gift may have been activated outside this exact callback flow.
+            # In that case the stale onboarding lock must not hide the normal menu.
+            await state.clear()
+            data = {}
 
     # ИСПРАВЛЕНИЕ БАГА: используем .get() вместо .pop() для campaign_notification_sent
     # pending_start_payload обрабатывается отдельно ниже
@@ -2348,11 +2399,13 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
         try:
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, user, pinned_message)
-            await callback.message.answer(
+            sent_message = await callback.message.answer(
                 offer_text,
                 reply_markup=keyboard,
                 parse_mode='HTML',
             )
+            if can_offer_trial:
+                await _remember_post_registration_offer(state, sent_message, offer_text)
             logger.info('✅ Приветственное сообщение отправлено пользователю', telegram_id=user.telegram_id)
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, user, pinned_message)
@@ -2360,11 +2413,13 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             if 'parse entities' in str(e).lower() or "can't parse" in str(e).lower():
                 logger.warning('HTML parse error в приветственном сообщении, повтор без parse_mode', error=e)
                 try:
-                    await callback.message.answer(
+                    sent_message = await callback.message.answer(
                         offer_text,
                         reply_markup=keyboard,
                         parse_mode=None,
                     )
+                    if can_offer_trial:
+                        await _remember_post_registration_offer(state, sent_message, offer_text)
                     if pinned_message and not pinned_message.send_before_menu:
                         await _send_pinned_message(callback.bot, db, user, pinned_message)
                 except Exception as fallback_err:
@@ -2715,11 +2770,13 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
         try:
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, user, pinned_message)
-            await message.answer(
+            sent_message = await message.answer(
                 offer_text,
                 reply_markup=keyboard,
                 parse_mode='HTML',
             )
+            if can_offer_trial:
+                await _remember_post_registration_offer(state, sent_message, offer_text)
             logger.info('✅ Приветственное сообщение отправлено пользователю', telegram_id=user.telegram_id)
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, user, pinned_message)
@@ -2727,11 +2784,13 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             if 'parse entities' in str(e).lower() or "can't parse" in str(e).lower():
                 logger.warning('HTML parse error в приветственном сообщении, повтор без parse_mode', error=e)
                 try:
-                    await message.answer(
+                    sent_message = await message.answer(
                         offer_text,
                         reply_markup=keyboard,
                         parse_mode=None,
                     )
+                    if can_offer_trial:
+                        await _remember_post_registration_offer(state, sent_message, offer_text)
                     if pinned_message and not pinned_message.send_before_menu:
                         await _send_pinned_message(message.bot, db, user, pinned_message)
                 except Exception as fallback_err:
@@ -3066,7 +3125,10 @@ async def required_sub_channel_check(
             state_data['language'] = language
             await state.set_data(state_data)
 
-            if settings.SKIP_RULES_ACCEPT:
+            # Канальная проверка может завершать регистрацию отдельным путём.
+            # Здесь также не возвращаем старые экраны принятия документов.
+            registration_legal_prompts_enabled = False
+            if not registration_legal_prompts_enabled:
                 if settings.SKIP_REFERRAL_CODE or state_data.get('referral_code') or state_data.get('referrer_id'):
                     from app.utils.user_utils import generate_unique_referral_code
 

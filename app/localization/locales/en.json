@@ -1,5 +1,13 @@
 {
   "ACCESS_DENIED": "❌ Access denied",
+  "LEGAL_ACTION_ACTIVATE_TRIAL": "“Activate”",
+  "LEGAL_ACTION_CONFIRM_PURCHASE": "“Confirm purchase”",
+  "LEGAL_PRIVACY_POLICY_LINK_LABEL": "Privacy Policy",
+  "LEGAL_PUBLIC_OFFER_LINK_LABEL": "Public Offer",
+  "LEGAL_DOCUMENTS_CONJUNCTION": "and",
+  "LEGAL_IMPLICIT_CONSENT_NOTICE": "By clicking {action}, you agree to the {documents}.",
+  "LEGAL_BROWSING_CONSENT_WARNING": "<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> By continuing to use the bot, you agree to the {documents}.",
+  "POST_REGISTRATION_CHOICE_REQUIRED": "Please choose one of the two options below first.",
   "ADDON_INSUFFICIENT_FUNDS_MESSAGE": "⚠️ <b>Insufficient funds</b>\n\nService price: {required}\nBalance: {balance}\nMissing: {missing}\n\nChoose a top-up method. The amount will be filled in automatically.",
   "ADD_COUNTRIES_BUTTON": "🌐 Add countries",
   "ADD_TRAFFIC_PROMPT": "📈 <b>Add traffic to your subscription</b>\n\nCurrent limit: {current_traffic}\nChoose extra traffic:",

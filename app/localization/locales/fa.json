@@ -1,5 +1,13 @@
 {
   "ACCESS_DENIED": "❌ دسترسی غیرمجاز",
+  "LEGAL_ACTION_ACTIVATE_TRIAL": "«فعال‌سازی»",
+  "LEGAL_ACTION_CONFIRM_PURCHASE": "«تأیید خرید»",
+  "LEGAL_PRIVACY_POLICY_LINK_LABEL": "سیاست حفظ حریم خصوصی",
+  "LEGAL_PUBLIC_OFFER_LINK_LABEL": "پیشنهاد عمومی",
+  "LEGAL_DOCUMENTS_CONJUNCTION": "و",
+  "LEGAL_IMPLICIT_CONSENT_NOTICE": "با کلیک روی {action}، با {documents} موافقت می‌کنید.",
+  "LEGAL_BROWSING_CONSENT_WARNING": "<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> با ادامه استفاده از ربات، با {documents} موافقت می‌کنید.",
+  "POST_REGISTRATION_CHOICE_REQUIRED": "ابتدا یکی از دو گزینه زیر را انتخاب کنید.",
   "ADDON_INSUFFICIENT_FUNDS_MESSAGE": "⚠️ <b>موجودی ناکافی</b>\n\nهزینه: {required}\nموجودی: {balance}\nکسری: {missing}\n\nروش شارژ را انتخاب کنید.",
   "ADD_COUNTRIES_BUTTON": "🌐 افزودن کشور",
   "ADD_TRAFFIC_PROMPT": "📈 <b>افزودن ترافیک</b>\n\nمحدودیت فعلی: {current_traffic}\nترافیک اضافی را انتخاب کنید:",

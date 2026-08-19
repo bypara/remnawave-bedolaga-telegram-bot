@@ -348,7 +348,7 @@ def get_post_registration_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKe
             [
                 InlineKeyboardButton(
                     text=texts.t('POST_REGISTRATION_EXPLORE_BUTTON', 'Я пока тут осмотрюсь'),
-                    callback_data='back_to_menu',
+                    callback_data='post_registration_explore',
                 )
             ],
         ]
@@ -903,8 +903,8 @@ def get_profile_keyboard(
 
 def get_info_menu_keyboard(
     language: str = DEFAULT_LANGUAGE,
-    show_privacy_policy: bool = False,
-    show_public_offer: bool = False,
+    privacy_policy_url: str | None = None,
+    public_offer_url: str | None = None,
     show_faq: bool = False,
     show_promo_groups: bool = False,
     show_rules: bool = True,
@@ -934,22 +934,26 @@ def get_info_menu_keyboard(
             ]
         )
 
-    if show_privacy_policy:
+    if privacy_policy_url:
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('MENU_PRIVACY_POLICY', '🛡️ Политика конфиденциальности'),
-                    callback_data='menu_privacy_policy',
+                    text=strip_leading_emoji(
+                        texts.t('MENU_PRIVACY_POLICY', '🛡️ Политика конфиденциальности')
+                    ),
+                    url=privacy_policy_url,
+                    icon_custom_emoji_id='5251203410396458957',
                 )
             ]
         )
 
-    if show_public_offer:
+    if public_offer_url:
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('MENU_PUBLIC_OFFER', '📄 Оферта'),
-                    callback_data='menu_public_offer',
+                    text=strip_leading_emoji(texts.t('MENU_PUBLIC_OFFER', '📄 Оферта')),
+                    url=public_offer_url,
+                    icon_custom_emoji_id='5334544901428229844',
                 )
             ]
         )

@@ -557,7 +557,7 @@ async def countries_continue(callback: types.CallbackQuery, state: FSMContext, d
         return
 
     if not settings.is_devices_selection_enabled():
-        if await present_subscription_summary(callback, state, db_user, texts):
+        if await present_subscription_summary(callback, state, db_user, db, texts):
             await callback.answer()
         return
 

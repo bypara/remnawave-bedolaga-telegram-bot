@@ -17,6 +17,7 @@ async def present_subscription_summary(
     callback: types.CallbackQuery,
     state: FSMContext,
     db_user,
+    db,
     texts: Optional = None,
 ) -> bool:
     """Render the subscription purchase summary and switch to the confirmation state.
@@ -46,6 +47,7 @@ async def present_subscription_summary(
         summary_text,
         reply_markup=get_subscription_confirm_keyboard(db_user.language),
         parse_mode='HTML',
+        disable_web_page_preview=True,
     )
 
     await state.set_state(SubscriptionStates.confirming_purchase)

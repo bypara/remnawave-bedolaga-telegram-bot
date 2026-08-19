@@ -1,5 +1,13 @@
 {
   "ACCESS_DENIED": "❌ Доступ запрещен",
+  "LEGAL_ACTION_ACTIVATE_TRIAL": "«Активировать»",
+  "LEGAL_ACTION_CONFIRM_PURCHASE": "«Подтвердить покупку»",
+  "LEGAL_PRIVACY_POLICY_LINK_LABEL": "политикой конфиденциальности",
+  "LEGAL_PUBLIC_OFFER_LINK_LABEL": "публичной офертой",
+  "LEGAL_DOCUMENTS_CONJUNCTION": "и",
+  "LEGAL_IMPLICIT_CONSENT_NOTICE": "Нажимая {action}, вы соглашаетесь с {documents}.",
+  "LEGAL_BROWSING_CONSENT_WARNING": "<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> Продолжая пользоваться ботом, вы соглашаетесь с {documents}.",
+  "POST_REGISTRATION_CHOICE_REQUIRED": "Сначала выберите один из двух вариантов ниже.",
   "ADDON_INSUFFICIENT_FUNDS_MESSAGE": "⚠️ <b>Недостаточно средств</b>\n\nСтоимость услуги: {required}\nНа балансе: {balance}\nНе хватает: {missing}\n\nВыберите способ пополнения. Сумма подставится автоматически.",
   "ADD_COUNTRIES_BUTTON": "🌐 Добавить страны",
   "ADD_TRAFFIC_PROMPT": "📈 <b>Добавить трафик к подписке</b>\n\nТекущий лимит: {current_traffic}\nВыберите дополнительный трафик:",

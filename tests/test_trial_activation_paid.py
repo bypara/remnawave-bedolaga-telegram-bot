@@ -51,6 +51,8 @@ async def test_activate_trial_paid_shows_payment_screen_with_trial_price(
     trial_user.is_trial_already_used.return_value = False
 
     mock_keyboard = InlineKeyboardMarkup(inline_keyboard=[])
+    trial_state = AsyncMock()
+    record_consent = AsyncMock()
 
     with (
         # get_trial_activation_charge_amount is imported locally inside
@@ -73,8 +75,12 @@ async def test_activate_trial_paid_shows_payment_screen_with_trial_price(
             'app.handlers.subscription.purchase._get_trial_payment_keyboard',
             return_value=mock_keyboard,
         ) as payment_keyboard,
+        patch(
+            'app.handlers.subscription.purchase.record_implicit_legal_consent',
+            new=record_consent,
+        ),
     ):
-        await activate_trial(trial_callback_query, trial_user, trial_db)
+        await activate_trial(trial_callback_query, trial_user, trial_db, trial_state)
 
     # The paid-trial keyboard is shown for the can_pay_from_balance=False case.
     payment_keyboard.assert_called_once_with(trial_user.language, False)
@@ -90,6 +96,13 @@ async def test_activate_trial_paid_shows_payment_screen_with_trial_price(
     assert settings.format_price(balance_kopeks) in body
 
     trial_callback_query.answer.assert_called_once()
+    trial_state.clear.assert_awaited_once()
+    record_consent.assert_awaited_once_with(
+        trial_db,
+        trial_user,
+        language='ru',
+        source='bot_trial',
+    )
 
 
 @pytest.mark.asyncio

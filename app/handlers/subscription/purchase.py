@@ -39,6 +39,10 @@ from app.keyboards.inline import (
 )
 from app.localization.texts import Texts, get_texts
 from app.services.admin_notification_service import AdminNotificationService
+from app.services.legal_document_link_service import (
+    build_implicit_consent_notice,
+    record_implicit_legal_consent,
+)
 from app.services.pricing_engine import pricing_engine
 from app.services.remnawave_service import RemnaWaveConfigurationError
 from app.services.subscription_checkout_service import (
@@ -657,8 +661,21 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
         devices=_format_trial_device_amount(texts, trial_device_limit),
         price_line=price_line,
     )
+    consent_notice = await build_implicit_consent_notice(
+        db,
+        texts,
+        action_key='LEGAL_ACTION_ACTIVATE_TRIAL',
+        action_fallback='«Активировать»',
+    )
+    if consent_notice:
+        trial_text = f'{trial_text}\n\n{consent_notice}'
 
-    await callback.message.edit_text(trial_text, reply_markup=get_trial_keyboard(db_user.language))
+    await callback.message.edit_text(
+        trial_text,
+        reply_markup=get_trial_keyboard(db_user.language),
+        parse_mode='HTML',
+        disable_web_page_preview=True,
+    )
     await callback.answer()
 
 
@@ -717,7 +734,12 @@ def _get_trial_payment_keyboard(language: str, can_pay_from_balance: bool = Fals
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-async def activate_trial(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def activate_trial(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext | None = None,
+):
     from app.services.trial_activation_service import get_trial_activation_charge_amount
 
     texts = get_texts(db_user.language)
@@ -758,6 +780,21 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
         await callback.message.edit_text(texts.TRIAL_ALREADY_USED, reply_markup=get_back_keyboard(db_user.language))
         await callback.answer()
         return
+
+    # Clicking the activation button is both the required onboarding choice and
+    # the legal action described directly on the preceding trial screen.
+    if state is not None:
+        await state.clear()
+        try:
+            await record_implicit_legal_consent(
+                db,
+                db_user,
+                language=db_user.language,
+                source='bot_trial',
+            )
+        except Exception as error:
+            # A temporary legal-page read error must not break trial activation.
+            logger.error('Не удалось записать согласие при активации триала', error=str(error))
 
     # Проверяем, платный ли триал
     trial_price_kopeks = get_trial_activation_charge_amount()
@@ -2050,7 +2087,7 @@ async def select_period(callback: types.CallbackQuery, state: FSMContext, db_use
         await callback.answer()
         return
 
-    if await present_subscription_summary(callback, state, db_user, texts):
+    if await present_subscription_summary(callback, state, db_user, db, texts):
         await callback.answer()
 
 
@@ -2116,7 +2153,7 @@ async def devices_continue(callback: types.CallbackQuery, state: FSMContext, db_
         await callback.answer('⚠️ Некорректный запрос', show_alert=True)
         return
 
-    if await present_subscription_summary(callback, state, db_user):
+    if await present_subscription_summary(callback, state, db_user, db):
         await callback.answer()
 
 
@@ -2141,6 +2178,13 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
 
     data = await state.get_data()
     texts = get_texts(db_user.language)
+
+    await record_implicit_legal_consent(
+        db,
+        db_user,
+        language=db_user.language,
+        source='bot_purchase',
+    )
 
     await save_subscription_checkout_draft(db_user.id, dict(data))
     resume_callback = 'subscription_resume_checkout' if should_offer_checkout_resume(db_user, True) else None

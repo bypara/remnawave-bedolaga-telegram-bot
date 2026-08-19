@@ -1,5 +1,13 @@
 {
   "ACCESS_DENIED": "❌ Доступ заборонено",
+  "LEGAL_ACTION_ACTIVATE_TRIAL": "«Активувати»",
+  "LEGAL_ACTION_CONFIRM_PURCHASE": "«Підтвердити покупку»",
+  "LEGAL_PRIVACY_POLICY_LINK_LABEL": "політикою конфіденційності",
+  "LEGAL_PUBLIC_OFFER_LINK_LABEL": "публічною офертою",
+  "LEGAL_DOCUMENTS_CONJUNCTION": "і",
+  "LEGAL_IMPLICIT_CONSENT_NOTICE": "Натискаючи {action}, ви погоджуєтеся з {documents}.",
+  "LEGAL_BROWSING_CONSENT_WARNING": "<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> Продовжуючи користуватися ботом, ви погоджуєтеся з {documents}.",
+  "POST_REGISTRATION_CHOICE_REQUIRED": "Спочатку виберіть один із двох варіантів нижче.",
   "ADDON_INSUFFICIENT_FUNDS_MESSAGE": "⚠️ <b>Недостатньо коштів</b>\n\nВартість послуги: {required}\nНа балансі: {balance}\nНе вистачає: {missing}\n\nОберіть спосіб поповнення. Сума підставиться автоматично.",
   "ADD_COUNTRIES_BUTTON": "🌐 Додати країни",
   "ADD_TRAFFIC_PROMPT": "📈 <b>Додати трафік до підписки</b>\n\nПоточний ліміт: {current_traffic}\nВиберіть додатковий трафік:",

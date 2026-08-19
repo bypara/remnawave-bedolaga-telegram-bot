@@ -1,5 +1,13 @@
 {
   "ACCESS_DENIED": "❌拒绝访问",
+  "LEGAL_ACTION_ACTIVATE_TRIAL": "“激活”",
+  "LEGAL_ACTION_CONFIRM_PURCHASE": "“确认购买”",
+  "LEGAL_PRIVACY_POLICY_LINK_LABEL": "隐私政策",
+  "LEGAL_PUBLIC_OFFER_LINK_LABEL": "公开要约",
+  "LEGAL_DOCUMENTS_CONJUNCTION": "和",
+  "LEGAL_IMPLICIT_CONSENT_NOTICE": "点击{action}即表示您同意{documents}。",
+  "LEGAL_BROWSING_CONSENT_WARNING": "<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> 继续使用机器人即表示您同意{documents}。",
+  "POST_REGISTRATION_CHOICE_REQUIRED": "请先从下面两个选项中选择一个。",
   "ADDON_INSUFFICIENT_FUNDS_MESSAGE": "⚠️<b>资金不足</b>\n\n服务费用：{required}\n当前余额：{balance}\n缺少：{missing}\n\n请选择充值方式。金额将自动填入。",
   "ADD_COUNTRIES_BUTTON": "🌐添加国家",
   "BUY_TRAFFIC_BUTTON": "📈购买更多流量",

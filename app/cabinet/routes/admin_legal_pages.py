@@ -28,6 +28,7 @@ from app.database.crud.recurrent_payments import (
 )
 from app.database.crud.rules import clear_all_rules, create_or_update_rules, get_rules_by_language
 from app.database.models import FaqPage, User
+from app.services.legal_document_link_service import normalize_legal_document_url
 from app.services.system_settings_service import bot_configuration_service
 from app.utils.display_mode import normalize_display_mode
 
@@ -68,6 +69,19 @@ def _require_language(language: str) -> str:
             detail=f'Unsupported language: {lang}',
         )
     return lang
+
+
+def _require_document_url(value: str, *, document: str, enabled: bool) -> str:
+    candidate = (value or '').strip()
+    if not candidate and not enabled:
+        return ''
+    normalized = normalize_legal_document_url(candidate)
+    if not normalized:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f'{document} must be a valid http:// or https:// URL',
+        )
+    return normalized
 
 
 def _display_mode_env_locked(page_key: str) -> bool:
@@ -309,8 +323,13 @@ async def update_privacy_policy_admin(
     languages = [_require_language(item.language) for item in items]
     _check_display_mode_writable('privacy-policy', request.display_mode)
     for lang, item in zip(languages, items, strict=True):
+        document_url = _require_document_url(
+            item.content,
+            document='Privacy policy',
+            enabled=item.is_enabled,
+        )
         try:
-            await upsert_privacy_policy(db, lang, item.content, is_enabled=item.is_enabled)
+            await upsert_privacy_policy(db, lang, document_url, is_enabled=item.is_enabled)
         except IntegrityError:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -340,8 +359,13 @@ async def update_public_offer_admin(
     languages = [_require_language(item.language) for item in items]
     _check_display_mode_writable('public-offer', request.display_mode)
     for lang, item in zip(languages, items, strict=True):
+        document_url = _require_document_url(
+            item.content,
+            document='Public offer',
+            enabled=item.is_enabled,
+        )
         try:
-            await upsert_public_offer(db, lang, item.content, is_enabled=item.is_enabled)
+            await upsert_public_offer(db, lang, document_url, is_enabled=item.is_enabled)
         except IntegrityError:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
