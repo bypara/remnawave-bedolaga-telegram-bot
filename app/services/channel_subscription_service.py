@@ -14,6 +14,7 @@ from aiogram import Bot
 from aiogram.enums import ChatMemberStatus
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError, TelegramRetryAfter
 
+from app.config import settings
 from app.database.crud.required_channel import (
     get_active_channels,
     get_user_channel_subs,
@@ -38,6 +39,18 @@ GOOD_STATUSES = (ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMe
 
 # How long a DB record is considered fresh (no API call needed)
 DB_FRESHNESS_SECONDS = 1800  # 30 min
+
+
+def is_channel_subscription_required_for_user(user) -> bool:
+    """Global channel gate, plus the referral-only retention programme gate."""
+    return bool(
+        settings.CHANNEL_IS_REQUIRED_SUB
+        or (
+            settings.REFERRAL_RETENTION_REWARD_ENABLED
+            and user is not None
+            and getattr(user, 'referred_by_id', None) is not None
+        )
+    )
 
 
 class ChannelSubscriptionService:
@@ -202,6 +215,44 @@ class ChannelSubscriptionService:
         if not subs:
             return True  # No required channels = subscribed
         return all(subs.values())
+
+    async def check_required_channels_strict(self, telegram_id: int) -> bool | None:
+        """Fresh tri-state check used before irreversible rewards.
+
+        Unlike the user-facing hot path, this method never converts an unknown
+        Telegram result into ``True``. ``None`` means that the operator must
+        retry later and must not pay or reject the referral yet. An empty
+        required-channel list is also unknown: the reward explicitly requires
+        a channel subscription, so a missing channel is a configuration error.
+        """
+        channels = await self.get_required_channels()
+        if not channels or not self.bot:
+            logger.warning(
+                'Strict referral channel check unavailable',
+                telegram_id=telegram_id,
+                channels_count=len(channels),
+                has_bot=bool(self.bot),
+            )
+            return None
+
+        saw_unknown = False
+        async with AsyncSessionLocal() as db:
+            for channel in channels:
+                channel_id = channel['channel_id']
+                result = await self._rate_limited_check(telegram_id, channel_id)
+                if result is False:
+                    await upsert_user_channel_sub(db, telegram_id, channel_id, False)
+                    await ChannelSubCache.set_sub_status(telegram_id, channel_id, False)
+                    await db.commit()
+                    return False
+                if result is None:
+                    saw_unknown = True
+                    continue
+                await upsert_user_channel_sub(db, telegram_id, channel_id, True)
+                await ChannelSubCache.set_sub_status(telegram_id, channel_id, True)
+            await db.commit()
+
+        return None if saw_unknown else True
 
     async def get_unsubscribed_channels(self, telegram_id: int) -> list[dict]:
         """Get the list of channels the user is NOT subscribed to."""

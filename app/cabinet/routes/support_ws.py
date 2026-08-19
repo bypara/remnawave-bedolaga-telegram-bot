@@ -417,7 +417,13 @@ async def _apply_cabinet_account_guards(
     if maintenance_service.is_maintenance_active() and not is_user_admin_by_env(user).is_admin:
         return _shared_error('FORBIDDEN', 'Service is under maintenance', resource_type='auth')
 
-    if settings.CHANNEL_IS_REQUIRED_SUB and user.telegram_id is not None and not is_user_admin_by_env(user).is_admin:
+    from app.services.channel_subscription_service import is_channel_subscription_required_for_user
+
+    if (
+        is_channel_subscription_required_for_user(user)
+        and user.telegram_id is not None
+        and not is_user_admin_by_env(user).is_admin
+    ):
         from app.services.channel_subscription_service import channel_subscription_service
 
         channels_with_status = await channel_subscription_service.get_channels_with_status(user.telegram_id)

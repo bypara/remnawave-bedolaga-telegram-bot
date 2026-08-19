@@ -2888,6 +2888,42 @@ class ReferralEarning(Base):
         return self.amount_kopeks / 100
 
 
+class ReferralRetentionRewardStatus(Enum):
+    PENDING = 'pending'
+    REWARDED = 'rewarded'
+    REJECTED = 'rejected'
+
+
+class ReferralRetentionReward(Base):
+    """Durable, idempotent delayed reward for a verified live referral."""
+
+    __tablename__ = 'referral_retention_rewards'
+    __table_args__ = (
+        UniqueConstraint('referral_id', name='uq_referral_retention_rewards_referral_id'),
+        Index('ix_referral_retention_due', 'status', 'eligible_at'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    referrer_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    referral_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    amount_kopeks = Column(Integer, nullable=False)
+    eligible_at = Column(AwareDateTime(), nullable=False)
+    status = Column(
+        String(20),
+        nullable=False,
+        default=ReferralRetentionRewardStatus.PENDING.value,
+        server_default=ReferralRetentionRewardStatus.PENDING.value,
+    )
+    last_checked_at = Column(AwareDateTime(), nullable=True)
+    completed_at = Column(AwareDateTime(), nullable=True)
+    rejection_reason = Column(String(100), nullable=True)
+    created_at = Column(AwareDateTime(), nullable=False, default=func.now(), server_default=func.now())
+    updated_at = Column(AwareDateTime(), nullable=False, default=func.now(), server_default=func.now(), onupdate=func.now())
+
+    referrer = relationship('User', foreign_keys=[referrer_id], lazy='selectin')
+    referral = relationship('User', foreign_keys=[referral_id], lazy='selectin')
+
+
 class WithdrawalRequestStatus(Enum):
     """Статусы заявки на вывод реферального баланса."""
 

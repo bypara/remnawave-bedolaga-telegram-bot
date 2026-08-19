@@ -52,6 +52,9 @@ class PartnerSettingsResponse(BaseModel):
     referral_program_enabled: bool
     first_payment_commission_percent: int | None = None
     recurring_commission_tiers: str = ''
+    retention_reward_enabled: bool = False
+    retention_reward_kopeks: int = 0
+    retention_days: int = 7
 
 
 class PartnerSettingsUpdateRequest(BaseModel):
@@ -63,6 +66,9 @@ class PartnerSettingsUpdateRequest(BaseModel):
     referral_program_enabled: bool | None = None
     first_payment_commission_percent: int | None = Field(None, ge=0, le=100)
     recurring_commission_tiers: str | None = Field(None, max_length=500)
+    retention_reward_enabled: bool | None = None
+    retention_reward_kopeks: int | None = Field(None, ge=0, le=100_000_000)
+    retention_days: int | None = Field(None, ge=0, le=3650)
 
 
 def _build_partner_settings_response() -> PartnerSettingsResponse:
@@ -75,6 +81,9 @@ def _build_partner_settings_response() -> PartnerSettingsResponse:
         referral_program_enabled=settings.REFERRAL_PROGRAM_ENABLED,
         first_payment_commission_percent=settings.REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT,
         recurring_commission_tiers=settings.REFERRAL_RECURRING_COMMISSION_TIERS,
+        retention_reward_enabled=settings.REFERRAL_RETENTION_REWARD_ENABLED,
+        retention_reward_kopeks=settings.REFERRAL_RETENTION_REWARD_KOPEKS,
+        retention_days=settings.REFERRAL_RETENTION_DAYS,
     )
 
 
@@ -112,6 +121,12 @@ async def update_partner_settings(
         settings.REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT = request.first_payment_commission_percent
     if request.recurring_commission_tiers is not None:
         settings.REFERRAL_RECURRING_COMMISSION_TIERS = request.recurring_commission_tiers
+    if request.retention_reward_enabled is not None:
+        settings.REFERRAL_RETENTION_REWARD_ENABLED = request.retention_reward_enabled
+    if request.retention_reward_kopeks is not None:
+        settings.REFERRAL_RETENTION_REWARD_KOPEKS = request.retention_reward_kopeks
+    if request.retention_days is not None:
+        settings.REFERRAL_RETENTION_DAYS = request.retention_days
 
     # Persist to .env file
     try:
@@ -143,6 +158,12 @@ async def update_partner_settings(
                     request.recurring_commission_tiers.replace('\r\n', '').replace('\n', '').replace('\r', '')
                 )
                 updates['REFERRAL_RECURRING_COMMISSION_TIERS'] = sanitized_tiers
+            if request.retention_reward_enabled is not None:
+                updates['REFERRAL_RETENTION_REWARD_ENABLED'] = str(request.retention_reward_enabled).lower()
+            if request.retention_reward_kopeks is not None:
+                updates['REFERRAL_RETENTION_REWARD_KOPEKS'] = str(request.retention_reward_kopeks)
+            if request.retention_days is not None:
+                updates['REFERRAL_RETENTION_DAYS'] = str(request.retention_days)
 
             new_lines = []
             updated_keys: set[str] = set()

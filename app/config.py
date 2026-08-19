@@ -386,6 +386,14 @@ class Settings(BaseSettings):
     REFERRAL_NOTIFICATIONS_ENABLED: bool = True
     REFERRAL_NOTIFICATION_RETRY_ATTEMPTS: int = 3
 
+    # Отложенная награда за подтверждённого «живого» реферала.
+    # Сумма фиксируется в момент регистрации, поэтому последующее изменение
+    # настройки не меняет уже запланированные выплаты.
+    REFERRAL_RETENTION_REWARD_ENABLED: bool = False
+    REFERRAL_RETENTION_REWARD_KOPEKS: int = 0
+    REFERRAL_RETENTION_DAYS: int = 7
+    REFERRAL_RETENTION_BATCH_SIZE: int = 100
+
     # Настройки вывода реферального баланса
     REFERRAL_WITHDRAWAL_ENABLED: bool = False  # Включить возможность вывода
     REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS: int = 100000  # Мин. сумма вывода (1000₽)
@@ -486,6 +494,8 @@ class Settings(BaseSettings):
     SUBSCRIPTION_RENEWAL_BALANCE_THRESHOLD_KOPEKS: int = 20000
 
     MONITORING_INTERVAL: int = 60
+    PAYMENT_INVOICE_WARNING_MINUTES: int = 5
+    PAYMENT_INVOICE_CHECK_INTERVAL_SECONDS: int = 30
     # Жёсткий per-send таймаут (сек) на отправку уведомлений из MonitoringService.
     # Дефолтный session timeout aiogram = 60s; при медленном канале до Telegram
     # или недоступном получателе один send_photo/send_message блокирует ВЕСЬ хвост
