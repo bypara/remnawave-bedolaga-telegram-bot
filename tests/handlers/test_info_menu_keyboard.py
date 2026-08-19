@@ -1,3 +1,9 @@
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+
+from app.handlers import menu as menu_handler
 from app.keyboards.inline import get_info_menu_keyboard
 
 
@@ -49,3 +55,24 @@ def test_legal_documents_are_direct_url_buttons():
     assert not offer.text.startswith('📄')
     assert 'menu_privacy_policy' not in _callbacks(markup)
     assert 'menu_public_offer' not in _callbacks(markup)
+
+
+@pytest.mark.asyncio
+async def test_rules_back_button_returns_to_info(monkeypatch):
+    callback = SimpleNamespace(
+        data='menu_rules',
+        message=SimpleNamespace(edit_text=AsyncMock()),
+        answer=AsyncMock(),
+    )
+    user = SimpleNamespace(language='ru')
+
+    monkeypatch.setattr(menu_handler.settings, 'SERVICE_RULES_DISPLAY_MODE', 'both')
+    monkeypatch.setattr(
+        'app.database.crud.rules.get_current_rules_content',
+        AsyncMock(return_value='Правила'),
+    )
+
+    await menu_handler.show_service_rules(callback, user, AsyncMock())
+
+    markup = callback.message.edit_text.await_args.kwargs['reply_markup']
+    assert _callbacks(markup)[-1] == 'menu_info'
