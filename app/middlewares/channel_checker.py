@@ -12,14 +12,17 @@ from aiogram.types import CallbackQuery, Message, TelegramObject, Update
 from app.config import settings
 from app.database.crud.campaign import get_campaign_by_start_parameter
 from app.database.crud.subscription import deactivate_subscription, reactivate_subscription
-from app.database.crud.user import get_user_by_telegram_id
+from app.database.crud.user import get_user_by_referral_code, get_user_by_telegram_id
 from app.database.database import AsyncSessionLocal
 from app.database.models import SubscriptionStatus, UserStatus
 from app.keyboards.inline import get_channel_sub_keyboard
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
-from app.services.channel_subscription_service import channel_subscription_service
+from app.services.channel_subscription_service import (
+    channel_subscription_service,
+    is_channel_subscription_required_for_user,
+)
 from app.services.subscription_service import SubscriptionService
 from app.utils.cache import ChannelSubCache, cache
 from app.utils.check_reg_process import is_registration_process
@@ -87,8 +90,9 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        # Runtime check (supports toggling without restart)
-        if not settings.CHANNEL_IS_REQUIRED_SUB:
+        # Runtime check (supports toggling without restart). Referral-only
+        # enforcement is resolved after extracting telegram_id below.
+        if not settings.CHANNEL_IS_REQUIRED_SUB and not settings.REFERRAL_RETENTION_REWARD_ENABLED:
             return await handler(event, data)
 
         # Fast-path bypasses
@@ -102,6 +106,9 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 telegram_id = event.callback_query.from_user.id
 
         if telegram_id is None:
+            return await handler(event, data)
+
+        if not await self._requires_channel_check(telegram_id, event):
             return await handler(event, data)
 
         # Skip channel check for lightweight UI callbacks (close/delete notifications)
@@ -214,6 +221,42 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             return None
 
         return await self._deny_message(event, bot, all_channels)
+
+    async def _requires_channel_check(self, telegram_id: int, event: TelegramObject) -> bool:
+        """Resolve the global/referral-only gate without a DB query on every click."""
+        if settings.CHANNEL_IS_REQUIRED_SUB:
+            return True
+
+        cache_key = f'referral_channel_required:{telegram_id}'
+        cached = await cache.get(cache_key)
+        if cached is not None:
+            return cached in {1, True, '1', 'true', b'1', b'true'}
+
+        payload = None
+        if isinstance(event, Message) and event.text:
+            parts = event.text.strip().split(maxsplit=1)
+            if parts and parts[0].startswith('/start') and len(parts) == 2:
+                payload = parts[1].strip()
+
+        requires_channel = False
+        async with AsyncSessionLocal() as db:
+            user = await get_user_by_telegram_id(db, telegram_id)
+            requires_channel = is_channel_subscription_required_for_user(user)
+
+            # A brand-new referral has no User row yet. Resolve the deep-link
+            # payload before the start handler creates it.
+            if not requires_channel and not user and payload:
+                campaign = await get_campaign_by_start_parameter(db, payload, only_active=True)
+                if campaign and campaign.partner_user_id:
+                    requires_channel = True
+                elif not campaign:
+                    referrer = await get_user_by_referral_code(db, payload)
+                    requires_channel = bool(referrer and referrer.telegram_id != telegram_id)
+
+        # Cache both answers. A later referral attachment explicitly invalidates
+        # this key in process_referral_registration.
+        await cache.set(cache_key, 1 if requires_channel else 0, expire=600)
+        return requires_channel
 
     # -- _deny_message (multi-channel) -----------------------------------------
 

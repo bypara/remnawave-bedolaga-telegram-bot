@@ -210,7 +210,9 @@ async def get_current_cabinet_user(
             )
 
     # Check required channel subscription - Telegram users only
-    if settings.CHANNEL_IS_REQUIRED_SUB:
+    from app.services.channel_subscription_service import is_channel_subscription_required_for_user
+
+    if is_channel_subscription_required_for_user(user):
         # Skip for email-only users (no telegram_id)
         if user.telegram_id is not None:
             # Skip admin check

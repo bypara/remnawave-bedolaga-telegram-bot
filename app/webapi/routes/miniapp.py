@@ -3084,8 +3084,12 @@ async def get_subscription_details(
             detail='Invalid Telegram user identifier',
         ) from None
 
-    # Check required channel subscription
-    if settings.CHANNEL_IS_REQUIRED_SUB:
+    user = await get_user_by_telegram_id(db, telegram_id)
+
+    # Check required channel subscription globally or for referred users only.
+    from app.services.channel_subscription_service import is_channel_subscription_required_for_user
+
+    if is_channel_subscription_required_for_user(user):
         from app.services.channel_subscription_service import channel_subscription_service
 
         channels_with_status = await channel_subscription_service.get_channels_with_status(telegram_id)
@@ -3101,7 +3105,6 @@ async def get_subscription_details(
                 },
             )
 
-    user = await get_user_by_telegram_id(db, telegram_id)
     purchase_url = (settings.MINIAPP_PURCHASE_URL or '').strip()
 
     if not user:

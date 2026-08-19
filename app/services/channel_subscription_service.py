@@ -14,6 +14,7 @@ from aiogram import Bot
 from aiogram.enums import ChatMemberStatus
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError, TelegramRetryAfter
 
+from app.config import settings
 from app.database.crud.required_channel import (
     get_active_channels,
     get_user_channel_subs,
@@ -38,6 +39,18 @@ GOOD_STATUSES = (ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMe
 
 # How long a DB record is considered fresh (no API call needed)
 DB_FRESHNESS_SECONDS = 1800  # 30 min
+
+
+def is_channel_subscription_required_for_user(user) -> bool:
+    """Global channel gate, plus the referral-only retention programme gate."""
+    return bool(
+        settings.CHANNEL_IS_REQUIRED_SUB
+        or (
+            settings.REFERRAL_RETENTION_REWARD_ENABLED
+            and user is not None
+            and getattr(user, 'referred_by_id', None) is not None
+        )
+    )
 
 
 class ChannelSubscriptionService:

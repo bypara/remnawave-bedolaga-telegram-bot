@@ -559,6 +559,17 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
             logger.error('Пользователь не привязан к рефереру', new_user_id=new_user_id, referrer_id=referrer_id)
             return False
 
+        # A user may have opened the bot without a referral payload and entered
+        # the code later. Drop the middleware's cached non-referral decision so
+        # the mandatory channel gate applies immediately after attachment.
+        if settings.REFERRAL_RETENTION_REWARD_ENABLED and new_user.telegram_id:
+            try:
+                from app.utils.cache import cache
+
+                await cache.delete(f'referral_channel_required:{new_user.telegram_id}')
+            except Exception as exc:
+                logger.debug('Failed to invalidate referral channel cache', user_id=new_user_id, error=exc)
+
         try:
             from app.services.referral_retention_service import schedule_referral_retention_reward
 
