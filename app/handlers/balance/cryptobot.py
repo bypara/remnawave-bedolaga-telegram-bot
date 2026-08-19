@@ -7,6 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.handlers.balance.payment_ui import (
+    build_amount_error,
+    build_payment_create_error,
+    build_payment_created_text,
+    build_payment_keyboard,
+    build_topup_prompt,
+)
 from app.keyboards.inline import get_back_keyboard
 from app.keyboards.topup_amounts import get_topup_amount_keyboard
 from app.localization.texts import get_texts
@@ -56,14 +63,12 @@ async def start_cryptobot_payment(callback: types.CallbackQuery, db_user: User, 
     available_assets = settings.get_cryptobot_assets()
     assets_text = ', '.join(available_assets)
 
-    message_text = (
-        f'🪙 <b>Пополнение криптовалютой</b>\n\n'
-        f'Введите сумму для пополнения от 100 до 100,000 ₽:\n\n'
-        f'💰 Доступные активы: {assets_text}\n'
-        f'⚡ Мгновенное зачисление на баланс\n'
-        f'🔒 Безопасная оплата через CryptoBot\n\n'
-        f'{rate_text}\n'
-        f'Сумма будет автоматически конвертирована в USD для оплаты.'
+    message_text = build_topup_prompt(
+        db_user.language,
+        'CryptoBot',
+        10_000,
+        10_000_000,
+        note=f'Доступные активы: <b>{assets_text}</b>\n{rate_text}',
     )
 
     keyboard = await get_topup_amount_keyboard('cryptobot', db_user.language, back_callback='back_to_menu')
@@ -113,12 +118,18 @@ async def process_cryptobot_payment_amount(
     amount_rubles = amount_kopeks / 100
 
     if amount_rubles < 100:
-        await message.answer('Минимальная сумма пополнения: 100 ₽', reply_markup=get_back_keyboard(db_user.language))
+        await message.answer(
+            build_amount_error(db_user.language, 10_000, minimum=True),
+            reply_markup=get_back_keyboard(db_user.language),
+            parse_mode='HTML',
+        )
         return
 
     if amount_rubles > 100000:
         await message.answer(
-            'Максимальная сумма пополнения: 100,000 ₽', reply_markup=get_back_keyboard(db_user.language)
+            build_amount_error(db_user.language, 10_000_000, minimum=False),
+            reply_markup=get_back_keyboard(db_user.language),
+            parse_mode='HTML',
         )
         return
 
@@ -159,7 +170,7 @@ async def process_cryptobot_payment_amount(
         )
 
         if not payment_result:
-            await message.answer('❌ Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.')
+            await message.answer(build_payment_create_error(db_user.language), parse_mode='HTML')
             await state.clear()
             return
 
@@ -169,21 +180,15 @@ async def process_cryptobot_payment_amount(
         payment_url = bot_invoice_url or mini_app_invoice_url
 
         if not payment_url:
-            await message.answer('❌ Ошибка получения ссылки для оплаты. Обратитесь в поддержку.')
+            await message.answer(build_payment_create_error(db_user.language), parse_mode='HTML')
             await state.clear()
             return
 
-        keyboard = types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [types.InlineKeyboardButton(text='🪙 Оплатить', url=payment_url)],
-                [
-                    types.InlineKeyboardButton(
-                        text='📊 Проверить статус',
-                        callback_data=f'check_cryptobot_{payment_result["local_payment_id"]}',
-                    )
-                ],
-                [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],
-            ]
+        keyboard = build_payment_keyboard(
+            db_user.language,
+            payment_url,
+            amount_kopeks,
+            back_callback='balance_topup',
         )
 
         state_data = await state.get_data()
@@ -202,20 +207,16 @@ async def process_cryptobot_payment_amount(
                 logger.warning('Не удалось удалить сообщение с запросом суммы CryptoBot', delete_error=delete_error)
 
         invoice_message = await message.answer(
-            f'🪙 <b>Оплата криптовалютой</b>\n\n'
-            f'💰 Сумма к зачислению: {amount_rubles:.0f} ₽\n'
-            f'💵 К оплате: {amount_usd:.2f} USD\n'
-            f'🪙 Актив: {payment_result["asset"]}\n'
-            f'💱 Курс: 1 USD = {current_rate:.2f} ₽\n'
-            f'🆔 ID платежа: {payment_result["invoice_id"][:8]}...\n\n'
-            f'📱 <b>Инструкция:</b>\n'
-            f"1. Нажмите кнопку 'Оплатить'\n"
-            f'2. Выберите удобный актив\n'
-            f'3. Переведите указанную сумму\n'
-            f'4. Деньги поступят на баланс автоматически\n\n'
-            f'🔒 Оплата проходит через защищенную систему CryptoBot\n'
-            f'⚡ Поддерживаемые активы: USDT, TON, BTC, ETH\n\n'
-            f'❓ Если возникнут проблемы, обратитесь в {settings.get_support_contact_display_html()}',
+            build_payment_created_text(
+                db_user.language,
+                'CryptoBot',
+                amount_kopeks,
+                details=(
+                    f'<b>{"К оплате" if not str(db_user.language).startswith("en") else "To pay"}:</b> {amount_usd:.2f} USD',
+                    f'<b>{"Актив" if not str(db_user.language).startswith("en") else "Asset"}:</b> {payment_result["asset"]}',
+                    f'<b>{"Курс" if not str(db_user.language).startswith("en") else "Rate"}:</b> 1 USD = {current_rate:.2f} ₽',
+                ),
+            ),
             reply_markup=keyboard,
             parse_mode='HTML',
         )

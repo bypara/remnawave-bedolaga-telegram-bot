@@ -8,12 +8,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import User
 from app.external.telegram_stars import TelegramStarsService
+from app.handlers.balance.payment_ui import (
+    build_payment_create_error,
+    build_payment_created_text,
+    build_payment_keyboard,
+    build_topup_prompt,
+)
 from app.keyboards.topup_amounts import get_topup_amount_keyboard, get_topup_amount_limits
 from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
-from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
@@ -50,14 +55,11 @@ async def start_stars_payment(
         return
 
     min_amount_kopeks, max_amount_kopeks = await get_topup_amount_limits('stars', db)
-    message_text = texts.t(
-        'STARS_ENTER_AMOUNT',
-        'Оплата через {name}\n\n'
-        'Введите сумму для пополнения от {min_amount} до {max_amount}.',
-    ).format(
-        name=settings.get_telegram_stars_display_name(),
-        min_amount=settings.format_price(min_amount_kopeks),
-        max_amount=settings.format_price(max_amount_kopeks),
+    message_text = build_topup_prompt(
+        db_user.language,
+        settings.get_telegram_stars_display_name(),
+        min_amount_kopeks,
+        max_amount_kopeks,
     )
 
     keyboard = await get_topup_amount_keyboard('stars', db_user.language, db=db, back_callback='back_to_menu')
@@ -114,17 +116,11 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
             payload=f'balance_{db_user.id}_{amount_kopeks}',
         )
 
-        keyboard = types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text=strip_leading_emoji(texts.t('STARS_PAY_BUTTON', '⭐ Оплатить')),
-                        icon_custom_emoji_id='5271604874419647061',
-                        url=invoice_link,
-                    )
-                ],
-                [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],
-            ]
+        keyboard = build_payment_keyboard(
+            db_user.language,
+            invoice_link,
+            amount_kopeks,
+            back_callback='balance_topup',
         )
 
         state_data = await state.get_data()
@@ -144,16 +140,15 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
                 logger.warning('Не удалось удалить сообщение с запросом суммы Stars', delete_error=delete_error)
 
         invoice_message = await message.answer(
-            texts.t(
-                'STARS_BALANCE_PAYMENT_INVOICE',
-                'Оплата через Telegram Stars\n\n'
-                'Сумма: {amount}\n'
-                'К оплате: {stars_amount} звезд\n'
-                'Курс: {stars_rate}₽ за звезду',
-            ).format(
-                amount=texts.format_price(amount_kopeks),
-                stars_amount=stars_amount,
-                stars_rate=stars_rate,
+            build_payment_created_text(
+                db_user.language,
+                'Telegram Stars',
+                amount_kopeks,
+                details=(
+                    f'<b>{"To pay" if str(db_user.language).startswith("en") else "К оплате"}:</b> {stars_amount} Stars',
+                    f'<b>{"Rate" if str(db_user.language).startswith("en") else "Курс"}:</b> {stars_rate} ₽ / Star',
+                ),
+                instruction=False,
             ),
             reply_markup=keyboard,
             parse_mode='HTML',
@@ -168,4 +163,4 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
 
     except Exception as e:
         logger.error('Ошибка создания Stars invoice', error=e)
-        await message.answer('⚠️ Ошибка создания платежа')
+        await message.answer(build_payment_create_error(db_user.language), parse_mode='HTML')
