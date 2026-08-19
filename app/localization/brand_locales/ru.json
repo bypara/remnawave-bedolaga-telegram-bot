@@ -301,5 +301,6 @@
   "PAYMENT_INVOICE_EXPIRING_WARNING": "<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> <b>Счёт ещё не оплачен</b>\n\nДо окончания срока оплаты осталось менее 5 минут.",
   "PAYMENT_INVOICE_EXPIRED": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> <b>Срок оплаты истёк</b>\n\nЭтот счёт больше нельзя оплатить. Создайте новый, чтобы продолжить.",
   "PAYMENT_INVOICE_PAY_BUTTON": "Оплатить",
-  "PAYMENT_INVOICE_MAIN_MENU_BUTTON": "Главное меню"
+  "PAYMENT_INVOICE_MAIN_MENU_BUTTON": "Главное меню",
+  "PAYMENT_INVOICE_VALID_UNTIL": "<tg-emoji emoji-id=\"5258258882022612173\">⏲️</tg-emoji> Счёт действует до: {expires_at}"
 }

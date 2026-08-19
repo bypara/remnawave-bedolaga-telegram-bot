@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -7,6 +8,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from app.services.payment_invoice_lifecycle_service import (
     LIFECYCLE_METADATA_KEY,
     _extract_payment_urls,
+    _append_expiry_to_invoice,
     _is_paid,
     _is_pending,
     _send_expired,
@@ -79,3 +81,24 @@ async def test_expiry_deletes_invoice_and_warning_then_sends_main_menu():
     stored = payment.metadata_json[LIFECYCLE_METADATA_KEY]
     assert stored['expired_message_id'] == 33
     assert stored['expired_notified_at']
+
+
+@pytest.mark.asyncio
+async def test_invoice_message_gets_client_localized_expiry_time():
+    bot = SimpleNamespace(edit_message_text=AsyncMock())
+    message = SimpleNamespace(
+        text='Payment details',
+        caption=None,
+        html_text='<b>Payment details</b>',
+        chat=SimpleNamespace(id=100),
+        message_id=11,
+        reply_markup=None,
+    )
+    expires_at = datetime(2026, 8, 20, 12, 30, tzinfo=UTC)
+
+    await _append_expiry_to_invoice(bot, message, expires_at, 'en')
+
+    edited_text = bot.edit_message_text.await_args.kwargs['text']
+    assert '<b>Payment details</b>' in edited_text
+    assert 'Invoice valid until:' in edited_text
+    assert '<tg-time unix=' in edited_text
