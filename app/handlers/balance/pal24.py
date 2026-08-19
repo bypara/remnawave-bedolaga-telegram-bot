@@ -12,6 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import User
+from app.handlers.balance.payment_ui import (
+    build_amount_error,
+    build_payment_create_error,
+    build_payment_created_text,
+    build_payment_keyboard,
+    build_topup_prompt,
+)
 from app.keyboards.inline import get_back_keyboard
 from app.keyboards.topup_amounts import get_topup_amount_keyboard
 from app.localization.texts import get_texts
@@ -57,10 +64,9 @@ async def _send_pal24_payment_message(
 
         if not payment_result:
             await message.answer(
-                texts.t(
-                    'PAL24_PAYMENT_ERROR',
-                    '❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
-                )
+                build_payment_create_error(db_user.language),
+                reply_markup=get_back_keyboard(db_user.language),
+                parse_mode='HTML',
             )
             await state.clear()
             return
@@ -71,10 +77,9 @@ async def _send_pal24_payment_message(
 
         if not (sbp_url or card_url or fallback_url):
             await message.answer(
-                texts.t(
-                    'PAL24_PAYMENT_ERROR',
-                    '❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
-                )
+                build_payment_create_error(db_user.language),
+                reply_markup=get_back_keyboard(db_user.language),
+                parse_mode='HTML',
             )
             await state.clear()
             return
@@ -85,9 +90,7 @@ async def _send_pal24_payment_message(
         bill_id = payment_result.get('bill_id')
         local_payment_id = payment_result.get('local_payment_id')
 
-        pay_buttons: list[list[types.InlineKeyboardButton]] = []
-        steps: list[str] = []
-        step_counter = 1
+        payment_actions: list[tuple[str, str]] = []
 
         default_sbp_text = texts.t(
             'PAL24_SBP_PAY_BUTTON',
@@ -96,21 +99,7 @@ async def _send_pal24_payment_message(
         sbp_button_text = settings.get_pal24_sbp_button_text(default_sbp_text)
 
         if sbp_url and settings.is_pal24_sbp_button_visible():
-            pay_buttons.append(
-                [
-                    types.InlineKeyboardButton(
-                        text=sbp_button_text,
-                        url=sbp_url,
-                    )
-                ]
-            )
-            steps.append(
-                texts.t(
-                    'PAL24_INSTRUCTION_BUTTON',
-                    '{step}. Нажмите кнопку «{button}»',
-                ).format(step=step_counter, button=html.escape(sbp_button_text))
-            )
-            step_counter += 1
+            payment_actions.append((sbp_button_text, sbp_url))
 
         default_card_text = texts.t(
             'PAL24_CARD_PAY_BUTTON',
@@ -119,88 +108,19 @@ async def _send_pal24_payment_message(
         card_button_text = settings.get_pal24_card_button_text(default_card_text)
 
         if card_url and card_url != sbp_url and settings.is_pal24_card_button_visible():
-            pay_buttons.append(
-                [
-                    types.InlineKeyboardButton(
-                        text=card_button_text,
-                        url=card_url,
-                    )
-                ]
-            )
-            steps.append(
-                texts.t(
-                    'PAL24_INSTRUCTION_BUTTON',
-                    '{step}. Нажмите кнопку «{button}»',
-                ).format(step=step_counter, button=html.escape(card_button_text))
-            )
-            step_counter += 1
+            payment_actions.append((card_button_text, card_url))
 
-        if not pay_buttons and fallback_url and settings.is_pal24_sbp_button_visible():
-            pay_buttons.append(
-                [
-                    types.InlineKeyboardButton(
-                        text=sbp_button_text,
-                        url=fallback_url,
-                    )
-                ]
-            )
-            steps.append(
-                texts.t(
-                    'PAL24_INSTRUCTION_BUTTON',
-                    '{step}. Нажмите кнопку «{button}»',
-                ).format(step=step_counter, button=html.escape(sbp_button_text))
-            )
-            step_counter += 1
+        if not payment_actions and fallback_url and settings.is_pal24_sbp_button_visible():
+            payment_actions.append((sbp_button_text, fallback_url))
 
-        follow_template = texts.t(
-            'PAL24_INSTRUCTION_FOLLOW',
-            '{step}. Следуйте подсказкам платёжной системы',
+        keyboard = build_payment_keyboard(
+            db_user.language,
+            None,
+            amount_kopeks,
+            back_callback='balance_topup',
+            payment_actions=payment_actions,
         )
-        steps.append(follow_template.format(step=step_counter))
-        step_counter += 1
-
-        confirm_template = texts.t(
-            'PAL24_INSTRUCTION_CONFIRM',
-            '{step}. Подтвердите перевод',
-        )
-        steps.append(confirm_template.format(step=step_counter))
-        step_counter += 1
-
-        success_template = texts.t(
-            'PAL24_INSTRUCTION_COMPLETE',
-            '{step}. Средства зачислятся автоматически',
-        )
-        steps.append(success_template.format(step=step_counter))
-
-        message_template = texts.t(
-            'PAL24_PAYMENT_INSTRUCTIONS',
-            (
-                '🏦 <b>Оплата через PayPalych</b>\n\n'
-                '💰 Сумма: {amount}\n'
-                '🆔 ID счета: {bill_id}\n\n'
-                '📱 <b>Инструкция:</b>\n{steps}\n\n'
-                '❓ Если возникнут проблемы, обратитесь в {support}'
-            ),
-        )
-
-        keyboard_rows = pay_buttons + [
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
-                    callback_data=f'check_pal24_{local_payment_id}',
-                )
-            ],
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],
-        ]
-
-        keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
-
-        message_text = message_template.format(
-            amount=settings.format_price(amount_kopeks),
-            bill_id=bill_id,
-            steps='\n'.join(steps),
-            support=settings.get_support_contact_display_html(),
-        )
+        message_text = build_payment_created_text(db_user.language, 'PayPalych', amount_kopeks)
 
         invoice_message = await message.answer(
             message_text,
@@ -245,10 +165,9 @@ async def _send_pal24_payment_message(
     except Exception as error:
         logger.error('Ошибка создания PayPalych платежа', error=error)
         await message.answer(
-            texts.t(
-                'PAL24_PAYMENT_ERROR',
-                '❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
-            )
+            build_payment_create_error(db_user.language),
+            reply_markup=get_back_keyboard(db_user.language),
+            parse_mode='HTML',
         )
         await state.clear()
 
@@ -282,24 +201,11 @@ async def start_pal24_payment(
         await callback.answer('❌ Оплата через PayPalych временно недоступна', show_alert=True)
         return
 
-    # Формируем текст сообщения в зависимости от доступных способов оплаты
-    if settings.is_pal24_sbp_button_visible() and settings.is_pal24_card_button_visible():
-        payment_methods_text = 'СБП и банковской картой'
-    elif settings.is_pal24_sbp_button_visible():
-        payment_methods_text = 'СБП'
-    elif settings.is_pal24_card_button_visible():
-        payment_methods_text = 'банковской картой'
-    else:
-        # Если обе кнопки отключены, используем общий текст
-        payment_methods_text = 'доступными способами'
-
-    message_text = texts.t(
-        'PAL24_TOPUP_PROMPT',
-        (
-            f'🏦 <b>Оплата через PayPalych ({payment_methods_text})</b>\n\n'
-            'Введите сумму для пополнения от 100 до 1 000 000 ₽.\n'
-            f'Оплата проходит через PayPalych ({payment_methods_text}).'
-        ),
+    message_text = build_topup_prompt(
+        db_user.language,
+        'PayPalych',
+        settings.PAL24_MIN_AMOUNT_KOPEKS,
+        settings.PAL24_MAX_AMOUNT_KOPEKS,
     )
 
     keyboard = await get_topup_amount_keyboard('pal24', db_user.language, back_callback='back_to_menu')
@@ -352,18 +258,18 @@ async def process_pal24_payment_amount(
         return
 
     if amount_kopeks < settings.PAL24_MIN_AMOUNT_KOPEKS:
-        min_rubles = settings.PAL24_MIN_AMOUNT_KOPEKS / 100
         await message.answer(
-            f'❌ Минимальная сумма для оплаты через PayPalych: {min_rubles:.0f} ₽',
+            build_amount_error(db_user.language, settings.PAL24_MIN_AMOUNT_KOPEKS, minimum=True),
             reply_markup=get_back_keyboard(db_user.language),
+            parse_mode='HTML',
         )
         return
 
     if amount_kopeks > settings.PAL24_MAX_AMOUNT_KOPEKS:
-        max_rubles = settings.PAL24_MAX_AMOUNT_KOPEKS / 100
         await message.answer(
-            f'❌ Максимальная сумма для оплаты через PayPalych: {max_rubles:,.0f} ₽'.replace(',', ' '),
+            build_amount_error(db_user.language, settings.PAL24_MAX_AMOUNT_KOPEKS, minimum=False),
             reply_markup=get_back_keyboard(db_user.language),
+            parse_mode='HTML',
         )
         return
 

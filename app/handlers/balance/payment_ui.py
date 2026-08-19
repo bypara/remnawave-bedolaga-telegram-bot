@@ -125,7 +125,7 @@ def get_common_payment_text(key: str, language: str) -> str | None:
             + (
                 'Enter a top-up amount from <b>{min_amount:.0f} ₽</b> to <b>{max_amount:,.0f} ₽</b>.'
                 if english
-                else 'Введите сумму для поплнения от <b>{min_amount:.0f} ₽</b> до <b>{max_amount:,.0f} ₽</b>.'
+                else 'Введите сумму для пополнения от <b>{min_amount:.0f} ₽</b> до <b>{max_amount:,.0f} ₽</b>.'
             )
         )
     if key == 'CLOUDPAYMENTS_PAYMENT_CREATED':
@@ -254,12 +254,24 @@ def build_payment_keyboard(
     amount_kopeks: int,
     *,
     back_callback: str = 'menu_balance',
+    payment_actions: Sequence[tuple[str, str]] = (),
 ) -> InlineKeyboardMarkup:
     from app.localization.texts import get_texts
 
     texts = get_texts(language)
     rows: list[list[InlineKeyboardButton]] = []
-    if payment_url:
+    if payment_actions:
+        rows.extend(
+            [
+                InlineKeyboardButton(
+                    text=label,
+                    url=url,
+                    icon_custom_emoji_id=PAY_BUTTON_EMOJI_ID,
+                )
+            ]
+            for label, url in payment_actions
+        )
+    elif payment_url:
         pay = 'Pay' if _is_english(language) else 'Оплатить'
         rows.append(
             [

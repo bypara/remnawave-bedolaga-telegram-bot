@@ -1,5 +1,3 @@
-import html
-
 import structlog
 from aiogram import types
 from aiogram.fsm.context import FSMContext
@@ -7,6 +5,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.handlers.balance.payment_ui import (
+    build_amount_error,
+    build_payment_create_error,
+    build_payment_created_text,
+    build_payment_keyboard,
+    build_topup_prompt,
+    build_topup_restriction_keyboard,
+    build_topup_restriction_text,
+)
 from app.keyboards.inline import get_back_keyboard
 from app.keyboards.topup_amounts import get_topup_amount_keyboard
 from app.localization.texts import get_texts
@@ -28,23 +35,15 @@ async def start_mulenpay_payment(
 
     # Проверка ограничения на пополнение
     if getattr(db_user, 'restriction_topup', False):
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
-        support_url = settings.get_support_contact_url()
-        keyboard = []
-        if support_url:
-            keyboard.append([types.InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
-        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
-
         await callback.message.edit_text(
-            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
-            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
-            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+            build_topup_restriction_text(db_user.language, getattr(db_user, 'restriction_reason', None)),
+            reply_markup=build_topup_restriction_keyboard(db_user.language),
+            parse_mode='HTML',
         )
         await callback.answer()
         return
 
     mulenpay_name = settings.get_mulenpay_display_name()
-    mulenpay_name_html = settings.get_mulenpay_display_name_html()
 
     if not settings.is_mulenpay_enabled():
         await callback.answer(
@@ -53,17 +52,11 @@ async def start_mulenpay_payment(
         )
         return
 
-    message_template = texts.t(
-        'MULENPAY_TOPUP_PROMPT',
-        (
-            '💳 <b>Оплата через {mulenpay_name_html}</b>\n\n'
-            'Введите сумму для пополнения от 100 до 100 000 ₽.\n'
-            'Оплата происходит через защищенную платформу {mulenpay_name}.'
-        ),
-    )
-    message_text = message_template.format(
-        mulenpay_name=mulenpay_name,
-        mulenpay_name_html=mulenpay_name_html,
+    message_text = build_topup_prompt(
+        db_user.language,
+        mulenpay_name,
+        settings.MULENPAY_MIN_AMOUNT_KOPEKS,
+        settings.MULENPAY_MAX_AMOUNT_KOPEKS,
     )
 
     keyboard = await get_topup_amount_keyboard('mulenpay', db_user.language, back_callback='back_to_menu')
@@ -95,24 +88,15 @@ async def process_mulenpay_payment_amount(
 
     # Проверка ограничения на пополнение
     if getattr(db_user, 'restriction_topup', False):
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
-        support_url = settings.get_support_contact_url()
-        keyboard = []
-        if support_url:
-            keyboard.append([types.InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
-        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
-
         await message.answer(
-            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
-            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
-            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+            build_topup_restriction_text(db_user.language, getattr(db_user, 'restriction_reason', None)),
+            reply_markup=build_topup_restriction_keyboard(db_user.language),
             parse_mode='HTML',
         )
         await state.clear()
         return
 
     mulenpay_name = settings.get_mulenpay_display_name()
-    mulenpay_name_html = settings.get_mulenpay_display_name_html()
 
     if not settings.is_mulenpay_enabled():
         await message.answer(f'❌ Оплата через {mulenpay_name} временно недоступна')
@@ -120,15 +104,17 @@ async def process_mulenpay_payment_amount(
 
     if amount_kopeks < settings.MULENPAY_MIN_AMOUNT_KOPEKS:
         await message.answer(
-            f'Минимальная сумма пополнения: {settings.format_price(settings.MULENPAY_MIN_AMOUNT_KOPEKS)}',
+            build_amount_error(db_user.language, settings.MULENPAY_MIN_AMOUNT_KOPEKS, minimum=True),
             reply_markup=get_back_keyboard(db_user.language),
+            parse_mode='HTML',
         )
         return
 
     if amount_kopeks > settings.MULENPAY_MAX_AMOUNT_KOPEKS:
         await message.answer(
-            f'Максимальная сумма пополнения: {settings.format_price(settings.MULENPAY_MAX_AMOUNT_KOPEKS)}',
+            build_amount_error(db_user.language, settings.MULENPAY_MAX_AMOUNT_KOPEKS, minimum=False),
             reply_markup=get_back_keyboard(db_user.language),
+            parse_mode='HTML',
         )
         return
 
@@ -161,63 +147,24 @@ async def process_mulenpay_payment_amount(
 
         if not payment_result or not payment_result.get('payment_url'):
             await message.answer(
-                texts.t(
-                    'MULENPAY_PAYMENT_ERROR',
-                    '❌ Ошибка создания платежа {mulenpay_name}. Попробуйте позже или обратитесь в поддержку.',
-                ).format(mulenpay_name=mulenpay_name)
+                build_payment_create_error(db_user.language),
+                reply_markup=get_back_keyboard(db_user.language),
+                parse_mode='HTML',
             )
             await state.clear()
             return
 
         payment_url = payment_result.get('payment_url')
-        mulen_payment_id = payment_result.get('mulen_payment_id')
         local_payment_id = payment_result.get('local_payment_id')
+        payment_id_display = payment_result.get('mulen_payment_id') or local_payment_id
 
-        keyboard = types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text=texts.t(
-                            'MULENPAY_PAY_BUTTON',
-                            '💳 Оплатить через {mulenpay_name}',
-                        ).format(mulenpay_name=mulenpay_name),
-                        url=payment_url,
-                    )
-                ],
-                [
-                    types.InlineKeyboardButton(
-                        text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
-                        callback_data=f'check_mulenpay_{local_payment_id}',
-                    )
-                ],
-                [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],
-            ]
+        keyboard = build_payment_keyboard(
+            db_user.language,
+            payment_url,
+            amount_kopeks,
+            back_callback='balance_topup',
         )
-
-        payment_id_display = mulen_payment_id if mulen_payment_id is not None else local_payment_id
-
-        message_template = texts.t(
-            'MULENPAY_PAYMENT_INSTRUCTIONS',
-            (
-                '💳 <b>Оплата через {mulenpay_name_html}</b>\n\n'
-                '💰 Сумма: {amount}\n'
-                '🆔 ID платежа: {payment_id}\n\n'
-                '📱 <b>Инструкция:</b>\n'
-                "1. Нажмите кнопку 'Оплатить через {mulenpay_name}'\n"
-                '2. Следуйте подсказкам платежной системы\n'
-                '3. Подтвердите перевод\n'
-                '4. Средства зачислятся автоматически\n\n'
-                '❓ Если возникнут проблемы, обратитесь в {support}'
-            ),
-        )
-
-        message_text = message_template.format(
-            amount=settings.format_price(amount_kopeks),
-            payment_id=payment_id_display,
-            support=settings.get_support_contact_display_html(),
-            mulenpay_name=mulenpay_name,
-            mulenpay_name_html=mulenpay_name_html,
-        )
+        message_text = build_payment_created_text(db_user.language, mulenpay_name, amount_kopeks)
 
         invoice_message = await message.answer(
             message_text,
@@ -261,10 +208,9 @@ async def process_mulenpay_payment_amount(
     except Exception as e:
         logger.error('Ошибка создания платежа', mulenpay_name=mulenpay_name, error=e)
         await message.answer(
-            texts.t(
-                'MULENPAY_PAYMENT_ERROR',
-                '❌ Ошибка создания платежа {mulenpay_name}. Попробуйте позже или обратитесь в поддержку.',
-            ).format(mulenpay_name=mulenpay_name)
+            build_payment_create_error(db_user.language),
+            reply_markup=get_back_keyboard(db_user.language),
+            parse_mode='HTML',
         )
         await state.clear()
 

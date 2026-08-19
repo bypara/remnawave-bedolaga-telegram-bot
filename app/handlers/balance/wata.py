@@ -1,4 +1,3 @@
-import html
 from datetime import UTC, datetime
 
 import structlog
@@ -9,6 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.handlers.balance.payment_ui import (
+    build_amount_error,
+    build_payment_create_error,
+    build_payment_created_text,
+    build_payment_keyboard,
+    build_topup_prompt,
+    build_topup_restriction_keyboard,
+    build_topup_restriction_text,
+)
 from app.keyboards.inline import get_back_keyboard
 from app.keyboards.topup_amounts import get_topup_amount_keyboard
 from app.localization.texts import get_texts
@@ -26,21 +34,12 @@ async def start_wata_payment(
     db_user: User,
     state: FSMContext,
 ):
-    texts = get_texts(db_user.language)
-
     # Проверка ограничения на пополнение
     if getattr(db_user, 'restriction_topup', False):
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
-        support_url = settings.get_support_contact_url()
-        keyboard = []
-        if support_url:
-            keyboard.append([types.InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
-        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
-
         await callback.message.edit_text(
-            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
-            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
-            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+            build_topup_restriction_text(db_user.language, getattr(db_user, 'restriction_reason', None)),
+            reply_markup=build_topup_restriction_keyboard(db_user.language),
+            parse_mode='HTML',
         )
         await callback.answer()
         return
@@ -49,16 +48,11 @@ async def start_wata_payment(
         await callback.answer('❌ Оплата через WATA временно недоступна', show_alert=True)
         return
 
-    message_text = texts.t(
-        'WATA_TOPUP_PROMPT',
-        (
-            '💳 <b>Оплата через WATA</b>\n\n'
-            'Введите сумму пополнения. Минимальная сумма — {min_amount}, максимальная — {max_amount}.\n'
-            'Оплата происходит через защищенную форму WATA.'
-        ),
-    ).format(
-        min_amount=settings.format_price(settings.WATA_MIN_AMOUNT_KOPEKS),
-        max_amount=settings.format_price(settings.WATA_MAX_AMOUNT_KOPEKS),
+    message_text = build_topup_prompt(
+        db_user.language,
+        'WATA',
+        settings.WATA_MIN_AMOUNT_KOPEKS,
+        settings.WATA_MAX_AMOUNT_KOPEKS,
     )
 
     keyboard = await get_topup_amount_keyboard('wata', db_user.language, back_callback='back_to_menu')
@@ -86,21 +80,11 @@ async def process_wata_payment_amount(
     amount_kopeks: int,
     state: FSMContext,
 ):
-    texts = get_texts(db_user.language)
-
     # Проверка ограничения на пополнение
     if getattr(db_user, 'restriction_topup', False):
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
-        support_url = settings.get_support_contact_url()
-        keyboard = []
-        if support_url:
-            keyboard.append([types.InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
-        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
-
         await message.answer(
-            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
-            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
-            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+            build_topup_restriction_text(db_user.language, getattr(db_user, 'restriction_reason', None)),
+            reply_markup=build_topup_restriction_keyboard(db_user.language),
             parse_mode='HTML',
         )
         await state.clear()
@@ -112,21 +96,17 @@ async def process_wata_payment_amount(
 
     if amount_kopeks < settings.WATA_MIN_AMOUNT_KOPEKS:
         await message.answer(
-            texts.t(
-                'WATA_AMOUNT_TOO_LOW',
-                'Минимальная сумма пополнения: {amount}',
-            ).format(amount=settings.format_price(settings.WATA_MIN_AMOUNT_KOPEKS)),
+            build_amount_error(db_user.language, settings.WATA_MIN_AMOUNT_KOPEKS, minimum=True),
             reply_markup=get_back_keyboard(db_user.language),
+            parse_mode='HTML',
         )
         return
 
     if amount_kopeks > settings.WATA_MAX_AMOUNT_KOPEKS:
         await message.answer(
-            texts.t(
-                'WATA_AMOUNT_TOO_HIGH',
-                'Максимальная сумма пополнения: {amount}',
-            ).format(amount=settings.format_price(settings.WATA_MAX_AMOUNT_KOPEKS)),
+            build_amount_error(db_user.language, settings.WATA_MAX_AMOUNT_KOPEKS, minimum=False),
             reply_markup=get_back_keyboard(db_user.language),
+            parse_mode='HTML',
         )
         return
 
@@ -146,56 +126,18 @@ async def process_wata_payment_amount(
 
     if not result or not result.get('payment_url'):
         await message.answer(
-            texts.t(
-                'WATA_PAYMENT_ERROR',
-                '❌ Ошибка создания платежа WATA. Попробуйте позже или обратитесь в поддержку.',
-            )
+            build_payment_create_error(db_user.language),
+            reply_markup=get_back_keyboard(db_user.language),
+            parse_mode='HTML',
         )
         await state.clear()
         return
 
     payment_url = result['payment_url']
-    payment_link_id = result['payment_link_id']
     local_payment_id = result['local_payment_id']
 
-    keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t('WATA_PAY_BUTTON', '💳 Оплатить через WATA'),
-                    url=payment_url,
-                )
-            ],
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
-                    callback_data=f'check_wata_{local_payment_id}',
-                )
-            ],
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],
-        ]
-    )
-
-    message_template = texts.t(
-        'WATA_PAYMENT_INSTRUCTIONS',
-        (
-            '💳 <b>Оплата через WATA</b>\n\n'
-            '💰 Сумма: {amount}\n'
-            '🆔 ID платежа: {payment_id}\n\n'
-            '📱 <b>Инструкция:</b>\n'
-            "1. Нажмите кнопку 'Оплатить через WATA'\n"
-            '2. Следуйте подсказкам платежной системы\n'
-            '3. Подтвердите перевод\n'
-            '4. Средства зачислятся автоматически\n\n'
-            '❓ Если возникнут проблемы, обратитесь в {support}'
-        ),
-    )
-
-    message_text = message_template.format(
-        amount=settings.format_price(amount_kopeks),
-        payment_id=payment_link_id,
-        support=settings.get_support_contact_display_html(),
-    )
+    keyboard = build_payment_keyboard(db_user.language, payment_url, amount_kopeks, back_callback='balance_topup')
+    message_text = build_payment_created_text(db_user.language, 'WATA', amount_kopeks)
 
     state_data = await state.get_data()
     prompt_message_id = state_data.get('wata_prompt_message_id')

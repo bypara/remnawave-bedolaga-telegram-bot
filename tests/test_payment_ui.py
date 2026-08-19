@@ -47,6 +47,24 @@ def test_standard_pay_button_uses_custom_emoji() -> None:
     assert pay_button.text == 'Оплатить 100 ₽'
 
 
+def test_payment_keyboard_supports_multiple_provider_actions() -> None:
+    keyboard = build_payment_keyboard(
+        'ru',
+        None,
+        10_000,
+        payment_actions=(
+            ('Оплатить через СБП', 'https://example.com/sbp'),
+            ('Оплатить картой', 'https://example.com/card'),
+        ),
+    )
+
+    assert [row[0].url for row in keyboard.inline_keyboard[:-1]] == [
+        'https://example.com/sbp',
+        'https://example.com/card',
+    ]
+    assert all(row[0].icon_custom_emoji_id == PAY_BUTTON_EMOJI_ID for row in keyboard.inline_keyboard[:-1])
+
+
 def test_legacy_provider_keys_resolve_to_one_shared_template() -> None:
     aura = get_common_payment_text('AURAPAY_PAYMENT_CREATED', 'ru')
     cispay = get_common_payment_text('CISPAY_PAYMENT_CREATED', 'ru')
