@@ -376,8 +376,6 @@ class FreekassaPaymentMixin:
         # Отправка уведомления пользователю
         if getattr(self, 'bot', None) and user.telegram_id:
             try:
-                keyboard = await self.build_topup_success_keyboard(user)
-
                 # Resolve display name from payment metadata (sub-method aware)
                 display_name = settings.get_freekassa_display_name_html()
                 try:
@@ -395,17 +393,12 @@ class FreekassaPaymentMixin:
                         display_name = settings.get_freekassa_card_display_name_html()
                 except (json.JSONDecodeError, AttributeError, TypeError):
                     pass
-                await self.bot.send_message(
+                await self._send_payment_success_notification(
                     user.telegram_id,
-                    (
-                        '✅ <b>Пополнение успешно!</b>\n\n'
-                        f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        f'💳 Способ: {display_name}\n'
-                        f'🆔 Транзакция: {transaction.id}\n\n'
-                        'Баланс пополнен автоматически!'
-                    ),
-                    parse_mode='HTML',
-                    reply_markup=keyboard,
+                    payment.amount_kopeks,
+                    user,
+                    db=db,
+                    payment_method_title=display_name,
                 )
             except Exception as error:
                 logger.error('Ошибка отправки уведомления пользователю Freekassa', error=error)

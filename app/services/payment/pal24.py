@@ -486,18 +486,12 @@ class Pal24PaymentMixin:
 
         if getattr(self, 'bot', None) and user.telegram_id:
             try:
-                keyboard = await self.build_topup_success_keyboard(user)
-                await self.bot.send_message(
+                await self._send_payment_success_notification(
                     user.telegram_id,
-                    (
-                        '✅ <b>Пополнение успешно!</b>\n\n'
-                        f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        '🦊 Способ: PayPalych\n'
-                        f'🆔 Транзакция: {transaction.id}\n\n'
-                        'Баланс пополнен автоматически!'
-                    ),
-                    parse_mode='HTML',
-                    reply_markup=keyboard,
+                    payment.amount_kopeks,
+                    user,
+                    db=db,
+                    payment_method_title='PayPalych',
                 )
             except Exception as error:
                 logger.error('Ошибка отправки уведомления пользователю Pal24', error=error)

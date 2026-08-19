@@ -526,18 +526,12 @@ class OverpayPaymentMixin:
 
         if getattr(self, 'bot', None) and user.telegram_id:
             try:
-                keyboard = await self.build_topup_success_keyboard(user)
-                await self.bot.send_message(
+                await self._send_payment_success_notification(
                     user.telegram_id,
-                    (
-                        '\u2705 <b>Пополнение успешно!</b>\n\n'
-                        f'\U0001f4b0 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        f'\U0001f4b3 Способ: {display_name}\n'
-                        f'\U0001f194 Транзакция: {transaction.id}\n\n'
-                        'Баланс пополнен автоматически!'
-                    ),
-                    parse_mode='HTML',
-                    reply_markup=keyboard,
+                    payment.amount_kopeks,
+                    user,
+                    db=db,
+                    payment_method_title=display_name,
                 )
             except Exception as error:
                 logger.error('Ошибка отправки уведомления пользователю Overpay', error=error)
