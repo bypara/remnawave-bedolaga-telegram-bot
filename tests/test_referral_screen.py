@@ -51,7 +51,7 @@ def test_referral_qr_is_cached_by_user_and_link(tmp_path: Path, monkeypatch: pyt
 
 
 @pytest.mark.asyncio
-async def test_referral_main_uses_qr_clickable_links_and_retention_reward(monkeypatch: pytest.MonkeyPatch):
+async def test_referral_main_uses_qr_copyable_links_and_retention_reward(monkeypatch: pytest.MonkeyPatch):
     callback = SimpleNamespace(
         bot=SimpleNamespace(get_me=AsyncMock(return_value=SimpleNamespace(username='example_bot'))),
         answer=AsyncMock(),
@@ -89,8 +89,9 @@ async def test_referral_main_uses_qr_clickable_links_and_retention_reward(monkey
     caption = rendered.await_args.kwargs['caption']
     assert 'Ваша статистика' not in caption
     assert 'не блокирует бота в течение 7 дней' in caption
-    assert '<a href="https://t.me/example_bot?start=ref-code&amp;source=test">' in caption
-    assert '<a href="https://cabinet.example/ref=ref-code&amp;source=test">' in caption
+    assert '<code>https://t.me/example_bot?start=ref-code&amp;source=test</code>' in caption
+    assert '<code>https://cabinet.example/ref=ref-code&amp;source=test</code>' in caption
+    assert '<code>ref-code</code>' in caption
     assert rendered.await_args.kwargs['qr_path'] == Path('referral.png')
 
 
