@@ -17,6 +17,8 @@ from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
 
+from .payment_ui import build_payment_created_text, build_payment_keyboard, build_topup_prompt
+
 
 logger = structlog.get_logger(__name__)
 
@@ -85,34 +87,8 @@ async def _create_riopay_payment_and_respond(
     payment_url = result.get('payment_url')
     display_name = settings.get_riopay_display_name()
 
-    # Create keyboard with payment button
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=texts.t(
-                        'PAY_BUTTON',
-                        '💳 Оплатить {amount}₽',
-                    ).format(amount=f'{amount_rub:.0f}'),
-                    url=payment_url,
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text=texts.t('BACK_BUTTON', '◀️ Назад'),
-                    callback_data='menu_balance',
-                )
-            ],
-        ]
-    )
-
-    response_text = texts.t(
-        'RIOPAY_PAYMENT_CREATED',
-        '💳 <b>Оплата через {name}</b>\n\n'
-        'Сумма: <b>{amount}₽</b>\n\n'
-        'Нажмите кнопку ниже для оплаты.\n'
-        'После успешной оплаты баланс будет пополнен автоматически.',
-    ).format(name=display_name, amount=f'{amount_rub:.2f}')
+    keyboard = build_payment_keyboard(db_user.language, payment_url, amount_kopeks)
+    response_text = build_payment_created_text(db_user.language, display_name, amount_kopeks)
 
     if edit_message:
         await message_or_callback.edit_text(
@@ -216,23 +192,16 @@ async def start_riopay_topup(
     await state.set_state(BalanceStates.waiting_for_amount)
     await state.update_data(payment_method='riopay')
 
-    min_amount = settings.RIOPAY_MIN_AMOUNT_KOPEKS // 100
-    max_amount = settings.RIOPAY_MAX_AMOUNT_KOPEKS // 100
     display_name = settings.get_riopay_display_name()
 
     keyboard = await get_topup_amount_keyboard('riopay', db_user.language)
 
     await callback.message.edit_text(
-        texts.t(
-            'RIOPAY_ENTER_AMOUNT',
-            '💳 <b>Пополнение через {name}</b>\n\n'
-            'Введите сумму пополнения в рублях.\n\n'
-            'Минимум: {min_amount}₽\n'
-            'Максимум: {max_amount}₽',
-        ).format(
-            name=display_name,
-            min_amount=min_amount,
-            max_amount=f'{max_amount:,}'.replace(',', ' '),
+        build_topup_prompt(
+            db_user.language,
+            display_name,
+            settings.RIOPAY_MIN_AMOUNT_KOPEKS,
+            settings.RIOPAY_MAX_AMOUNT_KOPEKS,
         ),
         parse_mode='HTML',
         reply_markup=keyboard,

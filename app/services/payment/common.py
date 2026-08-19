@@ -273,6 +273,7 @@ class PaymentCommonMixin:
                 telegram_id=getattr(source, 'telegram_id', None),
                 language=getattr(source, 'language', 'ru'),
                 subscription=subscription_snapshot,
+                subscriptions=([subscription_snapshot] if subscription_snapshot is not None else []),
             )
 
         try:

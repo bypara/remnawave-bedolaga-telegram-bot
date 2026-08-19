@@ -17,6 +17,8 @@ from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
 
+from .payment_ui import build_payment_created_text, build_payment_keyboard, build_topup_prompt
+
 
 logger = structlog.get_logger(__name__)
 
@@ -102,30 +104,8 @@ async def _create_lava_payment_and_respond(
     payment_url = result.get('payment_url')
     name = display_name or settings.get_lava_display_name()
 
-    # Без URL mixin вернул бы None ещё до этого блока; здесь URL гарантирован.
-    pay_button_text = texts.t('PAY_BUTTON', '\U0001f4b3 Оплатить {amount}₽').format(
-        amount=f'{amount_rub:.0f}',
-    )
-
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text=pay_button_text, url=payment_url)],
-            [
-                InlineKeyboardButton(
-                    text=texts.t('BACK_BUTTON', '◀️ Назад'),
-                    callback_data='menu_balance',
-                )
-            ],
-        ]
-    )
-
-    response_text = texts.t(
-        'LAVA_PAYMENT_CREATED',
-        '\U0001f4b3 <b>Оплата через {name}</b>\n\n'
-        'Сумма: <b>{amount}₽</b>\n\n'
-        'Нажмите кнопку ниже для перехода к оплате.\n'
-        'После подтверждения платежа баланс будет пополнен автоматически.',
-    ).format(name=name, amount=f'{amount_rub:.2f}'.rstrip('0').rstrip('.'))
+    keyboard = build_payment_keyboard(db_user.language, payment_url, amount_kopeks)
+    response_text = build_payment_created_text(db_user.language, name, amount_kopeks)
 
     if edit_message:
         await message_or_callback.edit_text(response_text, reply_markup=keyboard, parse_mode='HTML')
@@ -230,17 +210,7 @@ async def _start_lava_topup_impl(
     keyboard = await get_topup_amount_keyboard(payment_method, db_user.language, db=db)
 
     await callback.message.edit_text(
-        texts.t(
-            'LAVA_ENTER_AMOUNT',
-            '\U0001f4b3 <b>Пополнение через {name}</b>\n\n'
-            'Введите сумму пополнения в рублях.\n\n'
-            'Минимум: {min_amount}₽\n'
-            'Максимум: {max_amount}₽',
-        ).format(
-            name=display_name,
-            min_amount=f'{min_amount_kopeks // 100:,}'.replace(',', ' '),
-            max_amount=f'{max_amount_kopeks // 100:,}'.replace(',', ' '),
-        ),
+        build_topup_prompt(db_user.language, display_name, min_amount_kopeks, max_amount_kopeks),
         parse_mode='HTML',
         reply_markup=keyboard,
     )

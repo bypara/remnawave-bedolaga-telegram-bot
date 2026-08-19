@@ -12,7 +12,7 @@ from aiogram.types import CallbackQuery, Message, TelegramObject, Update
 from app.config import settings
 from app.database.crud.campaign import get_campaign_by_start_parameter
 from app.database.crud.subscription import deactivate_subscription, reactivate_subscription
-from app.database.crud.user import get_user_by_referral_code, get_user_by_telegram_id
+from app.database.crud.user import get_user_by_telegram_id
 from app.database.database import AsyncSessionLocal
 from app.database.models import SubscriptionStatus, UserStatus
 from app.keyboards.inline import get_channel_sub_keyboard
@@ -92,7 +92,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
     ) -> Any:
         # Runtime check (supports toggling without restart). Referral-only
         # enforcement is resolved after extracting telegram_id below.
-        if not settings.CHANNEL_IS_REQUIRED_SUB and not settings.REFERRAL_RETENTION_REWARD_ENABLED:
+        if not settings.CHANNEL_IS_REQUIRED_SUB and not settings.is_referral_program_enabled():
             return await handler(event, data)
 
         # Fast-path bypasses
@@ -232,26 +232,17 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         if cached is not None:
             return cached in {1, True, '1', 'true', b'1', b'true'}
 
-        payload = None
-        if isinstance(event, Message) and event.text:
-            parts = event.text.strip().split(maxsplit=1)
-            if parts and parts[0].startswith('/start') and len(parts) == 2:
-                payload = parts[1].strip()
-
         requires_channel = False
         async with AsyncSessionLocal() as db:
             user = await get_user_by_telegram_id(db, telegram_id)
             requires_channel = is_channel_subscription_required_for_user(user)
 
-            # A brand-new referral has no User row yet. Resolve the deep-link
-            # payload before the start handler creates it.
-            if not requires_channel and not user and payload:
-                campaign = await get_campaign_by_start_parameter(db, payload, only_active=True)
-                if campaign and campaign.partner_user_id:
-                    requires_channel = True
-                elif not campaign:
-                    referrer = await get_user_by_referral_code(db, payload)
-                    requires_channel = bool(referrer and referrer.telegram_id != telegram_id)
+            # A brand-new referral must first reach the language picker. The
+            # start handler resolves the trusted referral and then opens the
+            # mandatory channel gate explicitly. Once the User exists, this
+            # middleware keeps enforcing the same gate on every action.
+            if user is None:
+                requires_channel = False
 
         # Cache both answers. A later referral attachment explicitly invalidates
         # this key in process_referral_registration.

@@ -185,6 +185,15 @@ class Texts:
         if item == 'RULES_TEXT':
             return _get_cached_rules_value(self.language)
 
+        # Standard payment providers historically use separate localization keys
+        # for identical screens. The compatibility adapter keeps those handlers
+        # working while rendering one shared UI in the fork.
+        from app.handlers.balance.payment_ui import get_common_payment_text
+
+        common_payment_text = get_common_payment_text(item, self.language)
+        if common_payment_text is not None:
+            return common_payment_text
+
         if item in self._values:
             return self._values[item]
 

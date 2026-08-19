@@ -29,6 +29,7 @@ from app.database.crud.user_message import get_random_active_message
 from app.database.models import GuestPurchase, GuestPurchaseStatus, PinnedMessage, SubscriptionStatus, UserStatus
 from app.keyboards.inline import (
     get_back_keyboard,
+    get_channel_sub_keyboard,
     get_interface_languages,
     get_language_selection_keyboard,
     get_main_menu_keyboard_async,
@@ -162,6 +163,92 @@ async def _repeat_required_post_registration_choice(
             disable_web_page_preview=True,
         )
     await _remember_post_registration_offer(state, sent_message, offer_text)
+
+
+def _normalize_required_channels(channels: list[dict]) -> list[dict]:
+    """Return Telegram-safe channel links without mutating cached data."""
+    normalized: list[dict] = []
+    for channel in channels:
+        item = dict(channel)
+        link = str(item.get('channel_link') or '').strip()
+        if link.startswith('@'):
+            item['channel_link'] = f'https://t.me/{link[1:]}'
+        normalized.append(item)
+    return normalized
+
+
+def _get_referral_channel_gate_text(texts) -> str:
+    return texts.t(
+        'REFERRAL_CHANNEL_REQUIRED_TEXT',
+        '<tg-emoji emoji-id="5258486128742244085">👥</tg-emoji> '
+        '<b>Подпишитесь на канал</b>\n\n'
+        'Для пользователей, пришедших по реферальной ссылке, подписка обязательна.\n\n'
+        'После подписки нажмите «Я подписался».',
+    )
+
+
+async def _show_referral_channel_gate(
+    message: types.Message,
+    state: FSMContext,
+    language: str,
+) -> bool:
+    """Show the mandatory referral channel gate after language selection."""
+    channel_subscription_service.bot = message.bot
+    channels = await channel_subscription_service.get_channels_with_status(message.chat.id)
+    texts = get_texts(language)
+
+    if not channels:
+        logger.error(
+            'Referral channel gate is enabled but no active required channels are configured',
+            telegram_id=message.chat.id,
+        )
+        sent_message = await message.answer(
+            texts.t(
+                'REFERRAL_CHANNEL_NOT_CONFIGURED',
+                'Проверка подписки временно недоступна. Пожалуйста, попробуйте позже.',
+            )
+        )
+    else:
+        sent_message = await message.answer(
+            _get_referral_channel_gate_text(texts),
+            reply_markup=get_channel_sub_keyboard(
+                _normalize_required_channels(channels),
+                language=language,
+            ),
+            parse_mode='HTML',
+        )
+
+    await state.update_data(
+        referral_channel_gate_pending=True,
+        referral_channel_gate_message_id=sent_message.message_id,
+    )
+    await state.set_state(RegistrationStates.waiting_for_channel_subscription)
+    return True
+
+
+async def _repeat_referral_channel_gate(
+    message: types.Message,
+    state: FSMContext,
+    state_data: dict[str, Any],
+) -> None:
+    """Replace the referral gate instead of allowing a repeated /start past it."""
+    previous_message_id = state_data.get('referral_channel_gate_message_id')
+    if previous_message_id:
+        try:
+            await message.bot.delete_message(message.chat.id, int(previous_message_id))
+        except Exception as error:
+            logger.debug('Не удалось удалить предыдущее сообщение проверки канала', error=str(error))
+
+    try:
+        await message.delete()
+    except Exception as error:
+        logger.debug('Не удалось удалить повторную команду /start на проверке канала', error=str(error))
+
+    await _show_referral_channel_gate(
+        message,
+        state,
+        state_data.get('language', DEFAULT_LANGUAGE),
+    )
 
 
 def _split_start_param_subid(param: str | None) -> tuple[str | None, str | None]:
@@ -1080,6 +1167,10 @@ async def _continue_registration_after_language(
             await state.set_data(data)
             logger.info('✅ LANGUAGE: Реферер найден', referrer_id=referrer.id)
 
+    if settings.is_referral_program_enabled() and data.get('referrer_id'):
+        await _show_referral_channel_gate(target_message, state, language)
+        return
+
     if settings.SKIP_REFERRAL_CODE or data.get('referral_code') or data.get('referrer_id'):
         await _complete_registration_wrapper()
     else:
@@ -1102,6 +1193,10 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     logger.info('🚀 START: Обработка /start от', from_user_id=message.from_user.id)
 
     data = await state.get_data() or {}
+
+    if data.get('referral_channel_gate_pending'):
+        await _repeat_referral_channel_gate(message, state, data)
+        return
 
     if data.get('post_registration_choice_pending'):
         pending_user = db_user or await get_user_by_telegram_id(db, message.from_user.id)
@@ -2391,6 +2486,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
     pinned_message = await get_active_pinned_message(db)
 
     if offer_text:
+        edit_referral_gate = bool(data.get('referral_channel_gate_verified'))
         keyboard = (
             get_post_registration_keyboard(user.language)
             if can_offer_trial
@@ -2399,11 +2495,18 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
         try:
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, user, pinned_message)
-            sent_message = await callback.message.answer(
-                offer_text,
-                reply_markup=keyboard,
-                parse_mode='HTML',
-            )
+            if edit_referral_gate:
+                sent_message = await callback.message.edit_text(
+                    offer_text,
+                    reply_markup=keyboard,
+                    parse_mode='HTML',
+                )
+            else:
+                sent_message = await callback.message.answer(
+                    offer_text,
+                    reply_markup=keyboard,
+                    parse_mode='HTML',
+                )
             if can_offer_trial:
                 await _remember_post_registration_offer(state, sent_message, offer_text)
             logger.info('✅ Приветственное сообщение отправлено пользователю', telegram_id=user.telegram_id)
@@ -2413,11 +2516,18 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             if 'parse entities' in str(e).lower() or "can't parse" in str(e).lower():
                 logger.warning('HTML parse error в приветственном сообщении, повтор без parse_mode', error=e)
                 try:
-                    sent_message = await callback.message.answer(
-                        offer_text,
-                        reply_markup=keyboard,
-                        parse_mode=None,
-                    )
+                    if edit_referral_gate:
+                        sent_message = await callback.message.edit_text(
+                            offer_text,
+                            reply_markup=keyboard,
+                            parse_mode=None,
+                        )
+                    else:
+                        sent_message = await callback.message.answer(
+                            offer_text,
+                            reply_markup=keyboard,
+                            parse_mode=None,
+                        )
                     if can_offer_trial:
                         await _remember_post_registration_offer(state, sent_message, offer_text)
                     if pinned_message and not pinned_message.send_before_menu:
@@ -2955,6 +3065,55 @@ async def required_sub_channel_check(
         # Ensure bot is set on service
         if not channel_subscription_service.bot:
             channel_subscription_service.bot = bot
+
+        if state_data.get('referral_channel_gate_pending'):
+            await channel_subscription_service.invalidate_user_cache(query.from_user.id)
+            strict_result = await channel_subscription_service.check_required_channels_strict(query.from_user.id)
+            channels = await channel_subscription_service.get_channels_with_status(query.from_user.id)
+
+            if not channels:
+                return await query.answer(
+                    texts.t(
+                        'REFERRAL_CHANNEL_NOT_CONFIGURED',
+                        'Проверка подписки временно недоступна. Пожалуйста, попробуйте позже.',
+                    ),
+                    show_alert=True,
+                )
+
+            if strict_result is not True:
+                try:
+                    await query.message.edit_text(
+                        _get_referral_channel_gate_text(texts),
+                        reply_markup=get_channel_sub_keyboard(
+                            _normalize_required_channels(channels),
+                            language=language,
+                        ),
+                        parse_mode='HTML',
+                    )
+                except TelegramBadRequest as error:
+                    if 'message is not modified' not in str(error).lower():
+                        raise
+
+                alert_text = (
+                    texts.t(
+                        'CHANNEL_SUBSCRIBE_REQUIRED_ALERT',
+                        'Пожалуйста, сначала подпишитесь на все обязательные каналы!',
+                    )
+                    if strict_result is False
+                    else texts.t(
+                        'CHANNEL_CHECK_TEMPORARILY_UNAVAILABLE',
+                        'Не удалось проверить подписку. Пожалуйста, попробуйте ещё раз через несколько секунд.',
+                    )
+                )
+                return await query.answer(alert_text, show_alert=True)
+
+            state_data['referral_channel_gate_pending'] = False
+            state_data['referral_channel_gate_verified'] = True
+            state_data.pop('referral_channel_gate_message_id', None)
+            await state.set_data(state_data)
+            await query.answer()
+            await complete_registration_from_callback(query, state, db)
+            return
 
         # Invalidate cache for fresh check (user just clicked "I subscribed")
         await channel_subscription_service.invalidate_user_cache(query.from_user.id)

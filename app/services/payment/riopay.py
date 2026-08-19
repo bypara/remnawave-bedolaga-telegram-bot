@@ -415,21 +415,12 @@ class RioPayPaymentMixin:
         if getattr(self, 'bot', None) and user.telegram_id:
             try:
                 display_name = settings.get_riopay_display_name()
-
-                keyboard = await self.build_topup_success_keyboard(user)
-                message = (
-                    '✅ <b>Пополнение успешно!</b>\n\n'
-                    f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                    f'💳 Способ: {display_name}\n'
-                    f'🆔 Транзакция: {transaction.id}\n\n'
-                    'Баланс пополнен автоматически!'
-                )
-
-                await self.bot.send_message(
+                await self._send_payment_success_notification(
                     user.telegram_id,
-                    message,
-                    parse_mode='HTML',
-                    reply_markup=keyboard,
+                    payment.amount_kopeks,
+                    user,
+                    db=db,
+                    payment_method_title=display_name,
                 )
             except Exception as error:
                 logger.error('Ошибка отправки уведомления пользователю RioPay', error=error)

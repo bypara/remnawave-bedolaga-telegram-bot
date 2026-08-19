@@ -9,6 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.handlers.balance.payment_ui import (
+    build_amount_error,
+    build_payment_create_error,
+    build_payment_created_text,
+    build_payment_keyboard,
+    build_topup_prompt,
+)
 from app.keyboards.inline import get_back_keyboard
 from app.keyboards.topup_amounts import get_topup_amount_keyboard
 from app.localization.texts import get_texts
@@ -60,28 +67,16 @@ async def _prompt_amount(
             )
         return
 
-    min_amount_label = settings.format_price(settings.PLATEGA_MIN_AMOUNT_KOPEKS)
     max_amount_kopeks = settings.PLATEGA_MAX_AMOUNT_KOPEKS
-    max_amount_label = settings.format_price(max_amount_kopeks) if max_amount_kopeks and max_amount_kopeks > 0 else ''
-
-    default_prompt_body = (
-        'Введите сумму для пополнения от {min_amount} до {max_amount}.\n'
-        if max_amount_kopeks and max_amount_kopeks > 0
-        else 'Введите сумму для пополнения от {min_amount}.\n'
-    )
-
-    prompt_template = texts.t(
-        'PLATEGA_TOPUP_PROMPT',
-        (f'Оплата через {{method_name}}\n\n{default_prompt_body}'),
-    )
 
     keyboard = await get_topup_amount_keyboard('platega', db_user.language, back_callback='back_to_menu')
 
     await message.edit_text(
-        prompt_template.format(
-            method_name=method_name,
-            min_amount=min_amount_label,
-            max_amount=max_amount_label,
+        build_topup_prompt(
+            db_user.language,
+            method_name,
+            settings.PLATEGA_MIN_AMOUNT_KOPEKS,
+            max_amount_kopeks,
         ),
         reply_markup=keyboard,
         parse_mode='HTML',
@@ -297,22 +292,18 @@ async def process_platega_payment_amount(
 
     if amount_kopeks < settings.PLATEGA_MIN_AMOUNT_KOPEKS:
         await message.answer(
-            texts.t(
-                'PLATEGA_AMOUNT_TOO_LOW',
-                'Минимальная сумма для оплаты через Platega: {amount}',
-            ).format(amount=settings.format_price(settings.PLATEGA_MIN_AMOUNT_KOPEKS)),
+            build_amount_error(db_user.language, settings.PLATEGA_MIN_AMOUNT_KOPEKS, minimum=True),
             reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
+            parse_mode='HTML',
         )
         await state.set_state(BalanceStates.waiting_for_amount)
         return
 
     if amount_kopeks > settings.PLATEGA_MAX_AMOUNT_KOPEKS:
         await message.answer(
-            texts.t(
-                'PLATEGA_AMOUNT_TOO_HIGH',
-                'Максимальная сумма для оплаты через Platega: {amount}',
-            ).format(amount=settings.format_price(settings.PLATEGA_MAX_AMOUNT_KOPEKS)),
+            build_amount_error(db_user.language, settings.PLATEGA_MAX_AMOUNT_KOPEKS, minimum=False),
             reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
+            parse_mode='HTML',
         )
         await state.set_state(BalanceStates.waiting_for_amount)
         return
@@ -333,51 +324,18 @@ async def process_platega_payment_amount(
 
     if not payment_result or not payment_result.get('redirect_url'):
         await message.answer(
-            texts.t(
-                'PLATEGA_PAYMENT_ERROR',
-                '❌ Ошибка создания платежа Platega. Попробуйте позже или обратитесь в поддержку.',
-            )
+            build_payment_create_error(db_user.language),
+            reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
+            parse_mode='HTML',
         )
         await state.clear()
         return
 
     redirect_url = payment_result.get('redirect_url')
     local_payment_id = payment_result.get('local_payment_id')
-    transaction_id = payment_result.get('transaction_id')
     method_title = settings.get_platega_method_display_name(method_code)
 
-    keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                types.InlineKeyboardButton(
-                    text=strip_leading_emoji(
-                        texts.t(
-                            'PLATEGA_PAY_BUTTON',
-                            '💳 Оплатить через {method}',
-                        ).format(method=method_title)
-                    ),
-                    icon_custom_emoji_id='5271604874419647061',
-                    url=redirect_url,
-                )
-            ],
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],
-        ]
-    )
-
-    instructions_template = texts.t(
-        'PLATEGA_PAYMENT_INSTRUCTIONS',
-        (
-            'Оплата через {method}\n\n'
-            '💰 Сумма: {amount}\n'
-            '🆔 ID транзакции: {transaction}\n\n'
-            '📱 <b>Инструкция:</b>\n'
-            '1. Нажмите кнопку «Оплатить»\n'
-            '2. Следуйте подсказкам платёжной системы\n'
-            '3. Подтвердите перевод\n'
-            '4. Средства зачислятся автоматически\n\n'
-            '❓ Если возникнут проблемы, обратитесь в {support}'
-        ),
-    )
+    keyboard = build_payment_keyboard(db_user.language, redirect_url, amount_kopeks, back_callback='balance_topup')
 
     state_data = await state.get_data()
     prompt_message_id = state_data.get('platega_prompt_message_id')
@@ -395,12 +353,7 @@ async def process_platega_payment_amount(
             logger.warning('Не удалось удалить сообщение с запросом суммы Platega', delete_error=delete_error)
 
     invoice_message = await message.answer(
-        instructions_template.format(
-            method=method_title,
-            amount=settings.format_price(amount_kopeks),
-            transaction=transaction_id or local_payment_id,
-            support=settings.get_support_contact_display_html(),
-        ),
+        build_payment_created_text(db_user.language, method_title, amount_kopeks),
         reply_markup=keyboard,
         parse_mode='HTML',
     )
