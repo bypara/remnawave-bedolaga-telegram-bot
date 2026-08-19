@@ -348,7 +348,7 @@ def get_post_registration_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKe
             [
                 InlineKeyboardButton(
                     text=texts.t('POST_REGISTRATION_EXPLORE_BUTTON', 'Я пока тут осмотрюсь'),
-                    callback_data='back_to_menu',
+                    callback_data='post_registration_explore',
                 )
             ],
         ]

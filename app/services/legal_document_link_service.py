@@ -105,6 +105,31 @@ def format_implicit_consent_notice(texts, links: LegalDocumentLinks, *, action: 
     ).format(action=html.escape(action), documents=documents_text)
 
 
+def format_browsing_consent_warning(texts, links: LegalDocumentLinks) -> str:
+    """Build the notice shown when a new user chooses to explore the bot first."""
+    documents: list[str] = []
+    if links.privacy_policy:
+        label = texts.t('LEGAL_PRIVACY_POLICY_LINK_LABEL', 'политикой конфиденциальности')
+        documents.append(f'<a href="{html.escape(links.privacy_policy, quote=True)}">{html.escape(label)}</a>')
+    if links.public_offer:
+        label = texts.t('LEGAL_PUBLIC_OFFER_LINK_LABEL', 'публичной офертой')
+        documents.append(f'<a href="{html.escape(links.public_offer, quote=True)}">{html.escape(label)}</a>')
+
+    if not documents:
+        return ''
+
+    if len(documents) == 1:
+        documents_text = documents[0]
+    else:
+        conjunction = texts.t('LEGAL_DOCUMENTS_CONJUNCTION', 'и')
+        documents_text = f'{documents[0]} {html.escape(conjunction)} {documents[1]}'
+
+    return texts.t(
+        'LEGAL_BROWSING_CONSENT_WARNING',
+        'Продолжая пользоваться ботом, вы соглашаетесь с {documents}.',
+    ).format(documents=documents_text)
+
+
 async def build_implicit_consent_notice(
     db: AsyncSession,
     texts,
@@ -115,6 +140,11 @@ async def build_implicit_consent_notice(
     links = await get_active_legal_document_links(db, texts.language)
     action = texts.t(action_key, action_fallback)
     return format_implicit_consent_notice(texts, links, action=action)
+
+
+async def build_browsing_consent_warning(db: AsyncSession, texts) -> str:
+    links = await get_active_legal_document_links(db, texts.language)
+    return format_browsing_consent_warning(texts, links)
 
 
 async def record_implicit_legal_consent(

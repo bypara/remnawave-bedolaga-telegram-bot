@@ -26,10 +26,7 @@ from app.database.database import AsyncSessionLocal
 from app.database.models import Tariff, Transaction, TransactionType, User
 from app.localization.texts import Texts, get_texts
 from app.services.admin_notification_service import AdminNotificationService
-from app.services.legal_document_link_service import (
-    build_implicit_consent_notice,
-    record_implicit_legal_consent,
-)
+from app.services.legal_document_link_service import record_implicit_legal_consent
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 from app.utils.decorators import error_handler
@@ -38,16 +35,6 @@ from app.utils.promo_offer import get_user_active_promo_discount_percent
 
 
 logger = structlog.get_logger(__name__)
-
-
-async def _append_purchase_consent_notice(db: AsyncSession, texts: Texts, message: str) -> str:
-    notice = await build_implicit_consent_notice(
-        db,
-        texts,
-        action_key='LEGAL_ACTION_CONFIRM_PURCHASE',
-        action_fallback='«Подтвердить покупку»',
-    )
-    return f'{message}\n\n{notice}' if notice else message
 
 
 def _format_gb(value: float | int) -> str:
@@ -964,7 +951,6 @@ async def select_tariff(
                     discount=discount_text,
                     balance=format_price_kopeks(user_balance),
                 )
-            confirmation_text = await _append_purchase_consent_notice(db, texts, confirmation_text)
             await callback.message.edit_text(
                 confirmation_text,
                 reply_markup=get_daily_tariff_confirm_keyboard(tariff_id, db_user.language),
@@ -1658,7 +1644,6 @@ async def select_tariff_period(
                 balance=format_price_kopeks(user_balance),
                 balance_after=format_price_kopeks(user_balance - final_price),
             )
-        confirmation_text = await _append_purchase_consent_notice(db, texts, confirmation_text)
         await callback.message.edit_text(
             confirmation_text,
             reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language),
@@ -5371,7 +5356,6 @@ async def return_to_saved_tariff_cart(
                 balance=format_price_kopeks(user_balance),
                 after=format_price_kopeks(user_balance - daily_price),
             )
-        confirmation_text = await _append_purchase_consent_notice(db, texts, confirmation_text)
         await callback.message.edit_text(
             confirmation_text,
             reply_markup=get_daily_tariff_confirm_keyboard(tariff_id, db_user.language),
@@ -5469,7 +5453,6 @@ async def return_to_saved_tariff_cart(
                 balance=format_price_kopeks(user_balance),
                 balance_after=format_price_kopeks(user_balance - total_price),
             )
-        confirmation_text = await _append_purchase_consent_notice(db, texts, confirmation_text)
         await callback.message.edit_text(
             confirmation_text,
             reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language),

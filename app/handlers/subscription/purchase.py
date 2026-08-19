@@ -734,7 +734,12 @@ def _get_trial_payment_keyboard(language: str, can_pay_from_balance: bool = Fals
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-async def activate_trial(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def activate_trial(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext | None = None,
+):
     from app.services.trial_activation_service import get_trial_activation_charge_amount
 
     texts = get_texts(db_user.language)
@@ -775,6 +780,21 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
         await callback.message.edit_text(texts.TRIAL_ALREADY_USED, reply_markup=get_back_keyboard(db_user.language))
         await callback.answer()
         return
+
+    # Clicking the activation button is both the required onboarding choice and
+    # the legal action described directly on the preceding trial screen.
+    if state is not None:
+        await state.clear()
+        try:
+            await record_implicit_legal_consent(
+                db,
+                db_user,
+                language=db_user.language,
+                source='bot_trial',
+            )
+        except Exception as error:
+            # A temporary legal-page read error must not break trial activation.
+            logger.error('Не удалось записать согласие при активации триала', error=str(error))
 
     # Проверяем, платный ли триал
     trial_price_kopeks = get_trial_activation_charge_amount()
@@ -1048,12 +1068,6 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
             return
 
         await db.refresh(db_user)
-        await record_implicit_legal_consent(
-            db,
-            db_user,
-            language=db_user.language,
-            source='bot_trial',
-        )
 
         try:
             notification_service = AdminNotificationService(callback.bot)

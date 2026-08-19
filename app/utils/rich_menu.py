@@ -502,7 +502,7 @@ async def _build_single_subscription_block(user: User, texts, db: AsyncSession) 
     return '<blockquote>' + '<br>'.join(lines) + '</blockquote>'
 
 
-async def build_main_menu_rich_html(user: User, texts, db: AsyncSession) -> str:
+async def build_main_menu_rich_html(user: User, texts, db: AsyncSession, *, notice: str = '') -> str:
     """Собирает rich-HTML главного меню (контент, без клавиатуры)."""
     blocks: list[str] = []
 
@@ -513,6 +513,10 @@ async def build_main_menu_rich_html(user: User, texts, db: AsyncSession) -> str:
     user_name = html.escape(user.full_name or '')
     blocks.append(f'<h4>👤 {user_name}</h4>')
     blocks.append('<hr/>')
+
+    if notice:
+        notice_html = _sanitize_rich_inline(notice).replace('\n', '<br>')
+        blocks.append(f'<blockquote>{notice_html}</blockquote>')
 
     if settings.is_multi_tariff_enabled():
         heading = texts.t('MAIN_MENU_RICH_SUBSCRIPTIONS_HEADING', '📱 Подписки')
@@ -664,13 +668,19 @@ async def try_send_rich_main_menu(
     texts,
     db: AsyncSession,
     keyboard: InlineKeyboardMarkup,
+    *,
+    notice: str = '',
 ) -> bool:
     """Отправляет главное меню rich-сообщением. False — показать классическое меню."""
     if not is_rich_menu_enabled() or _compact_main_menu_requested(texts):
         return False
 
     try:
-        rich_html = await build_main_menu_rich_html(db_user, texts, db)
+        rich_html = (
+            await build_main_menu_rich_html(db_user, texts, db, notice=notice)
+            if notice
+            else await build_main_menu_rich_html(db_user, texts, db)
+        )
     except Exception as error:
         logger.error('Ошибка сборки rich-меню', error=error, user_id=getattr(db_user, 'id', None))
         return False
@@ -687,7 +697,7 @@ async def try_send_rich_main_menu(
             _mark_rich_unavailable(error)
         elif _retry_without_logo(error):
             # Логотип не скачался — единственный повтор уже без него (флаг взведён).
-            return await try_send_rich_main_menu(bot, chat_id, db_user, texts, db, keyboard)
+            return await try_send_rich_main_menu(bot, chat_id, db_user, texts, db, keyboard, notice=notice)
         else:
             logger.error('Не удалось отправить rich-меню', error=error, chat_id=chat_id)
         return False
@@ -702,12 +712,14 @@ async def try_answer_rich_main_menu(
     texts,
     db: AsyncSession,
     keyboard: InlineKeyboardMarkup,
+    *,
+    notice: str = '',
 ) -> bool:
     """Rich-аналог message.answer(menu_text) для /start и завершения регистрации."""
     bot = message.bot
     if bot is None:
         return False
-    return await try_send_rich_main_menu(bot, message.chat.id, db_user, texts, db, keyboard)
+    return await try_send_rich_main_menu(bot, message.chat.id, db_user, texts, db, keyboard, notice=notice)
 
 
 async def try_edit_rich_main_menu(
@@ -716,6 +728,8 @@ async def try_edit_rich_main_menu(
     texts,
     db: AsyncSession,
     keyboard: InlineKeyboardMarkup,
+    *,
+    notice: str = '',
 ) -> bool:
     """Rich-аналог edit_or_answer_photo для callback-навигации. False — рисовать классику."""
     if not is_rich_menu_enabled() or _compact_main_menu_requested(texts):
@@ -727,7 +741,11 @@ async def try_edit_rich_main_menu(
         return False
 
     try:
-        rich_html = await build_main_menu_rich_html(db_user, texts, db)
+        rich_html = (
+            await build_main_menu_rich_html(db_user, texts, db, notice=notice)
+            if notice
+            else await build_main_menu_rich_html(db_user, texts, db)
+        )
     except Exception as error:
         logger.error('Ошибка сборки rich-меню', error=error, user_id=getattr(db_user, 'id', None))
         return False
@@ -797,7 +815,7 @@ async def try_edit_rich_main_menu(
             _mark_rich_unavailable(error)
         elif _retry_without_logo(error):
             # Логотип не скачался — единственный повтор уже без него (флаг взведён).
-            return await try_edit_rich_main_menu(callback, db_user, texts, db, keyboard)
+            return await try_edit_rich_main_menu(callback, db_user, texts, db, keyboard, notice=notice)
         else:
             # Правка не удалась (сообщение удалено/устарело и т.п.) — классический
             # рендер разрулит своей цепочкой фоллбеков (edit_or_answer_photo).

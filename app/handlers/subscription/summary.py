@@ -6,7 +6,6 @@ from aiogram.fsm.context import FSMContext
 
 from app.keyboards.inline import get_subscription_confirm_keyboard
 from app.localization.texts import get_texts
-from app.services.legal_document_link_service import build_implicit_consent_notice
 from app.services.subscription_checkout_service import save_subscription_checkout_draft
 from app.states import SubscriptionStates
 
@@ -43,15 +42,6 @@ async def present_subscription_summary(
 
     await state.set_data(prepared_data)
     await save_subscription_checkout_draft(db_user.id, prepared_data)
-
-    consent_notice = await build_implicit_consent_notice(
-        db,
-        texts,
-        action_key='LEGAL_ACTION_CONFIRM_PURCHASE',
-        action_fallback='«Подтвердить покупку»',
-    )
-    if consent_notice:
-        summary_text = f'{summary_text}\n\n{consent_notice}'
 
     await callback.message.edit_text(
         summary_text,

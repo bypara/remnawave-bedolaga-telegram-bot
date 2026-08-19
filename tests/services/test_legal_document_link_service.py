@@ -2,6 +2,7 @@ from app.localization.texts import get_texts
 from app.services.legal_document_link_service import (
     LegalDocumentLinks,
     extract_legal_document_url,
+    format_browsing_consent_warning,
     format_implicit_consent_notice,
     normalize_legal_document_url,
 )
@@ -43,3 +44,17 @@ def test_implicit_consent_notice_contains_both_clickable_documents():
 
 def test_implicit_consent_notice_is_empty_without_configured_links():
     assert format_implicit_consent_notice(get_texts('en'), LegalDocumentLinks(), action='“Pay”') == ''
+
+
+def test_browsing_consent_warning_contains_document_links():
+    warning = format_browsing_consent_warning(
+        get_texts('ru'),
+        LegalDocumentLinks(
+            privacy_policy='https://example.com/privacy',
+            public_offer='https://example.com/offer',
+        ),
+    )
+
+    assert 'Продолжая пользоваться ботом' in warning
+    assert '<a href="https://example.com/privacy">политикой конфиденциальности</a>' in warning
+    assert '<a href="https://example.com/offer">публичной офертой</a>' in warning

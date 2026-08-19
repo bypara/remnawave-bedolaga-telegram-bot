@@ -105,6 +105,65 @@ def _get_default_post_registration_offer(texts) -> str:
     )
 
 
+async def _remember_post_registration_offer(
+    state: FSMContext,
+    sent_message: types.Message,
+    offer_text: str,
+) -> None:
+    await state.update_data(
+        post_registration_choice_pending=True,
+        post_registration_offer_message_id=sent_message.message_id,
+        post_registration_offer_text=offer_text,
+    )
+
+
+async def _repeat_required_post_registration_choice(
+    message: types.Message,
+    state: FSMContext,
+    user,
+    texts,
+    state_data: dict[str, Any],
+) -> None:
+    """Replace the stale onboarding offer when /start is pressed before a choice."""
+    previous_message_id = state_data.get('post_registration_offer_message_id')
+    if previous_message_id:
+        try:
+            await message.bot.delete_message(message.chat.id, int(previous_message_id))
+        except Exception as error:
+            logger.debug('Не удалось удалить предыдущее сообщение выбора после регистрации', error=str(error))
+
+    try:
+        await message.delete()
+    except Exception as error:
+        logger.debug('Не удалось удалить повторную команду /start', error=str(error))
+
+    warning = texts.t(
+        'POST_REGISTRATION_CHOICE_REQUIRED',
+        'Сначала выберите один из двух вариантов ниже.',
+    )
+    offer_text = state_data.get('post_registration_offer_text') or _get_default_post_registration_offer(texts)
+    message_text = f'{warning}\n\n{offer_text}'
+    try:
+        sent_message = await message.bot.send_message(
+            chat_id=message.chat.id,
+            text=message_text,
+            reply_markup=get_post_registration_keyboard(user.language),
+            parse_mode='HTML',
+            disable_web_page_preview=True,
+        )
+    except TelegramBadRequest as error:
+        if 'parse entities' not in str(error).lower() and "can't parse" not in str(error).lower():
+            raise
+        sent_message = await message.bot.send_message(
+            chat_id=message.chat.id,
+            text=message_text,
+            reply_markup=get_post_registration_keyboard(user.language),
+            parse_mode=None,
+            disable_web_page_preview=True,
+        )
+    await _remember_post_registration_offer(state, sent_message, offer_text)
+
+
 def _split_start_param_subid(param: str | None) -> tuple[str | None, str | None]:
     """Extract subid from ``{campaign}_subid_{subid}`` Telegram deeplink format.
 
@@ -1043,6 +1102,27 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     logger.info('🚀 START: Обработка /start от', from_user_id=message.from_user.id)
 
     data = await state.get_data() or {}
+
+    if data.get('post_registration_choice_pending'):
+        pending_user = db_user or await get_user_by_telegram_id(db, message.from_user.id)
+        if pending_user is None:
+            await state.clear()
+            data = {}
+        else:
+            try:
+                await db.refresh(pending_user, ['subscriptions'])
+            except Exception as error:
+                logger.debug('Не удалось обновить подписки перед проверкой обязательного выбора', error=str(error))
+
+            if _can_offer_post_registration_trial(pending_user):
+                texts = get_texts(pending_user.language)
+                await _repeat_required_post_registration_choice(message, state, pending_user, texts, data)
+                return
+
+            # A trial/gift may have been activated outside this exact callback flow.
+            # In that case the stale onboarding lock must not hide the normal menu.
+            await state.clear()
+            data = {}
 
     # ИСПРАВЛЕНИЕ БАГА: используем .get() вместо .pop() для campaign_notification_sent
     # pending_start_payload обрабатывается отдельно ниже
@@ -2319,11 +2399,13 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
         try:
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, user, pinned_message)
-            await callback.message.answer(
+            sent_message = await callback.message.answer(
                 offer_text,
                 reply_markup=keyboard,
                 parse_mode='HTML',
             )
+            if can_offer_trial:
+                await _remember_post_registration_offer(state, sent_message, offer_text)
             logger.info('✅ Приветственное сообщение отправлено пользователю', telegram_id=user.telegram_id)
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, user, pinned_message)
@@ -2331,11 +2413,13 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             if 'parse entities' in str(e).lower() or "can't parse" in str(e).lower():
                 logger.warning('HTML parse error в приветственном сообщении, повтор без parse_mode', error=e)
                 try:
-                    await callback.message.answer(
+                    sent_message = await callback.message.answer(
                         offer_text,
                         reply_markup=keyboard,
                         parse_mode=None,
                     )
+                    if can_offer_trial:
+                        await _remember_post_registration_offer(state, sent_message, offer_text)
                     if pinned_message and not pinned_message.send_before_menu:
                         await _send_pinned_message(callback.bot, db, user, pinned_message)
                 except Exception as fallback_err:
@@ -2686,11 +2770,13 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
         try:
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, user, pinned_message)
-            await message.answer(
+            sent_message = await message.answer(
                 offer_text,
                 reply_markup=keyboard,
                 parse_mode='HTML',
             )
+            if can_offer_trial:
+                await _remember_post_registration_offer(state, sent_message, offer_text)
             logger.info('✅ Приветственное сообщение отправлено пользователю', telegram_id=user.telegram_id)
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, user, pinned_message)
@@ -2698,11 +2784,13 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             if 'parse entities' in str(e).lower() or "can't parse" in str(e).lower():
                 logger.warning('HTML parse error в приветственном сообщении, повтор без parse_mode', error=e)
                 try:
-                    await message.answer(
+                    sent_message = await message.answer(
                         offer_text,
                         reply_markup=keyboard,
                         parse_mode=None,
                     )
+                    if can_offer_trial:
+                        await _remember_post_registration_offer(state, sent_message, offer_text)
                     if pinned_message and not pinned_message.send_before_menu:
                         await _send_pinned_message(message.bot, db, user, pinned_message)
                 except Exception as fallback_err:
