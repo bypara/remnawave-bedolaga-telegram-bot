@@ -212,6 +212,7 @@ class MonitoringService:
         self._notified_users: set[str] = set()
         self._last_cleanup = datetime.now(UTC)
         self._sla_task = None
+        self._payment_invoice_task = None
         # In-memory fallback состояния уведомлений об ошибке автоплатежа (на случай
         # недоступности Redis). Ключ — (subscription_id, cycle_token=int(end_date.timestamp())).
         self._autopay_fail_state: dict[tuple[int, int], dict] = {}
@@ -333,6 +334,11 @@ class MonitoringService:
                 self._sla_task = asyncio.create_task(self._sla_loop())
         except Exception as e:
             logger.error('Не удалось запустить SLA-мониторинг', error=e)
+        try:
+            if not self._payment_invoice_task or self._payment_invoice_task.done():
+                self._payment_invoice_task = asyncio.create_task(self._payment_invoice_loop())
+        except Exception as e:
+            logger.error('Не удалось запустить мониторинг платёжных счетов', error=e)
 
         while self.is_running:
             try:
@@ -349,6 +355,8 @@ class MonitoringService:
         try:
             if self._sla_task and not self._sla_task.done():
                 self._sla_task.cancel()
+            if self._payment_invoice_task and not self._payment_invoice_task.done():
+                self._payment_invoice_task.cancel()
         except Exception:
             pass
 
@@ -3141,6 +3149,25 @@ class MonitoringService:
                 break
             except Exception as e:
                 logger.error('Ошибка в SLA-цикле', error=e)
+            await asyncio.sleep(interval_seconds)
+
+    async def _payment_invoice_loop(self):
+        """Short-interval loop for five-minute payment invoice warnings."""
+        from app.services.payment_invoice_lifecycle_service import process_due_payment_invoices
+
+        try:
+            interval_seconds = max(10, int(getattr(settings, 'PAYMENT_INVOICE_CHECK_INTERVAL_SECONDS', 30)))
+        except Exception:
+            interval_seconds = 30
+
+        while self.is_running:
+            try:
+                if self.bot:
+                    await process_due_payment_invoices(self.bot)
+            except asyncio.CancelledError:
+                break
+            except Exception as error:
+                logger.error('Ошибка мониторинга платёжных счетов', error=error)
             await asyncio.sleep(interval_seconds)
 
     async def _log_monitoring_event(

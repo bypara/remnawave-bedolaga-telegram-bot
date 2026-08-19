@@ -494,6 +494,8 @@ class Settings(BaseSettings):
     SUBSCRIPTION_RENEWAL_BALANCE_THRESHOLD_KOPEKS: int = 20000
 
     MONITORING_INTERVAL: int = 60
+    PAYMENT_INVOICE_WARNING_MINUTES: int = 5
+    PAYMENT_INVOICE_CHECK_INTERVAL_SECONDS: int = 30
     # Жёсткий per-send таймаут (сек) на отправку уведомлений из MonitoringService.
     # Дефолтный session timeout aiogram = 60s; при медленном канале до Telegram
     # или недоступном получателе один send_photo/send_message блокирует ВЕСЬ хвост

@@ -1,8 +1,22 @@
 """Apply the project's fixed custom emoji icons to outgoing inline keyboards."""
 
+import asyncio
+
+import structlog
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.utils.miniapp_buttons import strip_leading_emoji
+
+
+logger = structlog.get_logger(__name__)
+
+
+def _log_background_error(task: asyncio.Task) -> None:
+    try:
+        task.result()
+    except Exception as error:
+        logger.warning('Background payment invoice registration failed', error=error)
 
 
 CUSTOM_EMOJI_IDS: dict[str, str] = {
@@ -256,4 +270,17 @@ class CustomEmojiButtonsMiddleware:
             decorated_markup = apply_custom_emoji_icons(reply_markup)
             if decorated_markup is not reply_markup:
                 method = method.model_copy(update={'reply_markup': decorated_markup})
-        return await make_request(bot, method)
+        result = await make_request(bot, method)
+
+        # Payment messages are registered after Telegram accepts them.  Keep it
+        # off the response path so a few database lookups do not slow callbacks.
+        has_external_url = isinstance(reply_markup, InlineKeyboardMarkup) and any(
+            button.url for row in reply_markup.inline_keyboard for button in row
+        )
+        if has_external_url:
+            from app.services.payment_invoice_lifecycle_service import register_outgoing_payment_message
+
+            task = asyncio.create_task(register_outgoing_payment_message(reply_markup, result))
+            task.add_done_callback(_log_background_error)
+
+        return result

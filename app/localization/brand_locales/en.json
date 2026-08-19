@@ -297,5 +297,9 @@
   "TRIBUTE_PAYMENT_SUCCESS": "<tg-emoji emoji-id=\"5206607081334906820\">✔️</tg-emoji> <b>Payment received successfully!</b>\n\nAmount: {amount} ₽\nPayment method: Tribute",
   "TRIBUTE_PAYMENT_FAILED": "<tg-emoji emoji-id=\"5240241223632954241\">🚫</tg-emoji> <b>Payment failed</b>\n\nUnfortunately, your Tribute payment was declined.",
   "TRIBUTE_PAYMENT_REFUND": "<tg-emoji emoji-id=\"5458603043203327669\">🔔</tg-emoji> <b>Refund</b>\n\nRefund amount: {amount} ₽\nMethod: Tribute\n\nThe funds will be returned to your card within 3–5 business days.",
-  "AUTOPAY_LEGACY_TARIFF_REQUIRED": "<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> <b>Autopay paused</b>\n\nYour subscription was created before plans were introduced. Select a plan to use autopay.\n\nOpen “My subscription” → “Renew” to select a plan."
+  "AUTOPAY_LEGACY_TARIFF_REQUIRED": "<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> <b>Autopay paused</b>\n\nYour subscription was created before plans were introduced. Select a plan to use autopay.\n\nOpen “My subscription” → “Renew” to select a plan.",
+  "PAYMENT_INVOICE_EXPIRING_WARNING": "<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> <b>The invoice has not been paid yet</b>\n\nLess than 5 minutes remain before the payment link expires.",
+  "PAYMENT_INVOICE_EXPIRED": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> <b>The payment period has expired</b>\n\nThis invoice can no longer be paid. Create a new one to continue.",
+  "PAYMENT_INVOICE_PAY_BUTTON": "Pay",
+  "PAYMENT_INVOICE_MAIN_MENU_BUTTON": "Main menu"
 }
