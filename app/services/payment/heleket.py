@@ -427,40 +427,12 @@ class HeleketPaymentMixin:
             # Отправляем уведомление только Telegram-пользователям
             if user.telegram_id:
                 try:
-                    keyboard = await self.build_topup_success_keyboard(user)
-                    is_english = str(user.language or '').lower().startswith('en')
-
-                    exchange_rate_value = updated_payment.exchange_rate or 0
-                    rate_text = (
-                        f'💱 Курс: 1 RUB = {1 / exchange_rate_value:.4f} {updated_payment.payer_currency}'
-                        if exchange_rate_value and updated_payment.payer_currency
-                        else None
-                    )
-
-                    message_lines = [
-                        (
-                            '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> <b>Top-up successful!</b>'
-                            if is_english
-                            else '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> <b>Пополнение успешно!</b>'
-                        ),
-                        f'{"Amount" if is_english else "Сумма"}: {settings.format_price(amount_kopeks)}',
-                        f'{"Method" if is_english else "Способ"}: Heleket',
-                    ]
-                    if updated_payment.payer_amount and updated_payment.payer_currency:
-                        message_lines.append(
-                            f'{"Payment" if is_english else "Оплата"}: '
-                            f'{updated_payment.payer_amount} {updated_payment.payer_currency}'
-                        )
-                    if rate_text:
-                        message_lines.append(
-                            rate_text.replace('💱 Курс:', 'Rate:' if is_english else 'Курс:')
-                        )
-
-                    await self.bot.send_message(
-                        chat_id=user.telegram_id,
-                        text='\n'.join(message_lines),
-                        parse_mode='HTML',
-                        reply_markup=keyboard,
+                    await self._send_payment_success_notification(
+                        user.telegram_id,
+                        amount_kopeks,
+                        user,
+                        db=db,
+                        payment_method_title='Heleket',
                     )
                 except Exception as error:  # pragma: no cover
                     logger.error('Ошибка отправки уведомления пользователю Heleket', error=error)
