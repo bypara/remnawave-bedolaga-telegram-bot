@@ -408,6 +408,17 @@ class MonitoringService:
                 await self._cleanup_expired_refresh_tokens(db)
                 await self._cleanup_button_click_logs(db)
                 await self._cleanup_inactive_users(db)
+                try:
+                    from app.services.referral_retention_service import process_due_referral_retention_rewards
+
+                    await process_due_referral_retention_rewards(db, self.bot)
+                except Exception as referral_retention_error:
+                    logger.error(
+                        'Ошибка проверки отложенных реферальных наград',
+                        error=referral_retention_error,
+                        exc_info=True,
+                    )
+                    await db.rollback()
                 await self._sync_with_remnawave(db)
 
                 await self._log_monitoring_event(

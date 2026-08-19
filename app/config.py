@@ -386,6 +386,14 @@ class Settings(BaseSettings):
     REFERRAL_NOTIFICATIONS_ENABLED: bool = True
     REFERRAL_NOTIFICATION_RETRY_ATTEMPTS: int = 3
 
+    # Отложенная награда за подтверждённого «живого» реферала.
+    # Сумма фиксируется в момент регистрации, поэтому последующее изменение
+    # настройки не меняет уже запланированные выплаты.
+    REFERRAL_RETENTION_REWARD_ENABLED: bool = False
+    REFERRAL_RETENTION_REWARD_KOPEKS: int = 0
+    REFERRAL_RETENTION_DAYS: int = 7
+    REFERRAL_RETENTION_BATCH_SIZE: int = 100
+
     # Настройки вывода реферального баланса
     REFERRAL_WITHDRAWAL_ENABLED: bool = False  # Включить возможность вывода
     REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS: int = 100000  # Мин. сумма вывода (1000₽)

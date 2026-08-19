@@ -559,6 +559,26 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
             logger.error('Пользователь не привязан к рефереру', new_user_id=new_user_id, referrer_id=referrer_id)
             return False
 
+        try:
+            from app.services.referral_retention_service import schedule_referral_retention_reward
+
+            await schedule_referral_retention_reward(
+                db,
+                referral_id=new_user_id,
+                referrer_id=referrer_id,
+            )
+        except Exception as exc:
+            # Registration itself must not fail because the optional delayed
+            # reward could not be scheduled. A duplicate registration call can
+            # retry this step even if the audit row already exists.
+            logger.error(
+                'Failed to schedule referral retention reward',
+                new_user_id=new_user_id,
+                referrer_id=referrer_id,
+                error=exc,
+                exc_info=True,
+            )
+
         # Cross-session de-dup. Bot and cabinet run on separate
         # ``AsyncSessionLocal`` instances; the per-session idempotency
         # guard in ``attach_referrer_if_missing`` is not enough on its

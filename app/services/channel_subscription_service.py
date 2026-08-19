@@ -203,6 +203,44 @@ class ChannelSubscriptionService:
             return True  # No required channels = subscribed
         return all(subs.values())
 
+    async def check_required_channels_strict(self, telegram_id: int) -> bool | None:
+        """Fresh tri-state check used before irreversible rewards.
+
+        Unlike the user-facing hot path, this method never converts an unknown
+        Telegram result into ``True``. ``None`` means that the operator must
+        retry later and must not pay or reject the referral yet. An empty
+        required-channel list is also unknown: the reward explicitly requires
+        a channel subscription, so a missing channel is a configuration error.
+        """
+        channels = await self.get_required_channels()
+        if not channels or not self.bot:
+            logger.warning(
+                'Strict referral channel check unavailable',
+                telegram_id=telegram_id,
+                channels_count=len(channels),
+                has_bot=bool(self.bot),
+            )
+            return None
+
+        saw_unknown = False
+        async with AsyncSessionLocal() as db:
+            for channel in channels:
+                channel_id = channel['channel_id']
+                result = await self._rate_limited_check(telegram_id, channel_id)
+                if result is False:
+                    await upsert_user_channel_sub(db, telegram_id, channel_id, False)
+                    await ChannelSubCache.set_sub_status(telegram_id, channel_id, False)
+                    await db.commit()
+                    return False
+                if result is None:
+                    saw_unknown = True
+                    continue
+                await upsert_user_channel_sub(db, telegram_id, channel_id, True)
+                await ChannelSubCache.set_sub_status(telegram_id, channel_id, True)
+            await db.commit()
+
+        return None if saw_unknown else True
+
     async def get_unsubscribed_channels(self, telegram_id: int) -> list[dict]:
         """Get the list of channels the user is NOT subscribed to."""
         channels = await self.get_required_channels()
