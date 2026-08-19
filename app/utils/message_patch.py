@@ -184,7 +184,14 @@ _TOPIC_REQUIRED_ERRORS = (
 def is_qr_message(message: Message) -> bool:
     if isinstance(message, InaccessibleMessage):
         return False
-    return bool(message.caption and message.caption.startswith('\U0001f517 Ваша реферальная ссылка'))
+    if not message.caption:
+        return False
+    first_line = message.caption.split('\n', 1)[0]
+    return bool(
+        message.caption.startswith('\U0001f517 Ваша реферальная ссылка')
+        or 'Реферальная программа' in first_line
+        or 'Referral program' in first_line
+    )
 
 
 _original_answer = Message.answer

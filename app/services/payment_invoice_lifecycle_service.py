@@ -43,6 +43,7 @@ from app.database.models import (
     WataPayment,
 )
 from app.localization.texts import get_texts
+from app.utils.timezone import format_telegram_datetime
 
 
 logger = structlog.get_logger(__name__)
@@ -50,6 +51,7 @@ logger = structlog.get_logger(__name__)
 LIFECYCLE_METADATA_KEY = 'telegram_invoice_lifecycle'
 PAY_BUTTON_EMOJI_ID = '5271604874419647061'
 WARNING_LINK_FRAGMENT = '#payment-expiry-reminder'
+_DEADLINE_LABELS = ('Счёт действует до:', 'Invoice valid until:')
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +99,44 @@ def _extract_payment_urls(markup: InlineKeyboardMarkup | None) -> set[str]:
             and not button.url.endswith(WARNING_LINK_FRAGMENT)
         )
     }
+
+
+def _message_has_deadline(message: Message) -> bool:
+    content = message.text or message.caption or ''
+    return any(label in content for label in _DEADLINE_LABELS)
+
+
+async def _append_expiry_to_invoice(bot: Bot, message: Message, expires_at: datetime, language: str) -> None:
+    if _message_has_deadline(message):
+        return
+
+    texts = get_texts(language)
+    deadline = format_telegram_datetime(expires_at, time_format='dt')
+    fallback = 'Invoice valid until: {expires_at}' if str(language or '').lower().startswith('en') else (
+        'Счёт действует до: {expires_at}'
+    )
+    deadline_line = texts.t('PAYMENT_INVOICE_VALID_UNTIL', fallback).format(expires_at=deadline)
+
+    if message.caption is not None:
+        original = message.html_caption or message.caption
+        await bot.edit_message_caption(
+            chat_id=message.chat.id,
+            message_id=message.message_id,
+            caption=f'{original}\n\n{deadline_line}',
+            parse_mode='HTML',
+            reply_markup=message.reply_markup,
+        )
+        return
+
+    if message.text is not None:
+        original = message.html_text or message.text
+        await bot.edit_message_text(
+            chat_id=message.chat.id,
+            message_id=message.message_id,
+            text=f'{original}\n\n{deadline_line}',
+            parse_mode='HTML',
+            reply_markup=message.reply_markup,
+        )
 
 
 def _is_paid(payment: Any) -> bool:
@@ -153,10 +193,11 @@ async def _find_payment_by_urls(db: AsyncSession, urls: set[str]) -> tuple[Payme
 async def register_outgoing_payment_message(
     markup: InlineKeyboardMarkup | None,
     telegram_result: Any,
+    bot: Bot | None = None,
 ) -> None:
     """Persist the Telegram message that contains a provider payment URL."""
     urls = _extract_payment_urls(markup)
-    if not urls or not isinstance(telegram_result, Message):
+    if not urls or not isinstance(telegram_result, Message) or _message_has_deadline(telegram_result):
         return
 
     try:
@@ -179,6 +220,18 @@ async def register_outgoing_payment_message(
             metadata[LIFECYCLE_METADATA_KEY] = lifecycle
             payment.metadata_json = metadata
             await db.commit()
+            if bot is not None:
+                user = await db.get(User, payment.user_id)
+                if user is not None:
+                    try:
+                        await _append_expiry_to_invoice(bot, telegram_result, payment.expires_at, user.language)
+                    except TelegramBadRequest as error:
+                        logger.warning(
+                            'Failed to append expiry time to payment invoice',
+                            provider=spec.provider,
+                            payment_id=payment.id,
+                            error=error,
+                        )
             logger.debug(
                 'Payment invoice message registered',
                 provider=spec.provider,

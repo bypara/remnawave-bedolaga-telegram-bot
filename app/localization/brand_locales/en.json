@@ -62,6 +62,7 @@
   "REFERRAL_REWARD_INVITER": "• You receive after a referral's first top-up: {bonus}",
   "REFERRAL_REWARD_COMMISSION": "• Commission from every referral top-up: {percent}%",
   "REFERRAL_REWARD_COMMISSION_LIMITED": "• Commission from a referral's first {max_payments} top-ups: {percent}%",
+  "REFERRAL_REWARD_RETENTION": "• You receive {bonus} for a referral who remains subscribed to the channel and does not block the bot for {period}",
   "REFERRAL_BOT_LINK_TITLE": "<tg-emoji emoji-id=\"5257991477358763590\">↗️</tg-emoji> Bot link:",
   "REFERRAL_CABINET_LINK_TITLE": "<tg-emoji emoji-id=\"5257991477358763590\">↗️</tg-emoji> Web dashboard link:",
   "REFERRAL_CODE_TITLE": "<tg-emoji emoji-id=\"5260341314095947411\">👀</tg-emoji> Your code: {code}",
@@ -301,5 +302,6 @@
   "PAYMENT_INVOICE_EXPIRING_WARNING": "<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> <b>The invoice has not been paid yet</b>\n\nLess than 5 minutes remain before the payment link expires.",
   "PAYMENT_INVOICE_EXPIRED": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> <b>The payment period has expired</b>\n\nThis invoice can no longer be paid. Create a new one to continue.",
   "PAYMENT_INVOICE_PAY_BUTTON": "Pay",
-  "PAYMENT_INVOICE_MAIN_MENU_BUTTON": "Main menu"
+  "PAYMENT_INVOICE_MAIN_MENU_BUTTON": "Main menu",
+  "PAYMENT_INVOICE_VALID_UNTIL": "<tg-emoji emoji-id=\"5258258882022612173\">⏲️</tg-emoji> Invoice valid until: {expires_at}"
 }
