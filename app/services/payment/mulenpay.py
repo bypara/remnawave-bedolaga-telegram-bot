@@ -370,7 +370,7 @@ class MulenPayPaymentMixin:
                             payment.amount_kopeks,
                             user,
                             db=db,
-                            payment_method_title=display_name_html,
+                            payment_method_title=display_name,
                         )
                     except Exception as error:
                         logger.error('Ошибка отправки уведомления пользователю', display_name=display_name, error=error)
