@@ -118,7 +118,7 @@ async def _append_expiry_to_invoice(bot: Bot, message: Message, expires_at: date
     deadline_line = texts.t('PAYMENT_INVOICE_VALID_UNTIL', fallback).format(expires_at=deadline)
 
     if message.caption is not None:
-        original = message.html_caption or message.caption
+        original = getattr(message, 'caption_html', None) or message.caption
         await bot.edit_message_caption(
             chat_id=message.chat.id,
             message_id=message.message_id,
@@ -129,7 +129,7 @@ async def _append_expiry_to_invoice(bot: Bot, message: Message, expires_at: date
         return
 
     if message.text is not None:
-        original = message.html_text or message.text
+        original = getattr(message, 'html_text', None) or message.text
         await bot.edit_message_text(
             chat_id=message.chat.id,
             message_id=message.message_id,
@@ -285,6 +285,24 @@ async def _delete_message_safely(bot: Bot, chat_id: int, message_id: int | None)
         await bot.delete_message(chat_id=chat_id, message_id=message_id)
     except (TelegramBadRequest, TelegramForbiddenError):
         pass
+
+
+async def delete_paid_invoice_messages(bot: Bot, payment: Any) -> None:
+    """Delete the original invoice and its expiry warning after successful payment.
+
+    Provider handlers may still update ``metadata_json`` after sending the
+    success notification, so this immediate path deliberately does not mutate
+    lifecycle metadata.  The periodic lifecycle worker persists ``closed_at``
+    later; Telegram message deletion itself is safe to repeat.
+    """
+    metadata = dict(getattr(payment, 'metadata_json', None) or {})
+    lifecycle = dict(metadata.get(LIFECYCLE_METADATA_KEY) or {})
+    chat_id = lifecycle.get('chat_id')
+    if not chat_id:
+        return
+
+    await _delete_message_safely(bot, int(chat_id), lifecycle.get('invoice_message_id'))
+    await _delete_message_safely(bot, int(chat_id), lifecycle.get('warning_message_id'))
 
 
 async def _store_lifecycle(db: AsyncSession, payment: Any, lifecycle: dict[str, Any]) -> None:

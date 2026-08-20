@@ -9,6 +9,7 @@ from app.services.payment_invoice_lifecycle_service import (
     LIFECYCLE_METADATA_KEY,
     _extract_payment_urls,
     _append_expiry_to_invoice,
+    delete_paid_invoice_messages,
     _is_paid,
     _is_pending,
     _send_expired,
@@ -85,6 +86,25 @@ async def test_expiry_deletes_invoice_and_warning_then_sends_main_menu():
 
 
 @pytest.mark.asyncio
+async def test_successful_payment_deletes_invoice_and_warning_immediately():
+    bot = SimpleNamespace(delete_message=AsyncMock())
+    payment = SimpleNamespace(
+        metadata_json={
+            LIFECYCLE_METADATA_KEY: {
+                'chat_id': 100,
+                'invoice_message_id': 11,
+                'warning_message_id': 22,
+            }
+        }
+    )
+
+    await delete_paid_invoice_messages(bot, payment)
+
+    deleted_ids = [call.kwargs['message_id'] for call in bot.delete_message.await_args_list]
+    assert deleted_ids == [11, 22]
+
+
+@pytest.mark.asyncio
 async def test_invoice_message_gets_client_localized_expiry_time():
     bot = SimpleNamespace(edit_message_text=AsyncMock())
     message = SimpleNamespace(
@@ -103,3 +123,24 @@ async def test_invoice_message_gets_client_localized_expiry_time():
     assert '<b>Payment details</b>' in edited_text
     assert 'Invoice valid until:' in edited_text
     assert '<tg-time unix=' in edited_text
+
+
+@pytest.mark.asyncio
+async def test_photo_invoice_caption_gets_expiry_time_with_current_aiogram_property():
+    bot = SimpleNamespace(edit_message_caption=AsyncMock())
+    message = SimpleNamespace(
+        text=None,
+        caption='Payment details',
+        caption_html='<b>Payment details</b>',
+        chat=SimpleNamespace(id=100),
+        message_id=12,
+        reply_markup=None,
+    )
+    expires_at = datetime(2026, 8, 20, 12, 30, tzinfo=UTC)
+
+    await _append_expiry_to_invoice(bot, message, expires_at, 'en')
+
+    edited_caption = bot.edit_message_caption.await_args.kwargs['caption']
+    assert '<b>Payment details</b>' in edited_caption
+    assert 'Invoice valid until:' in edited_caption
+    assert '<tg-time unix=' in edited_caption
