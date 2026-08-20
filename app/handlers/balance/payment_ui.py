@@ -83,9 +83,11 @@ def get_common_payment_text(key: str, language: str) -> str | None:
             f'<tg-emoji emoji-id="{TOPUP_EMOJI_ID}">🔼</tg-emoji> '
             f'<b>{"Payment via" if english else "Оплата через"} {{name}}</b>\n\n'
             + (
-                'Enter a top-up amount from <b>{min_amount} ₽</b> to <b>{max_amount} ₽</b>.'
+                'Enter an amount from <b>{min_amount} ₽</b> to <b>{max_amount} ₽</b> '
+                'or choose one of the suggested options.'
                 if english
-                else 'Введите сумму для пополнения от <b>{min_amount} ₽</b> до <b>{max_amount} ₽</b>.'
+                else 'Введите сумму от <b>{min_amount} ₽</b> до <b>{max_amount} ₽</b> '
+                'или выберите один из предложенных вариантов.'
             )
         )
     if key in _LEGACY_CREATED_KEYS:
@@ -175,13 +177,15 @@ def build_topup_prompt(
         text = (
             f'<tg-emoji emoji-id="{TOPUP_EMOJI_ID}">🔼</tg-emoji> '
             f'<b>Payment via {method}</b>\n\n'
-            f'Enter a top-up amount from <b>{minimum} ₽</b> to <b>{maximum} ₽</b>.'
+            f'Enter an amount from <b>{minimum} ₽</b> to <b>{maximum} ₽</b> '
+            'or choose one of the suggested options.'
         )
     else:
         text = (
             f'<tg-emoji emoji-id="{TOPUP_EMOJI_ID}">🔼</tg-emoji> '
             f'<b>Оплата через {method}</b>\n\n'
-            f'Введите сумму для пополнения от <b>{minimum} ₽</b> до <b>{maximum} ₽</b>.'
+            f'Введите сумму от <b>{minimum} ₽</b> до <b>{maximum} ₽</b> '
+            'или выберите один из предложенных вариантов.'
         )
     if note:
         text += f'\n\n{note}'
