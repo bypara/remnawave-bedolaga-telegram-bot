@@ -668,44 +668,49 @@ async def handle_topup_amount_callback(
         return
 
     try:
-        # Особые случаи, требующие специальной логики
-        if method.startswith('platega_m'):
-            from app.database.database import AsyncSessionLocal
+        with manual_topup_messages(
+            chat_id=callback.message.chat.id,
+            user_message_id=callback.message.message_id,
+            prompt_message_id=None,
+        ):
+            # Особые случаи, требующие специальной логики
+            if method.startswith('platega_m'):
+                from app.database.database import AsyncSessionLocal
 
-            from .platega import process_platega_payment_amount
+                from .platega import process_platega_payment_amount
 
-            platega_method_code = int(method[len('platega_m') :])
-            await state.update_data(payment_method='platega', platega_method=platega_method_code)
-            await state.set_state(BalanceStates.waiting_for_amount)
-            async with AsyncSessionLocal() as db:
-                await process_platega_payment_amount(callback.message, db_user, db, amount_kopeks, state)
-        elif method == 'platega':
-            from app.database.database import AsyncSessionLocal
-
-            from .platega import process_platega_payment_amount, start_platega_payment
-
-            data = await state.get_data()
-            method_code = int(data.get('platega_method', 0)) if data else 0
-
-            if method_code > 0:
+                platega_method_code = int(method[len('platega_m') :])
+                await state.update_data(payment_method='platega', platega_method=platega_method_code)
                 await state.set_state(BalanceStates.waiting_for_amount)
                 async with AsyncSessionLocal() as db:
                     await process_platega_payment_amount(callback.message, db_user, db, amount_kopeks, state)
-            else:
-                await state.update_data(platega_pending_amount=amount_kopeks)
-                await start_platega_payment(callback, db_user, state)
-        elif method == 'tribute':
-            from .tribute import start_tribute_payment
+            elif method == 'platega':
+                from app.database.database import AsyncSessionLocal
 
-            await start_tribute_payment(callback, db_user)
-            return
-        # Стандартные методы через роутер
-        else:
-            await state.update_data(payment_method=method)
-            await state.set_state(BalanceStates.waiting_for_amount)
-            if not await route_payment_by_method(callback.message, db_user, amount_kopeks, state, method):
-                await callback.answer('❌ Неизвестный способ оплаты', show_alert=True)
+                from .platega import process_platega_payment_amount, start_platega_payment
+
+                data = await state.get_data()
+                method_code = int(data.get('platega_method', 0)) if data else 0
+
+                if method_code > 0:
+                    await state.set_state(BalanceStates.waiting_for_amount)
+                    async with AsyncSessionLocal() as db:
+                        await process_platega_payment_amount(callback.message, db_user, db, amount_kopeks, state)
+                else:
+                    await state.update_data(platega_pending_amount=amount_kopeks)
+                    await start_platega_payment(callback, db_user, state)
+            elif method == 'tribute':
+                from .tribute import start_tribute_payment
+
+                await start_tribute_payment(callback, db_user)
                 return
+            # Стандартные методы через роутер
+            else:
+                await state.update_data(payment_method=method)
+                await state.set_state(BalanceStates.waiting_for_amount)
+                if not await route_payment_by_method(callback.message, db_user, amount_kopeks, state, method):
+                    await callback.answer('❌ Неизвестный способ оплаты', show_alert=True)
+                    return
 
         await callback.answer()
 

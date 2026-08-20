@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, call
 
 import pytest
@@ -7,6 +8,7 @@ from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, Chat, InlineKeyboardButton, InlineKeyboardMarkup, Message, User
 
+from app.handlers.balance import main as balance_main
 from app.handlers.balance.payment_ui import PAY_BUTTON_EMOJI_ID
 from app.middlewares.topup_prompt import TopupPromptTrackingMiddleware
 from app.states import BalanceStates
@@ -108,3 +110,36 @@ async def test_amount_prompt_is_remembered_after_provider_callback() -> None:
         'topup_prompt_chat_id': 10,
         'topup_prompt_message_id': 30,
     }
+
+
+@pytest.mark.asyncio
+async def test_quick_amount_exposes_prompt_for_cleanup(monkeypatch) -> None:
+    callback = SimpleNamespace(
+        data='topup_amount|lava_sbp|10000',
+        message=SimpleNamespace(
+            chat=SimpleNamespace(id=10),
+            message_id=30,
+        ),
+        answer=AsyncMock(),
+    )
+    state = AsyncMock()
+
+    async def route_payment(message, db_user, amount_kopeks, current_state, method):
+        assert message is callback.message
+        assert db_user == 'user'
+        assert amount_kopeks == 10_000
+        assert current_state is state
+        assert method == 'lava_sbp'
+        assert get_manual_topup_messages() == ManualTopupMessages(
+            chat_id=10,
+            user_message_id=30,
+            prompt_message_id=None,
+        )
+        return True
+
+    monkeypatch.setattr(balance_main, 'route_payment_by_method', route_payment)
+
+    await balance_main.handle_topup_amount_callback(callback, 'user', state)
+
+    assert get_manual_topup_messages() is None
+    callback.answer.assert_awaited_once_with()
