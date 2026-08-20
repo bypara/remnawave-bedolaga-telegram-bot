@@ -190,6 +190,11 @@ class Pal24PaymentMixin:
             'transfer_url': transfer_url,
             'link_page_url': link_page_url,
             'payment_url': primary_link,
+            'expires_at': (
+                payment.expires_at.isoformat()
+                if getattr(payment, 'expires_at', None)
+                else None
+            ),
         }
 
     async def process_pal24_callback(

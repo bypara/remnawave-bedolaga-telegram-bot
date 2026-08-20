@@ -120,7 +120,12 @@ async def _send_pal24_payment_message(
             back_callback='balance_topup',
             payment_actions=payment_actions,
         )
-        message_text = build_payment_created_text(db_user.language, 'PayPalych', amount_kopeks)
+        message_text = build_payment_created_text(
+            db_user.language,
+            'PayPalych',
+            amount_kopeks,
+            expires_at=result.get('expires_at'),
+        )
 
         invoice_message = await message.answer(
             message_text,

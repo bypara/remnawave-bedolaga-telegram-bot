@@ -137,7 +137,12 @@ async def process_wata_payment_amount(
     local_payment_id = result['local_payment_id']
 
     keyboard = build_payment_keyboard(db_user.language, payment_url, amount_kopeks, back_callback='balance_topup')
-    message_text = build_payment_created_text(db_user.language, 'WATA', amount_kopeks)
+    message_text = build_payment_created_text(
+        db_user.language,
+        'WATA',
+        amount_kopeks,
+        expires_at=result.get('expires_at'),
+    )
 
     state_data = await state.get_data()
     prompt_message_id = state_data.get('wata_prompt_message_id')

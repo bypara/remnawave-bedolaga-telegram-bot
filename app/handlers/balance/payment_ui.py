@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import html
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -17,6 +18,7 @@ from app.config import settings
 TOPUP_EMOJI_ID = '5449683594425410231'
 AMOUNT_EMOJI_ID = '5451882707875276247'
 INSTRUCTIONS_EMOJI_ID = '5231012545799666522'
+INVOICE_EXPIRY_EMOJI_ID = '5258258882022612173'
 ERROR_EMOJI_ID = '5210952531676504517'
 WARNING_EMOJI_ID = '5420323339723881652'
 PAY_BUTTON_EMOJI_ID = '5271604874419647061'
@@ -193,6 +195,7 @@ def build_payment_created_text(
     *,
     details: Sequence[str] = (),
     instruction: bool = True,
+    expires_at: datetime | str | float | None = None,
 ) -> str:
     """Build the standard invoice screen; provider-only details can be appended."""
     method = html.escape(method_name)
@@ -227,7 +230,50 @@ def build_payment_created_text(
                 '3. Подтвердите перевод\n'
                 '4. Средства зачислятся автоматически'
             )
-    return '\n\n'.join(parts)
+    return append_payment_expiry('\n\n'.join(parts), language, expires_at)
+
+
+def append_payment_expiry(
+    text: str,
+    language: str,
+    expires_at: datetime | str | float | None,
+) -> str:
+    """Add the localized invoice deadline to the original HTML before sending it."""
+    if expires_at is None or 'Счёт действует до:' in text or 'Invoice valid until:' in text:
+        return text
+
+    parsed: datetime
+    try:
+        if isinstance(expires_at, datetime):
+            parsed = expires_at
+        elif isinstance(expires_at, (int, float)):
+            parsed = datetime.fromtimestamp(expires_at, tz=UTC)
+        else:
+            raw = str(expires_at).strip()
+            if raw.endswith('Z'):
+                raw = f'{raw[:-1]}+00:00'
+            parsed = datetime.fromisoformat(raw)
+    except (TypeError, ValueError, OSError):
+        return text
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+
+    from app.localization.texts import get_texts
+    from app.utils.timezone import format_telegram_datetime
+
+    texts = get_texts(language)
+    fallback = (
+        'Invoice valid until: {expires_at}'
+        if _is_english(language)
+        else 'Счёт действует до: {expires_at}'
+    )
+    deadline = format_telegram_datetime(parsed, time_format='dt')
+    deadline_line = texts.t(
+        'PAYMENT_INVOICE_VALID_UNTIL',
+        f'<tg-emoji emoji-id="{INVOICE_EXPIRY_EMOJI_ID}">⏲️</tg-emoji> {fallback}',
+    ).format(expires_at=deadline)
+    return f'{text}\n\n{deadline_line}'
 
 
 def build_payment_processing_text(language: str, method_name: str, amount_kopeks: int) -> str:

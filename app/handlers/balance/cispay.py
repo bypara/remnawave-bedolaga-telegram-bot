@@ -99,7 +99,12 @@ async def _create_cispay_payment_and_respond(
     keyboard = build_payment_keyboard(db_user.language, payment_url, amount_kopeks)
 
     if payment_url:
-        response_text = build_payment_created_text(db_user.language, display_name, amount_kopeks)
+        response_text = build_payment_created_text(
+            db_user.language,
+            display_name,
+            amount_kopeks,
+            expires_at=result.get('expires_at'),
+        )
     else:
         response_text = build_payment_processing_text(db_user.language, display_name, amount_kopeks)
 

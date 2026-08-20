@@ -166,6 +166,7 @@ class HeleketPaymentMixin:
             'payer_currency': payer_currency,
             'exchange_rate': exchange_rate_value,
             'discount_percent': discount_percent,
+            'expires_at': expires_at.isoformat() if expires_at else None,
         }
 
     async def _process_heleket_payload(
