@@ -3,8 +3,7 @@
 import asyncio
 
 import structlog
-
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from app.utils.miniapp_buttons import strip_leading_emoji
 
@@ -16,7 +15,17 @@ def _log_background_error(task: asyncio.Task) -> None:
     try:
         task.result()
     except Exception as error:
-        logger.warning('Background payment invoice registration failed', error=error)
+        logger.warning('Background payment message task failed', error=error)
+
+
+def _has_payment_url(markup: InlineKeyboardMarkup | None) -> bool:
+    if not isinstance(markup, InlineKeyboardMarkup):
+        return False
+    return any(
+        button.url and button.icon_custom_emoji_id == CUSTOM_EMOJI_IDS['payment_pay']
+        for row in markup.inline_keyboard
+        for button in row
+    )
 
 
 CUSTOM_EMOJI_IDS: dict[str, str] = {
@@ -283,21 +292,40 @@ class CustomEmojiButtonsMiddleware:
 
     async def __call__(self, make_request, bot, method):
         reply_markup = getattr(method, 'reply_markup', None)
+        effective_markup = reply_markup
         if isinstance(reply_markup, InlineKeyboardMarkup):
             decorated_markup = apply_custom_emoji_icons(reply_markup)
+            effective_markup = decorated_markup
             if decorated_markup is not reply_markup:
                 method = method.model_copy(update={'reply_markup': decorated_markup})
         result = await make_request(bot, method)
 
         # Payment messages are registered after Telegram accepts them.  Keep it
         # off the response path so a few database lookups do not slow callbacks.
-        has_external_url = isinstance(reply_markup, InlineKeyboardMarkup) and any(
-            button.url for row in reply_markup.inline_keyboard for button in row
+        has_external_url = isinstance(effective_markup, InlineKeyboardMarkup) and any(
+            button.url for row in effective_markup.inline_keyboard for button in row
         )
         if has_external_url:
             from app.services.payment_invoice_lifecycle_service import register_outgoing_payment_message
 
-            task = asyncio.create_task(register_outgoing_payment_message(reply_markup, result))
+            task = asyncio.create_task(register_outgoing_payment_message(effective_markup, result))
             task.add_done_callback(_log_background_error)
+
+        if _has_payment_url(effective_markup) and isinstance(result, Message):
+            from app.utils.topup_message_cleanup import (
+                delete_manual_topup_messages,
+                get_manual_topup_messages,
+            )
+
+            disposable_messages = get_manual_topup_messages()
+            if disposable_messages is not None:
+                task = asyncio.create_task(
+                    delete_manual_topup_messages(
+                        bot,
+                        disposable_messages,
+                        keep_message_id=result.message_id,
+                    )
+                )
+                task.add_done_callback(_log_background_error)
 
         return result

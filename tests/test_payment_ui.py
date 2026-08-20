@@ -28,7 +28,8 @@ def test_standard_topup_prompt_uses_custom_emoji_and_escaped_name() -> None:
 
     assert f'emoji-id="{TOPUP_EMOJI_ID}"' in text
     assert 'CisPay &lt;SBP&gt;' in text
-    assert 'от <b>100 ₽</b> до <b>100 000 ₽</b>' in text
+    assert 'Введите сумму от <b>100 ₽</b> до <b>100 000 ₽</b>' in text
+    assert 'или выберите один из предложенных вариантов.' in text
 
 
 def test_standard_invoice_has_shared_structure() -> None:

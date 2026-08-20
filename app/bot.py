@@ -76,6 +76,7 @@ from app.middlewares.logging import LoggingMiddleware
 from app.middlewares.maintenance import MaintenanceMiddleware
 from app.middlewares.subscription_checker import SubscriptionStatusMiddleware
 from app.middlewares.throttling import ThrottlingMiddleware
+from app.middlewares.topup_prompt import TopupPromptTrackingMiddleware
 from app.services.maintenance_service import maintenance_service
 from app.utils.cache import cache
 from app.utils.message_patch import patch_message_methods
@@ -180,6 +181,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     dp.message.middleware(SubscriptionStatusMiddleware())
     dp.callback_query.middleware(SubscriptionStatusMiddleware())
     dp.pre_checkout_query.middleware(SubscriptionStatusMiddleware())
+    dp.callback_query.middleware(TopupPromptTrackingMiddleware())
     start.register_handlers(dp)
     menu.register_handlers(dp)
     subscription.register_handlers(dp)
