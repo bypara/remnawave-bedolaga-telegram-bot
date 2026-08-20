@@ -68,7 +68,7 @@ async def test_expiry_deletes_invoice_and_warning_then_sends_main_menu():
         send_message=AsyncMock(return_value=SimpleNamespace(message_id=33)),
     )
     db = SimpleNamespace(commit=AsyncMock())
-    payment = SimpleNamespace(metadata_json={})
+    payment = SimpleNamespace(metadata_json={}, amount_kopeks=12_300)
     user = SimpleNamespace(language='en')
     lifecycle = {'chat_id': 100, 'invoice_message_id': 11, 'warning_message_id': 22}
 
@@ -78,6 +78,7 @@ async def test_expiry_deletes_invoice_and_warning_then_sends_main_menu():
     assert deleted_ids == [11, 22]
     sent_markup = bot.send_message.await_args.kwargs['reply_markup']
     assert sent_markup.inline_keyboard[0][0].callback_data == 'back_to_menu'
+    assert 'Invoice amount: 123' in bot.send_message.await_args.kwargs['text']
     stored = payment.metadata_json[LIFECYCLE_METADATA_KEY]
     assert stored['expired_message_id'] == 33
     assert stored['expired_notified_at']

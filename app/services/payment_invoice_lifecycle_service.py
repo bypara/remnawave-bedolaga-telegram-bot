@@ -258,10 +258,12 @@ def _localized_copy(language: str, key: str, texts) -> str:
         'expired': (
             '<tg-emoji emoji-id="5210952531676504517">❌</tg-emoji> '
             '<b>The payment period has expired</b>\n\n'
+            '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji> Invoice amount: {amount}\n\n'
             'This invoice can no longer be paid. Create a new one to continue.'
             if english
             else '<tg-emoji emoji-id="5210952531676504517">❌</tg-emoji> '
             '<b>Срок оплаты истёк</b>\n\n'
+            '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji> Сумма счёта: {amount}\n\n'
             'Этот счёт больше нельзя оплатить. Создайте новый, чтобы продолжить.'
         ),
         'pay_button': 'Pay' if english else 'Оплатить',
@@ -354,7 +356,9 @@ async def _send_expired(bot: Bot, db: AsyncSession, payment: Any, user: User, li
     )
     expired_message = await bot.send_message(
         chat_id=chat_id,
-        text=_localized_copy(user.language, 'expired', texts),
+        text=_localized_copy(user.language, 'expired', texts).format(
+            amount=texts.format_price(payment.amount_kopeks),
+        ),
         parse_mode='HTML',
         reply_markup=keyboard,
     )

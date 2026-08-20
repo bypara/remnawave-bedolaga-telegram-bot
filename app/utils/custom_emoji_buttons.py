@@ -240,26 +240,30 @@ def apply_custom_emoji_icons(markup: InlineKeyboardMarkup) -> InlineKeyboardMark
         updated_row: list[InlineKeyboardButton] = []
         for button in row:
             plain_text = strip_leading_emoji(button.text)
-            callback_name = (button.callback_data or '').split(':', 1)[0]
+            callback_data = button.callback_data or ''
+            callback_name = callback_data.split(':', 1)[0]
+            is_quick_topup_amount = callback_data.startswith('topup_amount|')
             plain_text = LEGACY_BUTTON_TEXT_OVERRIDES.get(
                 (callback_name, plain_text.strip().casefold()),
                 plain_text,
             )
-            icon_name = _resolve_icon_name(button, plain_text)
+            icon_name = None if is_quick_topup_amount else _resolve_icon_name(button, plain_text)
             normalized_text = plain_text.strip().casefold()
             is_navigation = any(marker in normalized_text for marker in BACK_TEXT_MARKERS) or any(
                 marker in normalized_text for marker in CANCEL_TEXT_MARKERS
             )
             style = button.style if is_navigation else CALLBACK_TO_STYLE.get(callback_name, button.style)
 
-            if icon_name:
+            if is_quick_topup_amount:
+                emoji_id = None
+            elif icon_name:
                 emoji_id = CUSTOM_EMOJI_IDS[icon_name]
             else:
                 emoji_id = button.icon_custom_emoji_id
 
-            if (emoji_id and (button.text != plain_text or button.icon_custom_emoji_id != emoji_id)) or (
-                button.style != style
-            ):
+            icon_changed = button.icon_custom_emoji_id != emoji_id
+            text_changed = bool(emoji_id) and button.text != plain_text
+            if icon_changed or text_changed or button.style != style:
                 button = button.model_copy(
                     update={
                         'text': plain_text if emoji_id else button.text,
