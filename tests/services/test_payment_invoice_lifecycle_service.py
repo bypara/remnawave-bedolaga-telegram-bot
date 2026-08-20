@@ -103,3 +103,24 @@ async def test_invoice_message_gets_client_localized_expiry_time():
     assert '<b>Payment details</b>' in edited_text
     assert 'Invoice valid until:' in edited_text
     assert '<tg-time unix=' in edited_text
+
+
+@pytest.mark.asyncio
+async def test_photo_invoice_caption_gets_expiry_time_with_current_aiogram_property():
+    bot = SimpleNamespace(edit_message_caption=AsyncMock())
+    message = SimpleNamespace(
+        text=None,
+        caption='Payment details',
+        caption_html='<b>Payment details</b>',
+        chat=SimpleNamespace(id=100),
+        message_id=12,
+        reply_markup=None,
+    )
+    expires_at = datetime(2026, 8, 20, 12, 30, tzinfo=UTC)
+
+    await _append_expiry_to_invoice(bot, message, expires_at, 'en')
+
+    edited_caption = bot.edit_message_caption.await_args.kwargs['caption']
+    assert '<b>Payment details</b>' in edited_caption
+    assert 'Invoice valid until:' in edited_caption
+    assert '<tg-time unix=' in edited_caption

@@ -118,7 +118,7 @@ async def _append_expiry_to_invoice(bot: Bot, message: Message, expires_at: date
     deadline_line = texts.t('PAYMENT_INVOICE_VALID_UNTIL', fallback).format(expires_at=deadline)
 
     if message.caption is not None:
-        original = message.html_caption or message.caption
+        original = getattr(message, 'caption_html', None) or message.caption
         await bot.edit_message_caption(
             chat_id=message.chat.id,
             message_id=message.message_id,
@@ -129,7 +129,7 @@ async def _append_expiry_to_invoice(bot: Bot, message: Message, expires_at: date
         return
 
     if message.text is not None:
-        original = message.html_text or message.text
+        original = getattr(message, 'html_text', None) or message.text
         await bot.edit_message_text(
             chat_id=message.chat.id,
             message_id=message.message_id,
