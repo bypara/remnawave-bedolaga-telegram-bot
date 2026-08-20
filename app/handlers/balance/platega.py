@@ -40,7 +40,6 @@ async def _prompt_amount(
     state: FSMContext,
     method_code: int,
 ) -> None:
-    texts = get_texts(db_user.language)
     method_name = settings.get_platega_method_display_name(method_code)
 
     # Всегда фиксируем выбранный метод для последующей обработки
@@ -346,7 +345,7 @@ async def process_platega_payment_amount(
     except Exception as delete_error:  # pragma: no cover - зависит от прав бота
         logger.warning('Не удалось удалить сообщение с суммой Platega', delete_error=delete_error)
 
-    if prompt_message_id:
+    if prompt_message_id and prompt_message_id != message.message_id:
         try:
             await message.bot.delete_message(prompt_chat_id, prompt_message_id)
         except Exception as delete_error:  # pragma: no cover - диагностический лог
@@ -357,7 +356,7 @@ async def process_platega_payment_amount(
             db_user.language,
             method_title,
             amount_kopeks,
-            expires_at=result.get('expires_at'),
+            expires_at=payment_result.get('expires_at'),
         ),
         reply_markup=keyboard,
         parse_mode='HTML',
