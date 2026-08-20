@@ -297,7 +297,7 @@ class CustomEmojiButtonsMiddleware:
         if has_external_url:
             from app.services.payment_invoice_lifecycle_service import register_outgoing_payment_message
 
-            task = asyncio.create_task(register_outgoing_payment_message(reply_markup, result, bot))
+            task = asyncio.create_task(register_outgoing_payment_message(reply_markup, result))
             task.add_done_callback(_log_background_error)
 
         return result

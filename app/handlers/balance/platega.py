@@ -353,7 +353,12 @@ async def process_platega_payment_amount(
             logger.warning('Не удалось удалить сообщение с запросом суммы Platega', delete_error=delete_error)
 
     invoice_message = await message.answer(
-        build_payment_created_text(db_user.language, method_title, amount_kopeks),
+        build_payment_created_text(
+            db_user.language,
+            method_title,
+            amount_kopeks,
+            expires_at=result.get('expires_at'),
+        ),
         reply_markup=keyboard,
         parse_mode='HTML',
     )

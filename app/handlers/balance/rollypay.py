@@ -88,7 +88,12 @@ async def _create_rollypay_payment_and_respond(
     display_name = settings.get_rollypay_display_name()
 
     keyboard = build_payment_keyboard(db_user.language, payment_url, amount_kopeks)
-    response_text = build_payment_created_text(db_user.language, display_name, amount_kopeks)
+    response_text = build_payment_created_text(
+        db_user.language,
+        display_name,
+        amount_kopeks,
+        expires_at=result.get('expires_at'),
+    )
 
     if edit_message:
         await message_or_callback.edit_text(

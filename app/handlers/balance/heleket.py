@@ -218,7 +218,13 @@ async def process_heleket_payment_amount(
             logger.warning('Не удалось удалить сообщение с запросом суммы Heleket', delete_error=delete_error)
 
     invoice_message = await message.answer(
-        build_payment_created_text(db_user.language, 'Heleket', amount_kopeks, details=details),
+        build_payment_created_text(
+            db_user.language,
+            'Heleket',
+            amount_kopeks,
+            details=details,
+            expires_at=result.get('expires_at'),
+        ),
         parse_mode='HTML',
         reply_markup=keyboard,
     )

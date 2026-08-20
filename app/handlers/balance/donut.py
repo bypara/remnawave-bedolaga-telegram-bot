@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.handlers.balance.payment_ui import append_payment_expiry
 from app.keyboards.inline import get_back_keyboard
 from app.keyboards.topup_amounts import get_topup_amount_keyboard
 from app.localization.texts import get_texts
@@ -137,6 +138,9 @@ async def _create_donut_payment_and_respond(
             'Сумма: <b>{amount}₽</b>\n\n'
             'Платёж в обработке. Реквизиты будут отправлены отдельным сообщением.',
         ).format(name=name, amount=f'{amount_rub:.2f}')
+
+    if payment_url:
+        response_text = append_payment_expiry(response_text, db_user.language, result.get('expires_at'))
 
     if edit_message:
         await message_or_callback.edit_text(response_text, reply_markup=keyboard, parse_mode='HTML')

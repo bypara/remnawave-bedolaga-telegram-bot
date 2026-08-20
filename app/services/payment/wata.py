@@ -180,6 +180,7 @@ class WataPaymentMixin:
             'payment_url': payment_url,
             'status': status,
             'order_id': order_id,
+            'expires_at': expires_at.isoformat() if expires_at else None,
         }
 
     async def process_wata_webhook(

@@ -1,8 +1,11 @@
+from datetime import UTC, datetime
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.handlers.balance.payment_ui import (
     AMOUNT_EMOJI_ID,
     INSTRUCTIONS_EMOJI_ID,
+    INVOICE_EXPIRY_EMOJI_ID,
     PAY_BUTTON_EMOJI_ID,
     TOPUP_EMOJI_ID,
     build_payment_created_text,
@@ -36,6 +39,20 @@ def test_standard_invoice_has_shared_structure() -> None:
     assert f'emoji-id="{INSTRUCTIONS_EMOJI_ID}"' in text
     assert 'Сумма: <b>123.45 ₽</b>' in text
     assert 'Нажмите кнопку «Оплатить»' in text
+
+
+def test_standard_invoice_includes_expiry_in_original_custom_emoji_html() -> None:
+    text = build_payment_created_text(
+        'ru',
+        'CisPay',
+        12_345,
+        expires_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+    )
+
+    assert f'emoji-id="{INVOICE_EXPIRY_EMOJI_ID}"' in text
+    assert 'Счёт действует до:' in text
+    assert '<tg-time unix=' in text
+    assert text.count('Счёт действует до:') == 1
 
 
 def test_standard_pay_button_uses_custom_emoji() -> None:

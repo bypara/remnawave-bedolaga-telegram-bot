@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.handlers.balance.payment_ui import append_payment_expiry
 from app.keyboards.inline import get_back_keyboard
 from app.keyboards.topup_amounts import get_topup_amount_keyboard
 from app.localization.texts import get_texts
@@ -115,6 +116,7 @@ async def _create_aurapay_payment_and_respond(
         'Нажмите кнопку ниже для оплаты.\n'
         'После успешной оплаты баланс будет пополнен автоматически.',
     ).format(name=display_name, amount=f'{amount_rub:.2f}')
+    response_text = append_payment_expiry(response_text, db_user.language, result.get('expires_at'))
 
     if edit_message:
         await message_or_callback.edit_text(
