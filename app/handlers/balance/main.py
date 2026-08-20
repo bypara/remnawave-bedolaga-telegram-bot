@@ -21,6 +21,7 @@ from app.localization.texts import get_texts
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
 from app.utils.miniapp_buttons import strip_leading_emoji
+from app.utils.topup_message_cleanup import manual_topup_messages
 
 
 logger = structlog.get_logger(__name__)
@@ -590,7 +591,20 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
                 )
                 return
 
-        if not await route_payment_by_method(message, db_user, amount_kopeks, state, payment_method):
+        with manual_topup_messages(
+            chat_id=message.chat.id,
+            user_message_id=message.message_id,
+            prompt_message_id=data.get('topup_prompt_message_id'),
+        ):
+            payment_handled = await route_payment_by_method(
+                message,
+                db_user,
+                amount_kopeks,
+                state,
+                payment_method,
+            )
+
+        if not payment_handled:
             await message.answer('Неизвестный способ оплаты')
 
     except ValueError:
