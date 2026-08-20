@@ -93,6 +93,26 @@ def test_claim_discount_requested_icon_overrides_legacy_explicit_icon():
     assert button.icon_custom_emoji_id == CUSTOM_EMOJI_IDS['claim_discount']
 
 
+def test_quick_topup_amount_buttons_do_not_have_icons():
+    markup = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text='100 ₽',
+                    callback_data='topup_amount|lava_sbp|10000',
+                    icon_custom_emoji_id=CUSTOM_EMOJI_IDS['balance_topup'],
+                ),
+                _button('300 ₽', callback_data='topup_amount|lava_sbp|30000'),
+            ]
+        ]
+    )
+
+    first, second = apply_custom_emoji_icons(markup).inline_keyboard[0]
+
+    assert (first.text, first.icon_custom_emoji_id) == ('100 ₽', None)
+    assert (second.text, second.icon_custom_emoji_id) == ('300 ₽', None)
+
+
 def test_url_contact_and_all_back_cancel_buttons_are_decorated():
     markup = InlineKeyboardMarkup(
         inline_keyboard=[
