@@ -491,6 +491,7 @@ class Pal24PaymentMixin:
                     payment.amount_kopeks,
                     user,
                     db=db,
+                    payment=payment,
                     payment_method_title='PayPalych',
                 )
             except Exception as error:

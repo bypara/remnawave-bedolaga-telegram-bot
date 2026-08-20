@@ -921,6 +921,7 @@ class YooKassaPaymentMixin:
                                     payment.amount_kopeks,
                                     user=None,  # Передаем None, чтобы _ensure_user_snapshot загрузил данные сам
                                     db=db,
+                                    payment=payment,
                                     payment_method_title='Банковская карта (YooKassa)',
                                 )
                                 logger.info('Уведомление пользователю о платеже отправлено успешно')

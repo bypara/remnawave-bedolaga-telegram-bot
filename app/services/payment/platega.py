@@ -1032,6 +1032,7 @@ class PlategaPaymentMixin:
             payment.amount_kopeks,
             user,
             db=db,
+            payment=payment,
             payment_method_title=method_title,
         )
 

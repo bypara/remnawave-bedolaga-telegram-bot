@@ -287,6 +287,24 @@ async def _delete_message_safely(bot: Bot, chat_id: int, message_id: int | None)
         pass
 
 
+async def delete_paid_invoice_messages(bot: Bot, payment: Any) -> None:
+    """Delete the original invoice and its expiry warning after successful payment.
+
+    Provider handlers may still update ``metadata_json`` after sending the
+    success notification, so this immediate path deliberately does not mutate
+    lifecycle metadata.  The periodic lifecycle worker persists ``closed_at``
+    later; Telegram message deletion itself is safe to repeat.
+    """
+    metadata = dict(getattr(payment, 'metadata_json', None) or {})
+    lifecycle = dict(metadata.get(LIFECYCLE_METADATA_KEY) or {})
+    chat_id = lifecycle.get('chat_id')
+    if not chat_id:
+        return
+
+    await _delete_message_safely(bot, int(chat_id), lifecycle.get('invoice_message_id'))
+    await _delete_message_safely(bot, int(chat_id), lifecycle.get('warning_message_id'))
+
+
 async def _store_lifecycle(db: AsyncSession, payment: Any, lifecycle: dict[str, Any]) -> None:
     metadata = dict(payment.metadata_json or {})
     metadata[LIFECYCLE_METADATA_KEY] = lifecycle

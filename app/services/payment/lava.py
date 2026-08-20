@@ -541,6 +541,7 @@ class LavaPaymentMixin:
             payment.amount_kopeks,
             user,
             db=db,
+            payment=payment,
             payment_method_title=display_name,
         )
 

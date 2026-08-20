@@ -9,6 +9,7 @@ from app.services.payment_invoice_lifecycle_service import (
     LIFECYCLE_METADATA_KEY,
     _extract_payment_urls,
     _append_expiry_to_invoice,
+    delete_paid_invoice_messages,
     _is_paid,
     _is_pending,
     _send_expired,
@@ -82,6 +83,25 @@ async def test_expiry_deletes_invoice_and_warning_then_sends_main_menu():
     stored = payment.metadata_json[LIFECYCLE_METADATA_KEY]
     assert stored['expired_message_id'] == 33
     assert stored['expired_notified_at']
+
+
+@pytest.mark.asyncio
+async def test_successful_payment_deletes_invoice_and_warning_immediately():
+    bot = SimpleNamespace(delete_message=AsyncMock())
+    payment = SimpleNamespace(
+        metadata_json={
+            LIFECYCLE_METADATA_KEY: {
+                'chat_id': 100,
+                'invoice_message_id': 11,
+                'warning_message_id': 22,
+            }
+        }
+    )
+
+    await delete_paid_invoice_messages(bot, payment)
+
+    deleted_ids = [call.kwargs['message_id'] for call in bot.delete_message.await_args_list]
+    assert deleted_ids == [11, 22]
 
 
 @pytest.mark.asyncio

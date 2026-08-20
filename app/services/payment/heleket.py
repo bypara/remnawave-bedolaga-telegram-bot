@@ -432,6 +432,7 @@ class HeleketPaymentMixin:
                         amount_kopeks,
                         user,
                         db=db,
+                        payment=payment,
                         payment_method_title='Heleket',
                     )
                 except Exception as error:  # pragma: no cover

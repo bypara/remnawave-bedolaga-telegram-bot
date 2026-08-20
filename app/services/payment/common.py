@@ -164,6 +164,7 @@ class PaymentCommonMixin:
         user: Any | None = None,
         *,
         db: AsyncSession | None = None,
+        payment: Any | None = None,
         payment_method_title: str | None = None,
     ) -> None:
         """Отправляет пользователю уведомление об успешном платеже."""
@@ -189,7 +190,22 @@ class PaymentCommonMixin:
                     ws_error=ws_error,
                 )
 
-        if not getattr(self, 'bot', None):
+        bot = getattr(self, 'bot', None)
+        if bot is not None and payment is not None:
+            try:
+                from app.services.payment_invoice_lifecycle_service import delete_paid_invoice_messages
+
+                await delete_paid_invoice_messages(bot, payment)
+            except Exception as cleanup_error:
+                # Payment is already credited. Telegram cleanup is best-effort
+                # and must never turn a successful webhook into an error.
+                logger.warning(
+                    'Не удалось удалить оплаченный инвойс',
+                    telegram_id=telegram_id,
+                    cleanup_error=cleanup_error,
+                )
+
+        if bot is None:
             # Если бот не передан (например, внутри фоновых задач), уведомление пропускаем.
             return
 
@@ -220,7 +236,7 @@ class PaymentCommonMixin:
                 method=payment_method,
             )
 
-            await self.bot.send_message(
+            await bot.send_message(
                 chat_id=telegram_id,
                 text=message,
                 parse_mode='HTML',
