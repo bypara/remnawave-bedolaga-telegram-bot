@@ -40,6 +40,7 @@ PAYMENT_METHOD_CUSTOM_EMOJI_IDS: dict[str, str] = {
     'lava_card': '5244521450601194816',
     'lava_sbp': '5244802057994514325',
     'lava': '5247106557056920291',
+    'cispay_sbp': '5265074015868822600',
     'support': '5341715473882955310',
 }
 
@@ -1710,9 +1711,10 @@ def _order_payment_method_rows(
 ) -> list[list[InlineKeyboardButton]]:
     """Keep the preferred checkout methods first and auxiliary methods last."""
     preferred_order = {
-        'lava_sbp': 0,
+        'cispay_sbp': 0,
         'lava_card': 1,
-        'platega_m2': 2,
+        'lava_sbp': 2,
+        'platega_m2': 3,
     }
 
     indexed_rows = list(enumerate(keyboard))
@@ -2344,8 +2346,9 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         cispay_sbp_name = settings.get_cispay_sbp_display_name()
         keyboard.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('PAYMENT_CISPAY_SBP', f'📱 {cispay_sbp_name}'),
+                _payment_method_button(
+                    texts.t('PAYMENT_CISPAY_SBP', f'📱 {cispay_sbp_name}'),
+                    'cispay_sbp',
                     callback_data=_build_callback('cispay_sbp'),
                 )
             ]
