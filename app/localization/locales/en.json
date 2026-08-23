@@ -8,7 +8,7 @@
   "LEGAL_IMPLICIT_CONSENT_NOTICE": "By clicking {action}, you agree to the {documents}.",
   "LEGAL_BROWSING_CONSENT_WARNING": "<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> By continuing to use the bot, you agree to the {documents}.",
   "POST_REGISTRATION_CHOICE_REQUIRED": "Please choose one of the two options below first.",
-  "ADDON_INSUFFICIENT_FUNDS_MESSAGE": "⚠️ <b>Insufficient funds</b>\n\nService price: {required}\nBalance: {balance}\nMissing: {missing}\n\nChoose a top-up method. The amount will be filled in automatically.",
+  "ADDON_INSUFFICIENT_FUNDS_MESSAGE": "<tg-emoji emoji-id=\"5447644880824181073\">⚠️</tg-emoji> <b>Insufficient funds</b>\n\nService price: {required}\nBalance: {balance}\nMissing: {missing}\n\nChoose a top-up method. The amount will be filled in automatically.",
   "ADD_COUNTRIES_BUTTON": "🌐 Add countries",
   "ADD_TRAFFIC_PROMPT": "📈 <b>Add traffic to your subscription</b>\n\nCurrent limit: {current_traffic}\nChoose extra traffic:",
   "BUY_TRAFFIC_BUTTON": "📈 Buy more traffic",

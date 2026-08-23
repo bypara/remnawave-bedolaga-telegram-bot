@@ -1,6 +1,6 @@
 {
   "ACCESS_DENIED": "❌ Доступ запрещен",
-  "ADDON_INSUFFICIENT_FUNDS_MESSAGE": "⚠️ <b>Недостаточно средств</b>\n\nСтоимость услуги: {required}\nНа балансе: {balance}\nНе хватает: {missing}\n\nВыберите способ пополнения. Сумма подставится автоматически.",
+  "ADDON_INSUFFICIENT_FUNDS_MESSAGE": "<tg-emoji emoji-id=\"5447644880824181073\">⚠️</tg-emoji> <b>Недостаточно средств</b>\n\nСтоимость услуги: {required}\nНа балансе: {balance}\nНе хватает: {missing}\n\nВыберите способ пополнения. Сумма подставится автоматически.",
   "ADD_COUNTRIES_BUTTON": "🌐 Добавить страны",
   "ADD_TRAFFIC_PROMPT": "📈 <b>Добавить трафик к подписке</b>\n\nТекущий лимит: {current_traffic}\nВыберите дополнительный трафик:",
   "BUY_TRAFFIC_BUTTON": "📈 Докупить трафик",

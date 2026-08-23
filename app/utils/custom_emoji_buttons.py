@@ -264,7 +264,18 @@ def apply_custom_emoji_icons(markup: InlineKeyboardMarkup) -> InlineKeyboardMark
             style = button.style if is_navigation else CALLBACK_TO_STYLE.get(callback_name, button.style)
 
             if is_quick_topup_amount:
-                emoji_id = None
+                # Один callback-формат используется в двух разных местах:
+                # 1) кнопки готовых сумм (100 ₽, 300 ₽...) — им значок не нужен;
+                # 2) выбор платёжного метода с уже подставленной суммой — у этих
+                #    кнопок провайдерский icon_custom_emoji_id задан явно.
+                # Сохраняем провайдерский значок, а остальным названиям методов
+                # даём общую иконку пополнения. Числовые суммы остаются чистыми.
+                is_amount_choice = not any(character.isalpha() for character in plain_text)
+                emoji_id = (
+                    None
+                    if is_amount_choice
+                    else button.icon_custom_emoji_id or CUSTOM_EMOJI_IDS['balance_topup']
+                )
             elif icon_name:
                 emoji_id = CUSTOM_EMOJI_IDS[icon_name]
             else:
