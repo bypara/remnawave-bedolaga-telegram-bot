@@ -426,7 +426,7 @@ class HeleketPaymentMixin:
                 logger.error('Ошибка отправки админ-уведомления Heleket', error=error)
 
             # Отправляем уведомление только Telegram-пользователям
-            if user.telegram_id:
+            if user.telegram_id and settings.is_notifications_enabled():
                 try:
                     await self._send_payment_success_notification(
                         user.telegram_id,

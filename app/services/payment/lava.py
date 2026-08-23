@@ -642,6 +642,9 @@ class LavaPaymentMixin:
         Никогда не бросает наружу — вебхук обязан завершиться 200 независимо
         от доставки сообщения (зеркало ``_notify_sbp_recurring`` у Platega).
         """
+        if not settings.is_notifications_enabled():
+            return
+
         try:
             from app.cabinet.routes.websocket import cabinet_ws_manager
 

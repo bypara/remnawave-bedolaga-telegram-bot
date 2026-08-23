@@ -469,7 +469,7 @@ class AntilopayPaymentMixin:
             except Exception as error:
                 logger.error('Ошибка отправки админ уведомления Antilopay', error=error)
 
-        if getattr(self, 'bot', None) and user.telegram_id:
+        if getattr(self, 'bot', None) and user.telegram_id and settings.is_notifications_enabled():
             try:
                 await self._send_payment_success_notification(
                     user.telegram_id,

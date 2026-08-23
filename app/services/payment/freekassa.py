@@ -374,7 +374,7 @@ class FreekassaPaymentMixin:
                 logger.error('Ошибка отправки админ уведомления Freekassa', error=error)
 
         # Отправка уведомления пользователю
-        if getattr(self, 'bot', None) and user.telegram_id:
+        if getattr(self, 'bot', None) and user.telegram_id and settings.is_notifications_enabled():
             try:
                 # Resolve display name from payment metadata (sub-method aware)
                 display_name = settings.get_freekassa_display_name()
