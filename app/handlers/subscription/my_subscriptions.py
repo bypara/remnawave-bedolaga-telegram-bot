@@ -70,10 +70,16 @@ def _format_subscription_line(sub, idx: int) -> str:
     end_date = sub.end_date.strftime('%d.%m.%Y') if sub.end_date else '—'
 
     parts = [f'{emoji} <b>{idx}. {tariff_name}</b>{label}']
-    parts.append(f'   📊 Трафик: {traffic}')
+    parts.append(
+        f'   <tg-emoji emoji-id="5258115571848846212">✈️</tg-emoji> Трафик: {traffic}'
+    )
     if devices:
-        parts.append(f'   📱 Устройства: {devices}')
-    parts.append(f'   📅 До: {end_date}')
+        parts.append(
+            f'   <tg-emoji emoji-id="5258513401784573443">👥</tg-emoji> Устройства: {devices}'
+        )
+    parts.append(
+        f'   <tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> До: {end_date}'
+    )
 
     return '\n'.join(parts)
 
@@ -218,15 +224,19 @@ async def show_subscription_detail(
     status = subscription.status_display
 
     text = (
-        f'📋 <b>{tariff_name}</b>\n\n'
+        f'<tg-emoji emoji-id="5260730055880876557">⛓️</tg-emoji> <b>{tariff_name}</b>\n\n'
         f'Статус: {status}\n'
-        f'📊 Трафик: {traffic}\n'
-        f'📱 Устройства: {Texts.format_device_limit(subscription.device_limit)}\n'
-        f'📅 До: {end_date}\n'
+        f'<tg-emoji emoji-id="5258115571848846212">✈️</tg-emoji> Трафик: {traffic}\n'
+        f'<tg-emoji emoji-id="5258513401784573443">👥</tg-emoji> '
+        f'Устройства: {Texts.format_device_limit(subscription.device_limit)}\n'
+        f'<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> До: {end_date}\n'
     )
 
     if subscription.subscription_url and not settings.should_hide_subscription_link():
-        text += f'\n🔗 <code>{subscription.subscription_url}</code>'
+        text += (
+            f'\n<tg-emoji emoji-id="5260730055880876557">⛓️</tg-emoji> '
+            f'<code>{subscription.subscription_url}</code>'
+        )
 
     keyboard = _build_subscription_detail_keyboard(sub_id, sub=subscription)
 
@@ -330,7 +340,10 @@ async def handle_subscription_devices(
         can_buy_devices = settings.is_devices_selection_enabled()
 
     current_devices = Texts.format_device_limit(subscription.device_limit)
-    text = f'📱 <b>Устройства</b>\n\nТекущий лимит: {current_devices} устройств\n\nВыберите действие:'
+    text = (
+        '<tg-emoji emoji-id="5258513401784573443">👥</tg-emoji> <b>Устройства</b>\n\n'
+        f'Текущий лимит: {current_devices} устройств\n\nВыберите действие:'
+    )
 
     keyboard = []
     if can_buy_devices:
@@ -405,8 +418,10 @@ async def handle_subscription_delete_confirm(
     tariff_name = subscription.tariff.name if subscription.tariff else 'Подписка'
 
     text = (
-        f'🗑 <b>Удалить подписку «{tariff_name}»?</b>\n\n'
-        '⚠️ Подписка будет удалена безвозвратно.\n'
+        f'<tg-emoji emoji-id="5240241223632954241">🚫</tg-emoji> '
+        f'<b>Удалить подписку «{tariff_name}»?</b>\n\n'
+        '<tg-emoji emoji-id="5447644880824181073">⚠️</tg-emoji> '
+        'Подписка будет удалена безвозвратно.\n'
         'Все данные, устройства и настройки будут потеряны.\n'
         'Это действие нельзя отменить.'
     )

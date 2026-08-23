@@ -121,6 +121,21 @@ CALLBACK_TO_ICON: dict[str, str] = {
     'autopay_set_period': 'renewal_period',
     'subscription_manage_devices': 'manage_devices',
     'subscription_revoke': 'revoke_subscription',
+    'sm': 'my_subscription',
+    'sl': 'connect',
+    'se': 'extend_subscription',
+    'st': 'buy_traffic',
+    'sd': 'manage_devices',
+    'sub_del': 'disable',
+    'sub_del_yes': 'disable',
+    'sr': 'revoke_subscription',
+    'change_devices_menu': 'configure',
+    'device_management': 'manage_devices',
+    'tariff_select': 'tariff',
+    'sbp_recurring_menu': 'autopay',
+    'simple_subscription_pay_with_balance': 'payment_pay',
+    'trial_pay_with_balance': 'payment_pay',
+    'saved_cards_list': 'balance',
     'menu_balance': 'balance',
     'menu_promocode': 'promocode',
     'menu_referrals': 'referral_system',
@@ -140,6 +155,9 @@ CALLBACK_TO_ICON: dict[str, str] = {
 
 CALLBACK_PREFIX_TO_ICON: dict[str, str] = {
     'claim_discount_': 'claim_discount',
+    'check_': 'show_qr',
+    'confirm_unlink_': 'confirm_switch',
+    'confirm_switch_traffic_': 'confirm_switch',
 }
 
 CALLBACK_TO_STYLE: dict[str, str] = {
@@ -183,6 +201,12 @@ CONTACT_SUPPORT_TEXTS = {
     '联系支持',
 }
 
+APPEAL_TEXTS = {
+    'обжаловать',
+    'appeal',
+    'оскаржити',
+}
+
 CONNECT_TEXTS = {
     'подключиться',
     'connect',
@@ -214,6 +238,12 @@ def _resolve_icon_name(button: InlineKeyboardButton, plain_text: str) -> str | N
     if any(marker in normalized_text for marker in CANCEL_TEXT_MARKERS):
         return 'cancel'
 
+    if callback_name == 'noop':
+        if any(unit in normalized_text for unit in ('дн.', 'day', 'days')):
+            return 'renewal_period'
+        if any(unit in normalized_text for unit in ('гб', 'gb')):
+            return 'buy_traffic'
+
     if button.icon_custom_emoji_id:
         return None
 
@@ -224,7 +254,9 @@ def _resolve_icon_name(button: InlineKeyboardButton, plain_text: str) -> str | N
         return 'balance_topup'
     if button.url and (
         normalized_text.startswith('оплатить')
+        or 'к оплате' in normalized_text
         or normalized_text.startswith('pay')
+        or normalized_text.startswith('go to payment')
         or normalized_text.startswith('сплатити')
     ):
         return 'payment_pay'
@@ -234,6 +266,8 @@ def _resolve_icon_name(button: InlineKeyboardButton, plain_text: str) -> str | N
         return icon_name
 
     if normalized_text in CONTACT_SUPPORT_TEXTS:
+        return 'contact_support'
+    if normalized_text in APPEAL_TEXTS:
         return 'contact_support'
     if normalized_text in CONNECT_TEXTS:
         return 'connect'
