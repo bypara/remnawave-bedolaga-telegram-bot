@@ -462,6 +462,8 @@ class CloudPaymentsPaymentMixin:
         transaction: Any,
     ) -> None:
         """Send success notification to user via Telegram."""
+        if not settings.is_notifications_enabled():
+            return
 
         from app.bot_factory import create_bot
         from app.localization.texts import get_texts
@@ -514,6 +516,8 @@ class CloudPaymentsPaymentMixin:
         language: str = 'ru',
     ) -> None:
         """Send failure notification to user via Telegram."""
+        if not settings.is_notifications_enabled():
+            return
 
         from app.bot_factory import create_bot
 

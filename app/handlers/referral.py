@@ -786,7 +786,6 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
             reply_markup=admin_keyboard,
             category=NotificationCategory.PARTNERS,
         )
-
     # Отвечаем пользователю
     text = texts.t(
         'REFERRAL_WITHDRAWAL_SUCCESS',

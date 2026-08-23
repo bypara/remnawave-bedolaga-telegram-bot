@@ -55,6 +55,23 @@ def test_requested_custom_emoji_icons_are_applied_by_button_action():
         ('✅ Подтвердить переключение', 'instant_sw_confirm:2', 'confirm_switch'),
         ('✅ Подтвердить переключение', 'tariff_sw_confirm:2:30', 'confirm_switch'),
         ('✅ Подтвердить переключение', 'daily_tariff_switch_confirm:2', 'confirm_switch'),
+        ('⚙️ Минимум', 'sm:1', 'my_subscription'),
+        ('🔗 Ссылка подключения', 'sl:1', 'connect'),
+        ('🔄 Продлить', 'se:1', 'extend_subscription'),
+        ('📊 Трафик', 'st:1', 'buy_traffic'),
+        ('📱 Устройства', 'sd:1', 'manage_devices'),
+        ('🗑 Удалить подписку', 'sub_del:1', 'disable'),
+        ('🔄 Перевыпустить', 'sr:1', 'revoke_subscription'),
+        ('➕ Докупить устройства', 'change_devices_menu:1', 'configure'),
+        ('📱 Управление устройствами', 'device_management:1', 'manage_devices'),
+        ('📦 Минимум', 'tariff_select:1', 'tariff'),
+        ('⚡ Автопродление через СБП', 'sbp_recurring_menu', 'autopay'),
+        ('✅ Оплатить с баланса', 'simple_subscription_pay_with_balance', 'payment_pay'),
+        ('💳 Привязанные карты', 'saved_cards_list', 'balance'),
+        ('✅ Да, отвязать', 'confirm_unlink_1', 'confirm_switch'),
+        ('📊 Проверить статус', 'check_yookassa_1', 'show_qr'),
+        ('📅 30 дн.', 'noop', 'renewal_period'),
+        ('📊 100 ГБ', 'noop', 'buy_traffic'),
     ]
     markup = InlineKeyboardMarkup(
         inline_keyboard=[[_button(text, callback_data=callback)] for text, callback, _ in cases]
@@ -93,24 +110,32 @@ def test_claim_discount_requested_icon_overrides_legacy_explicit_icon():
     assert button.icon_custom_emoji_id == CUSTOM_EMOJI_IDS['claim_discount']
 
 
-def test_quick_topup_amount_buttons_do_not_have_icons():
+def test_quick_topup_amount_buttons_keep_only_explicit_icons():
     markup = InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text='100 ₽',
+                    text='СБП (Lava)',
                     callback_data='topup_amount|lava_sbp|10000',
                     icon_custom_emoji_id=CUSTOM_EMOJI_IDS['balance_topup'],
                 ),
                 _button('300 ₽', callback_data='topup_amount|lava_sbp|30000'),
+                _button('Банковская карта', callback_data='topup_amount|yookassa|30000'),
             ]
         ]
     )
 
-    first, second = apply_custom_emoji_icons(markup).inline_keyboard[0]
+    first, second, third = apply_custom_emoji_icons(markup).inline_keyboard[0]
 
-    assert (first.text, first.icon_custom_emoji_id) == ('100 ₽', None)
+    assert (first.text, first.icon_custom_emoji_id) == (
+        'СБП (Lava)',
+        CUSTOM_EMOJI_IDS['balance_topup'],
+    )
     assert (second.text, second.icon_custom_emoji_id) == ('300 ₽', None)
+    assert (third.text, third.icon_custom_emoji_id) == (
+        'Банковская карта',
+        CUSTOM_EMOJI_IDS['balance_topup'],
+    )
 
 
 def test_url_contact_and_all_back_cancel_buttons_are_decorated():
@@ -120,10 +145,14 @@ def test_url_contact_and_all_back_cancel_buttons_are_decorated():
             [_button('⬅️ Назад', callback_data='anything')],
             [_button('🏠 В главное меню', callback_data='back_to_menu')],
             [_button('❌ Отмена', callback_data='anything_else')],
+            [_button('🔗 Перейти к оплате', url='https://pay.example')],
+            [_button('🆘 Обжаловать', url='https://t.me/support')],
         ]
     )
 
-    contact, back, home, cancel = [row[0] for row in apply_custom_emoji_icons(markup).inline_keyboard]
+    contact, back, home, cancel, payment, appeal = [
+        row[0] for row in apply_custom_emoji_icons(markup).inline_keyboard
+    ]
     assert (contact.text, contact.icon_custom_emoji_id) == (
         'Связаться с поддержкой',
         CUSTOM_EMOJI_IDS['contact_support'],
@@ -131,6 +160,14 @@ def test_url_contact_and_all_back_cancel_buttons_are_decorated():
     assert (back.text, back.icon_custom_emoji_id) == ('Назад', CUSTOM_EMOJI_IDS['back'])
     assert (home.text, home.icon_custom_emoji_id) == ('В главное меню', CUSTOM_EMOJI_IDS['back'])
     assert (cancel.text, cancel.icon_custom_emoji_id) == ('Отмена', CUSTOM_EMOJI_IDS['cancel'])
+    assert (payment.text, payment.icon_custom_emoji_id) == (
+        'Перейти к оплате',
+        CUSTOM_EMOJI_IDS['payment_pay'],
+    )
+    assert (appeal.text, appeal.icon_custom_emoji_id) == (
+        'Обжаловать',
+        CUSTOM_EMOJI_IDS['contact_support'],
+    )
 
 
 def test_existing_context_specific_icon_is_preserved():
