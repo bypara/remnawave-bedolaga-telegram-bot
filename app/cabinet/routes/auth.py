@@ -900,15 +900,6 @@ async def auth_telegram_oidc(
             detail='Invalid or expired Telegram OIDC token',
         )
 
-    # Replay detection: reject if this exact token was already used
-    token_hash = hashlib.sha256(request.id_token.encode()).hexdigest()
-    token_ttl = max(int(claims.get('exp', 0) - datetime.now(UTC).timestamp()), 60)
-    if await TokenReplayCache.is_token_replayed(token_hash, ttl=min(token_ttl, 600)):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Invalid or expired Telegram OIDC token',
-        )
-
     # Extract user info from OIDC claims
     try:
         telegram_id = int(claims.get('id', claims.get('sub', 0)))
@@ -974,6 +965,21 @@ async def auth_telegram_oidc(
         consent_documents = await _require_legal_consent(
             db, accepted=request.accepted_legal_documents, language=language or 'ru'
         )
+
+    # Mark the token as consumed only after recoverable registration
+    # preconditions have passed. A 428 legal-consent response is a challenge,
+    # not a completed authentication: the browser must be able to resubmit the
+    # same still-valid OIDC token with the accepted documents. The replay guard
+    # still runs before any user is created or a session is issued.
+    token_hash = hashlib.sha256(request.id_token.encode()).hexdigest()
+    token_ttl = max(int(claims.get('exp', 0) - datetime.now(UTC).timestamp()), 60)
+    if await TokenReplayCache.is_token_replayed(token_hash, ttl=min(token_ttl, 600)):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid or expired Telegram OIDC token',
+        )
+
+    if not user:
         logger.info('Creating new user from cabinet OIDC', telegram_id=telegram_id, username=username)
         user = await create_user(
             db=db,
