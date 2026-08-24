@@ -276,6 +276,21 @@ async def test_gate_passes_with_full_consent(monkeypatch: pytest.MonkeyPatch) ->
         assert documents == [lcs.PUBLIC_OFFER, lcs.PRIVACY_POLICY]
 
 
+async def test_gate_allows_telegram_auth_to_defer_consent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Telegram first establishes a session; the blocking onboarding records consent next."""
+    from app.cabinet.routes.auth import _require_legal_consent
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        documents = await _require_legal_consent(
+            db,
+            accepted=None,
+            language='ru',
+            allow_deferred=True,
+        )
+
+        assert documents == []
+
+
 async def test_gate_is_transparent_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     """Выключенная настройка не должна ломать регистрацию без чекбоксов."""
     from app.cabinet.routes.auth import _require_legal_consent

@@ -202,8 +202,9 @@ async def _require_legal_consent(
     *,
     accepted: list[str] | None,
     language: str,
+    allow_deferred: bool = False,
 ) -> list[str]:
-    """Проверить галочки «ознакомлен» ПЕРЕД созданием нового аккаунта.
+    """Проверить галочки до создания либо отложить их до blocking onboarding.
 
     Возвращает документы, согласие с которыми надо записать после создания юзера.
     Если согласия не хватает — 428 со списком документов: экран логина по нему
@@ -212,6 +213,14 @@ async def _require_legal_consent(
     """
     requirement = await legal_consent_service.get_requirement(db, language)
     if not requirement.required:
+        return []
+
+    # Telegram auth must be allowed to establish a cabinet session first: the
+    # authenticated LegalOnboardingGate then shows the full welcome/trial
+    # experience and blocks the rest of the UI until consent is recorded.
+    # Email registration still submits consent before account creation and
+    # therefore keeps the stricter pre-auth behaviour.
+    if allow_deferred and not accepted:
         return []
 
     missing = legal_consent_service.missing_documents(requirement.documents, accepted)
@@ -586,9 +595,13 @@ async def auth_telegram(
     is_new_user = not user
     consent_documents: list[str] = []
     if not user:
-        # Согласие проверяем ДО создания: иначе аккаунт уже есть, а галочки нет.
+        # Для Telegram согласие можно отложить: после входа весь кабинет закрыт
+        # обязательным welcome-onboarding с предложением активировать триал.
         consent_documents = await _require_legal_consent(
-            db, accepted=request.accepted_legal_documents, language=tg_language or 'ru'
+            db,
+            accepted=request.accepted_legal_documents,
+            language=tg_language or 'ru',
+            allow_deferred=True,
         )
         # Create new user from Telegram initData
         logger.info('Creating new user from cabinet (initData): telegram_id', telegram_id=telegram_id)
@@ -781,7 +794,12 @@ async def auth_telegram_widget(
     is_new_user = not user
     consent_documents: list[str] = []
     if not user:
-        consent_documents = await _require_legal_consent(db, accepted=request.accepted_legal_documents, language='ru')
+        consent_documents = await _require_legal_consent(
+            db,
+            accepted=request.accepted_legal_documents,
+            language='ru',
+            allow_deferred=True,
+        )
         # Create new user from Telegram data
         logger.info(
             'Creating new user from cabinet: telegram_id=, username', request_id=request.id, username=request.username
@@ -963,7 +981,10 @@ async def auth_telegram_oidc(
     consent_documents: list[str] = []
     if not user:
         consent_documents = await _require_legal_consent(
-            db, accepted=request.accepted_legal_documents, language=language or 'ru'
+            db,
+            accepted=request.accepted_legal_documents,
+            language=language or 'ru',
+            allow_deferred=True,
         )
 
     # Mark the token as consumed only after recoverable registration

@@ -39,26 +39,23 @@ def _patch_oidc_prerequisites(stack: ExitStack) -> None:
 async def test_legal_consent_challenge_does_not_consume_oidc_token() -> None:
     request = TelegramOIDCAuthRequest(id_token='valid-oidc-token')
     replay = AsyncMock(return_value=False)
+    require_consent = AsyncMock(
+        side_effect=HTTPException(
+            status_code=status.HTTP_428_PRECONDITION_REQUIRED,
+            detail={'code': 'legal_consent_required'},
+        )
+    )
 
     with ExitStack() as stack:
         _patch_oidc_prerequisites(stack)
         stack.enter_context(patch('app.cabinet.routes.auth.TokenReplayCache.is_token_replayed', replay))
-        stack.enter_context(
-            patch(
-                'app.cabinet.routes.auth._require_legal_consent',
-                AsyncMock(
-                    side_effect=HTTPException(
-                        status_code=status.HTTP_428_PRECONDITION_REQUIRED,
-                        detail={'code': 'legal_consent_required'},
-                    )
-                ),
-            )
-        )
+        stack.enter_context(patch('app.cabinet.routes.auth._require_legal_consent', require_consent))
 
         with pytest.raises(HTTPException) as exc:
             await auth_telegram_oidc(request=request, raw_request=MagicMock(), db=AsyncMock())
 
     assert exc.value.status_code == status.HTTP_428_PRECONDITION_REQUIRED
+    assert require_consent.await_args.kwargs['allow_deferred'] is True
     replay.assert_not_awaited()
 
 
