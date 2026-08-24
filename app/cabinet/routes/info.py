@@ -1,8 +1,8 @@
 """Info pages routes for cabinet - FAQ, rules, privacy policy, etc."""
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -16,6 +16,7 @@ from app.services.recurrent_payments_service import RecurrentPaymentsService
 from app.utils.display_mode import is_visible_in_web
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
+from ..ip_utils import get_client_ip
 
 
 logger = structlog.get_logger(__name__)
@@ -121,6 +122,17 @@ class LegalConsentConfigResponse(BaseModel):
     required: bool
     prechecked: bool
     documents: list[str]
+
+
+class UserLegalConsentStatusResponse(LegalConsentConfigResponse):
+    accepted_documents: list[str]
+    missing_documents: list[str]
+    has_accepted_all: bool
+
+
+class LegalConsentAcceptRequest(BaseModel):
+    documents: list[str] = Field(default_factory=list, max_length=10)
+    language: str = Field(default='ru', min_length=2, max_length=10)
 
 
 # ============ Routes ============
@@ -434,6 +446,47 @@ async def get_legal_consent_config(
         prechecked=requirement.prechecked,
         documents=requirement.documents,
     )
+
+
+def _user_consent_response(state: legal_consent_service.UserLegalConsentStatus) -> UserLegalConsentStatusResponse:
+    return UserLegalConsentStatusResponse(
+        required=state.required,
+        prechecked=state.prechecked,
+        documents=state.documents,
+        accepted_documents=state.accepted_documents,
+        missing_documents=state.missing_documents,
+        has_accepted_all=state.has_accepted_all,
+    )
+
+
+@router.get('/legal-consent/status', response_model=UserLegalConsentStatusResponse)
+async def get_user_legal_consent_status(
+    language: str = Query('ru', min_length=2, max_length=10),
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Статус согласия текущего пользователя для обязательного onboarding."""
+    state = await legal_consent_service.get_user_status(db, user, language)
+    return _user_consent_response(state)
+
+
+@router.post('/legal-consent/accept', response_model=UserLegalConsentStatusResponse)
+async def accept_user_legal_documents(
+    body: LegalConsentAcceptRequest,
+    request: Request,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Явно принять документы; пропустить часть обязательного комплекта нельзя."""
+    state = await legal_consent_service.accept_user_consent(
+        db,
+        user,
+        body.documents,
+        language=body.language,
+        source='cabinet_onboarding',
+        ip_address=get_client_ip(request),
+    )
+    return _user_consent_response(state)
 
 
 @router.get('/visibility', response_model=InfoVisibilityResponse)

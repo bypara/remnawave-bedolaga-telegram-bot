@@ -174,6 +174,83 @@ async def test_record_consent_with_no_documents_is_a_noop(monkeypatch: pytest.Mo
         assert (await db.execute(select(LegalConsent))).scalars().all() == []
 
 
+async def test_existing_user_status_reports_only_missing_documents(monkeypatch: pytest.MonkeyPatch) -> None:
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = User(telegram_id=770002, status=UserStatus.ACTIVE.value, language='ru')
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        db.add(LegalConsent(user_id=user.id, document=lcs.PRIVACY_POLICY, source='cabinet_telegram'))
+        await db.commit()
+
+        state = await lcs.get_user_status(db, user)
+
+        assert state.required is True
+        assert state.accepted_documents == [lcs.PRIVACY_POLICY]
+        assert state.missing_documents == [lcs.PUBLIC_OFFER]
+        assert state.has_accepted_all is False
+
+
+async def test_onboarding_acceptance_records_only_missing_documents(monkeypatch: pytest.MonkeyPatch) -> None:
+    from sqlalchemy import select
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = User(telegram_id=770003, status=UserStatus.ACTIVE.value, language='ru')
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        db.add(LegalConsent(user_id=user.id, document=lcs.PRIVACY_POLICY, source='cabinet_email'))
+        await db.commit()
+
+        state = await lcs.accept_user_consent(
+            db,
+            user,
+            [lcs.PUBLIC_OFFER, lcs.PRIVACY_POLICY],
+            source='cabinet_onboarding',
+            ip_address='203.0.113.8',
+        )
+
+        rows = (await db.execute(select(LegalConsent).order_by(LegalConsent.id))).scalars().all()
+        assert [row.document for row in rows] == [lcs.PRIVACY_POLICY, lcs.PUBLIC_OFFER]
+        assert rows[-1].source == 'cabinet_onboarding'
+        assert rows[-1].ip_address == '203.0.113.8'
+        assert state.has_accepted_all is True
+
+
+async def test_onboarding_cannot_accept_only_part_of_required_documents(monkeypatch: pytest.MonkeyPatch) -> None:
+    from sqlalchemy import select
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = User(telegram_id=770004, status=UserStatus.ACTIVE.value, language='ru')
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+        with pytest.raises(HTTPException) as exc:
+            await lcs.accept_user_consent(db, user, [lcs.PRIVACY_POLICY])
+
+        assert exc.value.status_code == 428
+        assert exc.value.detail['missing'] == [lcs.PUBLIC_OFFER]
+        assert (await db.execute(select(LegalConsent))).scalars().all() == []
+
+
+async def test_paid_action_gate_reuses_trial_or_onboarding_consent(monkeypatch: pytest.MonkeyPatch) -> None:
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = User(telegram_id=770005, status=UserStatus.ACTIVE.value, language='ru')
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+        with pytest.raises(HTTPException) as exc:
+            await lcs.require_user_consent(db, user)
+        assert exc.value.status_code == 428
+
+        await lcs.accept_user_consent(db, user, [lcs.PUBLIC_OFFER, lcs.PRIVACY_POLICY])
+
+        state = await lcs.require_user_consent(db, user)
+        assert state.has_accepted_all is True
+
+
 # ── Гейт в auth-роутах ────────────────────────────────────────────────────────
 
 

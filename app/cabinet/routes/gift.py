@@ -32,7 +32,11 @@ from app.services.payment_method_config_service import get_enabled_methods_for_u
 from app.utils.cache import RateLimitCache
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 
-from ..dependencies import get_cabinet_db, get_current_cabinet_user
+from ..dependencies import (
+    get_cabinet_db,
+    get_current_cabinet_user,
+    get_current_cabinet_user_with_legal_consent,
+)
 from ..schemas.gift import (
     ActivateGiftRequest,
     ActivateGiftResponse,
@@ -205,7 +209,7 @@ async def get_gift_config(
 @router.post('/purchase', response_model=GiftPurchaseResponse)
 async def create_gift_purchase(
     body: GiftPurchaseRequest,
-    user: User = Depends(get_current_cabinet_user),
+    user: User = Depends(get_current_cabinet_user_with_legal_consent),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Create a gift subscription purchase from the cabinet."""

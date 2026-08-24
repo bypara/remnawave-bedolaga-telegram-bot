@@ -1364,11 +1364,11 @@ class Settings(BaseSettings):
     CABINET_PASSWORD_RESET_EXPIRE_HOURS: int = 1
     CABINET_EMAIL_CHANGE_CODE_EXPIRE_MINUTES: int = 15  # Email change verification code expiration
     CABINET_EMAIL_AUTH_ENABLED: bool = True  # Enable email registration/login in cabinet
-    # Согласие с офертой и политикой при ПЕРВОЙ авторизации в кабинете (для новых юзеров).
-    # False — чекбоксы не показываются и ничего не требуется (прежнее поведение).
+    # Обязательное согласие с офертой и политикой перед использованием кабинета и оплатой.
+    # False — обязательный экран и серверная проверка платных действий отключены.
     # Гейт сам собой отключается, если ни оферта, ни политика не включены для веба:
     # требовать согласие с несуществующим документом бессмысленно.
-    CABINET_REQUIRE_LEGAL_CONSENT: bool = False
+    CABINET_REQUIRE_LEGAL_CONSENT: bool = True
     # True — чекбоксы показываются уже отмеченными (пользователю остаётся не снимать).
     # Юридически слабее явной галочки, поэтому по умолчанию выключено.
     CABINET_LEGAL_CONSENT_PRECHECKED: bool = False

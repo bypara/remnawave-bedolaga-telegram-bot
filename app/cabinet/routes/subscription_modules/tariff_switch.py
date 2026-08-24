@@ -23,7 +23,11 @@ from app.services.pricing_engine import pricing_engine
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
 
-from ...dependencies import get_cabinet_db, get_current_cabinet_user
+from ...dependencies import (
+    get_cabinet_db,
+    get_current_cabinet_user,
+    get_current_cabinet_user_with_legal_consent,
+)
 from ...schemas.subscription import TariffPurchaseRequest
 from .helpers import _subscription_to_response, resolve_subscription
 
@@ -198,7 +202,7 @@ async def preview_tariff_switch(
 @router.post('/tariff/switch')
 async def switch_tariff(
     request: TariffPurchaseRequest,
-    user: User = Depends(get_current_cabinet_user),
+    user: User = Depends(get_current_cabinet_user_with_legal_consent),
     db: AsyncSession = Depends(get_cabinet_db),
     subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ) -> dict[str, Any]:

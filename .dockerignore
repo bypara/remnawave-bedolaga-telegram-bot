@@ -17,6 +17,8 @@ __pycache__/
 .coverage
 htmlcov/
 .venv/
+.cabinet-work/
+.codex-preview/
 tests/
 .mypy_cache/
 .ruff_cache/

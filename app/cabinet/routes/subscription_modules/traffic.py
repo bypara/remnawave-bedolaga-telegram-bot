@@ -29,7 +29,11 @@ from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 from app.utils.cache import RateLimitCache, cache, cache_key
 
-from ...dependencies import get_cabinet_db, get_current_cabinet_user
+from ...dependencies import (
+    get_cabinet_db,
+    get_current_cabinet_user,
+    get_current_cabinet_user_with_legal_consent,
+)
 from ...schemas.subscription import (
     TrafficPackageResponse,
     TrafficPurchaseRequest,
@@ -148,7 +152,7 @@ async def get_traffic_packages(
 @router.post('/traffic')
 async def purchase_traffic(
     request: TrafficPurchaseRequest,
-    user: User = Depends(get_current_cabinet_user),
+    user: User = Depends(get_current_cabinet_user_with_legal_consent),
     db: AsyncSession = Depends(get_cabinet_db),
     subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ):
@@ -557,7 +561,7 @@ async def save_traffic_cart(
 @router.put('/traffic')
 async def switch_traffic_package(
     request: TrafficPurchaseRequest,
-    user: User = Depends(get_current_cabinet_user),
+    user: User = Depends(get_current_cabinet_user_with_legal_consent),
     db: AsyncSession = Depends(get_cabinet_db),
     subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ) -> dict[str, Any]:

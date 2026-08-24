@@ -18,7 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
 
-from ...dependencies import get_cabinet_db, get_current_cabinet_user
+from ...dependencies import (
+    get_cabinet_db,
+    get_current_cabinet_user,
+    get_current_cabinet_user_with_legal_consent,
+)
 from .helpers import resolve_subscription
 
 
@@ -29,7 +33,7 @@ router = APIRouter()
 
 @router.post('/lava-recurrent/enable')
 async def enable_lava_recurrent(
-    user: User = Depends(get_current_cabinet_user),
+    user: User = Depends(get_current_cabinet_user_with_legal_consent),
     db: AsyncSession = Depends(get_cabinet_db),
     subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
 ):
@@ -88,7 +92,7 @@ async def enable_lava_recurrent(
 @router.post('/lava-recurrent/purchase')
 async def purchase_with_lava_recurrent(
     tariff_id: int = Query(..., description='Tariff to subscribe to'),
-    user: User = Depends(get_current_cabinet_user),
+    user: User = Depends(get_current_cabinet_user_with_legal_consent),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Оформление подписки на тариф оплатой привязкой Lava.

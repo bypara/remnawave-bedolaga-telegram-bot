@@ -37,7 +37,11 @@ from app.database.models import Subscription, TransactionType, User
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 
-from ...dependencies import get_cabinet_db, get_current_cabinet_user
+from ...dependencies import (
+    get_cabinet_db,
+    get_current_cabinet_user,
+    get_current_cabinet_user_with_legal_consent,
+)
 from ...schemas.subscription import DevicePurchaseRequest
 from .helpers import _apply_addon_discount, resolve_subscription
 
@@ -70,7 +74,7 @@ def _resolve_panel_user_id(subscription: Subscription | None, user: User) -> int
 async def purchase_devices_legacy(
     request: DevicePurchaseRequest,
     subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
-    user: User = Depends(get_current_cabinet_user),
+    user: User = Depends(get_current_cabinet_user_with_legal_consent),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Purchase additional device slots (legacy endpoint).
@@ -338,7 +342,7 @@ async def purchase_devices_legacy(
 async def purchase_devices(
     request: DevicePurchaseRequest,
     subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
-    user: User = Depends(get_current_cabinet_user),
+    user: User = Depends(get_current_cabinet_user_with_legal_consent),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Purchase additional device slots for subscription."""

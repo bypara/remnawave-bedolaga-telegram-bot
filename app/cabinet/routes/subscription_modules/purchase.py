@@ -50,7 +50,11 @@ from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 from app.utils.pricing_utils import calculate_price_per_month, format_period_description
 
-from ...dependencies import get_cabinet_db, get_current_cabinet_user
+from ...dependencies import (
+    get_cabinet_db,
+    get_current_cabinet_user,
+    get_current_cabinet_user_with_legal_consent,
+)
 from ...schemas.subscription import (
     PurchasePreviewRequest,
     SubscriptionResponse,
@@ -488,7 +492,7 @@ async def preview_purchase(
 @router.post('/purchase')
 async def submit_purchase(
     request: PurchasePreviewRequest,
-    user: User = Depends(get_current_cabinet_user),
+    user: User = Depends(get_current_cabinet_user_with_legal_consent),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict[str, Any]:
     """Submit subscription purchase (deduct from balance, classic mode only)."""
@@ -651,7 +655,7 @@ async def submit_purchase(
 @router.post('/purchase-tariff')
 async def purchase_tariff(
     request: TariffPurchaseRequest,
-    user: User = Depends(get_current_cabinet_user),
+    user: User = Depends(get_current_cabinet_user_with_legal_consent),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict[str, Any]:
     """Purchase a tariff (for tariffs mode)."""
@@ -1385,7 +1389,7 @@ async def get_trial_info(
 @router.post('/trial', response_model=SubscriptionResponse)
 async def activate_trial(
     request: TrialActivateRequest | None = None,
-    user: User = Depends(get_current_cabinet_user),
+    user: User = Depends(get_current_cabinet_user_with_legal_consent),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Activate trial subscription."""

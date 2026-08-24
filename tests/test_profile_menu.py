@@ -35,6 +35,10 @@ def test_personal_actions_are_grouped_under_profile(monkeypatch):
     assert 'menu_language' not in main_callbacks
 
     profile = get_profile_keyboard(language='ru', balance_kopeks=12_300)
+    cabinet_button = profile.inline_keyboard[0][0]
+    assert cabinet_button.text == 'Веб-кабинет'
+    assert cabinet_button.url == 'https://app.huntcdn.com/'
+    assert cabinet_button.icon_custom_emoji_id == '5447410659077661506'
     assert _callbacks(profile) == [
         'menu_balance',
         'menu_promocode',
@@ -42,7 +46,7 @@ def test_personal_actions_are_grouped_under_profile(monkeypatch):
         'menu_language',
         'back_to_menu',
     ]
-    assert profile.inline_keyboard[1][1].text == '🤝 Реф. система'
+    assert profile.inline_keyboard[2][1].text == '🤝 Реф. система'
 
 
 def test_profile_hides_optional_actions_when_disabled(monkeypatch):

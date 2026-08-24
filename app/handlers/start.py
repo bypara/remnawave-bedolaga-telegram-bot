@@ -70,6 +70,7 @@ from app.services.support_settings_service import SupportSettingsService
 from app.services.web_auth_service import WEB_AUTH_TOKEN_MIN_LENGTH, link_web_auth_token
 from app.states import RegistrationStates
 from app.utils.long_messages import answer_long_text, edit_long_text, send_long_text
+from app.utils.miniapp_buttons import strip_leading_emoji
 from app.utils.rich_menu import try_answer_rich_main_menu, try_send_rich_main_menu
 from app.utils.user_utils import generate_unique_referral_code
 
@@ -1334,12 +1335,14 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                     inline_keyboard=[
                         [
                             types.InlineKeyboardButton(
-                                text=texts.t('WEB_AUTH_CONFIRM_YES', '✅ Да, войти'),
+                                text=strip_leading_emoji(texts.t('WEB_AUTH_CONFIRM_YES', '✅ Да, войти')),
                                 callback_data=f'webauth_confirm:{web_auth_token}',
+                                icon_custom_emoji_id='5206607081334906820',
                             ),
                             types.InlineKeyboardButton(
-                                text=texts.t('WEB_AUTH_CONFIRM_NO', '❌ Нет'),
+                                text=strip_leading_emoji(texts.t('WEB_AUTH_CONFIRM_NO', '❌ Нет')),
                                 callback_data='webauth_deny',
+                                icon_custom_emoji_id='5210952531676504517',
                             ),
                         ],
                     ]
@@ -3493,7 +3496,14 @@ async def process_webauth_confirm(
         return
 
     if callback.data == 'webauth_deny':
-        await callback.message.edit_text('❌ Вход отменён.')
+        db_user = await get_user_by_telegram_id(db, callback.from_user.id)
+        texts = get_texts(db_user.language if db_user else 'ru')
+        await callback.message.edit_text(
+            texts.t(
+                'WEB_AUTH_DENIED',
+                '<tg-emoji emoji-id="5210952531676504517">❌</tg-emoji> Вход отменён.',
+            )
+        )
         return
 
     # Extract token from callback_data: "webauth_confirm:{token}"
@@ -3511,7 +3521,11 @@ async def process_webauth_confirm(
     texts = get_texts(user.language)
     if linked:
         await callback.message.edit_text(
-            texts.t('WEB_AUTH_SUCCESS', '✅ Авторизация в кабинете подтверждена! Вернитесь в браузер.'),
+            texts.t(
+                'WEB_AUTH_SUCCESS',
+                '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> '
+                'Авторизация в кабинете подтверждена! Вернитесь в браузер.',
+            ),
         )
     else:
         await callback.message.edit_text(
