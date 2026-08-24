@@ -22,7 +22,11 @@ from app.services.subscription_renewal_service import (
 )
 from app.services.user_cart_service import user_cart_service
 
-from ...dependencies import get_cabinet_db, get_current_cabinet_user
+from ...dependencies import (
+    get_cabinet_db,
+    get_current_cabinet_user,
+    get_current_cabinet_user_with_legal_consent,
+)
 from ...schemas.subscription import (
     RenewalOptionResponse,
     RenewalRequest,
@@ -98,7 +102,7 @@ async def get_renewal_options(
 @router.post('/renew')
 async def renew_subscription(
     request: RenewalRequest,
-    user: User = Depends(get_current_cabinet_user),
+    user: User = Depends(get_current_cabinet_user_with_legal_consent),
     db: AsyncSession = Depends(get_cabinet_db),
     subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
 ):

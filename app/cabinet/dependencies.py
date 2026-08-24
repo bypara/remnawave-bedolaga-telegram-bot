@@ -253,6 +253,17 @@ async def get_current_cabinet_user(
     return user
 
 
+async def get_current_cabinet_user_with_legal_consent(
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> User:
+    """Authenticated user who has accepted all currently required legal docs."""
+    from app.services.legal_consent_service import require_user_consent
+
+    await require_user_consent(db, user, getattr(user, 'language', None) or 'ru')
+    return user
+
+
 async def get_optional_cabinet_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),

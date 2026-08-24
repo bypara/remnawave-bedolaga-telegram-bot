@@ -1,11 +1,11 @@
-"""Согласие с офертой и политикой при первой авторизации в кабинете.
+"""Обязательное согласие с офертой и политикой в кабинете.
 
 В боте согласие с правилами спрашивается при регистрации, но живёт только в FSM и
 никуда не сохраняется. В кабинете новый пользователь создавался вообще молча: зашёл
 через Telegram — аккаунт готов, никаких документов ему не показывали.
 
 Здесь один источник правды на весь кабинет: какие документы требуют галочки, нужна
-ли она вообще и как записать факт согласия. Ключевое правило — требовать согласие
+ли она вообще, как записать факт согласия и разрешено ли платное действие. Ключевое правило — требовать согласие
 можно только с тем, что пользователь способен прочитать: если документ выключен или
 скрыт из веба, галочки по нему нет. Иначе установка без заполненной оферты
 заблокировала бы регистрацию вообще всем.
@@ -16,6 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import structlog
+from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -36,11 +38,26 @@ KNOWN_DOCUMENTS: tuple[str, ...] = (PUBLIC_OFFER, PRIVACY_POLICY)
 
 @dataclass(slots=True)
 class LegalConsentRequirement:
-    """Что кабинет должен показать на экране первой авторизации."""
+    """Что кабинет должен показать на обязательном экране согласия."""
 
     required: bool
     prechecked: bool
     documents: list[str]
+
+
+@dataclass(slots=True)
+class UserLegalConsentStatus:
+    """Текущее состояние обязательных документов для конкретного пользователя."""
+
+    required: bool
+    prechecked: bool
+    documents: list[str]
+    accepted_documents: list[str]
+    missing_documents: list[str]
+
+    @property
+    def has_accepted_all(self) -> bool:
+        return not self.missing_documents
 
 
 async def _document_is_available(db: AsyncSession, document: str, language: str) -> bool:
@@ -63,7 +80,7 @@ async def _document_is_available(db: AsyncSession, document: str, language: str)
 
 
 async def get_requirement(db: AsyncSession, language: str = 'ru') -> LegalConsentRequirement:
-    """Требование согласия для НОВОГО пользователя кабинета."""
+    """Текущий набор документов, обязательный для пользователей кабинета."""
     if not settings.CABINET_REQUIRE_LEGAL_CONSENT:
         return LegalConsentRequirement(required=False, prechecked=False, documents=[])
 
@@ -88,6 +105,111 @@ def missing_documents(required: list[str], accepted: list[str] | None) -> list[s
     """Какие из обязательных документов пользователь не отметил."""
     accepted_set = {item.strip() for item in (accepted or []) if isinstance(item, str)}
     return [document for document in required if document not in accepted_set]
+
+
+async def get_accepted_documents(
+    db: AsyncSession,
+    user_id: int,
+    documents: list[str] | None = None,
+) -> set[str]:
+    """Какие документы пользователь уже принимал хотя бы один раз."""
+    query = select(LegalConsent.document).where(LegalConsent.user_id == user_id)
+    if documents:
+        query = query.where(LegalConsent.document.in_(documents))
+    result = await db.execute(query)
+    return set(result.scalars().all())
+
+
+async def get_user_status(
+    db: AsyncSession,
+    user: User,
+    language: str = 'ru',
+) -> UserLegalConsentStatus:
+    """Вернуть обязательные, принятые и недостающие документы пользователя."""
+    requirement = await get_requirement(db, language)
+    accepted_set = await get_accepted_documents(db, user.id, requirement.documents)
+    accepted = [document for document in requirement.documents if document in accepted_set]
+    missing = [document for document in requirement.documents if document not in accepted_set]
+    return UserLegalConsentStatus(
+        required=requirement.required,
+        prechecked=requirement.prechecked,
+        documents=requirement.documents,
+        accepted_documents=accepted,
+        missing_documents=missing,
+    )
+
+
+def _consent_required_error(state: UserLegalConsentStatus) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_428_PRECONDITION_REQUIRED,
+        detail={
+            'code': 'legal_consent_required',
+            'message': 'Accept the public offer and privacy policy to continue',
+            'documents': state.documents,
+            'missing': state.missing_documents,
+            'prechecked': state.prechecked,
+        },
+    )
+
+
+async def require_user_consent(
+    db: AsyncSession,
+    user: User,
+    language: str | None = None,
+) -> UserLegalConsentStatus:
+    """Серверный гейт платных действий и триала — UI обойти нельзя."""
+    state = await get_user_status(db, user, language or getattr(user, 'language', None) or 'ru')
+    if state.required and not state.has_accepted_all:
+        raise _consent_required_error(state)
+    return state
+
+
+async def accept_user_consent(
+    db: AsyncSession,
+    user: User,
+    accepted: list[str] | None,
+    *,
+    language: str | None = None,
+    source: str = 'cabinet_onboarding',
+    ip_address: str | None = None,
+) -> UserLegalConsentStatus:
+    """Зафиксировать явное согласие со всеми актуальными документами.
+
+    Частичное принятие не сохраняется: пользователь либо принимает весь доступный
+    комплект, либо остаётся на обязательном экране.
+    """
+    state = await get_user_status(db, user, language or getattr(user, 'language', None) or 'ru')
+    missing_from_request = missing_documents(state.documents, accepted)
+    if state.required and missing_from_request:
+        raise HTTPException(
+            status_code=status.HTTP_428_PRECONDITION_REQUIRED,
+            detail={
+                'code': 'legal_consent_required',
+                'message': 'All required documents must be accepted',
+                'documents': state.documents,
+                'missing': missing_from_request,
+                'prechecked': state.prechecked,
+            },
+        )
+
+    to_record = [document for document in state.documents if document not in state.accepted_documents]
+    if to_record:
+        try:
+            for document in to_record:
+                db.add(
+                    LegalConsent(
+                        user_id=user.id,
+                        document=document,
+                        source=source,
+                        ip_address=ip_address,
+                    )
+                )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+
+    return await get_user_status(db, user, language or getattr(user, 'language', None) or 'ru')
 
 
 async def record_consent(
