@@ -179,13 +179,22 @@ async def test_explore_choice_opens_main_menu_with_legal_warning(monkeypatch):
     user = SimpleNamespace(language='ru')
     warning = 'Continue = consent'
     show_main_menu = AsyncMock()
+    record_consent = AsyncMock()
+    db = AsyncMock()
 
     monkeypatch.setattr(menu, 'build_browsing_consent_warning', AsyncMock(return_value=warning))
+    monkeypatch.setattr(menu, 'record_implicit_legal_consent', record_consent)
     monkeypatch.setattr(menu, 'show_main_menu', show_main_menu)
 
-    await menu.handle_post_registration_explore(callback, state, user, AsyncMock())
+    await menu.handle_post_registration_explore(callback, state, user, db)
 
     state.clear.assert_awaited_once()
+    record_consent.assert_awaited_once_with(
+        db,
+        user,
+        language='ru',
+        source='bot_explore',
+    )
     show_main_menu.assert_awaited_once()
     assert show_main_menu.await_args.kwargs['notice'] == warning
     callback.answer.assert_awaited_once()

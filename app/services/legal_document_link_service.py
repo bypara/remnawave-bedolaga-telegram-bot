@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.legal_consent_service import record_consent
+from app.services.legal_consent_service import get_accepted_documents, record_consent
 from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
 
@@ -68,6 +68,23 @@ class LegalDocumentLinks:
         if self.public_offer:
             result.append(PUBLIC_OFFER)
         return result
+
+
+async def get_unaccepted_legal_document_links(
+    db: AsyncSession,
+    language: str,
+    user=None,
+) -> LegalDocumentLinks:
+    """Return only active documents the user has not accepted in any channel."""
+    links = await get_active_legal_document_links(db, language)
+    if user is None or not getattr(user, 'id', None) or not links.documents:
+        return links
+
+    accepted = await get_accepted_documents(db, user.id, links.documents)
+    return LegalDocumentLinks(
+        privacy_policy=None if PRIVACY_POLICY in accepted else links.privacy_policy,
+        public_offer=None if PUBLIC_OFFER in accepted else links.public_offer,
+    )
 
 
 async def get_active_legal_document_links(db: AsyncSession, language: str) -> LegalDocumentLinks:
@@ -136,14 +153,15 @@ async def build_implicit_consent_notice(
     *,
     action_key: str,
     action_fallback: str,
+    user=None,
 ) -> str:
-    links = await get_active_legal_document_links(db, texts.language)
+    links = await get_unaccepted_legal_document_links(db, texts.language, user)
     action = texts.t(action_key, action_fallback)
     return format_implicit_consent_notice(texts, links, action=action)
 
 
-async def build_browsing_consent_warning(db: AsyncSession, texts) -> str:
-    links = await get_active_legal_document_links(db, texts.language)
+async def build_browsing_consent_warning(db: AsyncSession, texts, user=None) -> str:
+    links = await get_unaccepted_legal_document_links(db, texts.language, user)
     return format_browsing_consent_warning(texts, links)
 
 
@@ -154,6 +172,6 @@ async def record_implicit_legal_consent(
     language: str,
     source: str,
 ) -> None:
-    """Persist which enabled URL documents were accepted by clicking an action."""
-    links = await get_active_legal_document_links(db, language)
+    """Persist only documents not already accepted in the bot or cabinet."""
+    links = await get_unaccepted_legal_document_links(db, language, user)
     await record_consent(db, user, links.documents, source=source)

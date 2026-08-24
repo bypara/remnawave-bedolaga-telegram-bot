@@ -666,6 +666,7 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
         texts,
         action_key='LEGAL_ACTION_ACTIVATE_TRIAL',
         action_fallback='«Активировать»',
+        user=db_user,
     )
     if consent_notice:
         trial_text = f'{trial_text}\n\n{consent_notice}'

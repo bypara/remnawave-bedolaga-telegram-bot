@@ -31,7 +31,10 @@ from app.keyboards.inline import (
 )
 from app.localization.texts import get_rules, get_texts
 from app.services.faq_service import FaqService
-from app.services.legal_document_link_service import build_browsing_consent_warning
+from app.services.legal_document_link_service import (
+    build_browsing_consent_warning,
+    record_implicit_legal_consent,
+)
 from app.services.main_menu_button_service import MainMenuButtonService
 from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
@@ -1375,7 +1378,16 @@ async def handle_post_registration_explore(
         return
 
     texts = get_texts(db_user.language)
-    notice = await build_browsing_consent_warning(db, texts)
+    notice = await build_browsing_consent_warning(db, texts, db_user)
+    try:
+        await record_implicit_legal_consent(
+            db,
+            db_user,
+            language=db_user.language,
+            source='bot_explore',
+        )
+    except Exception as error:
+        logger.error('Не удалось записать согласие при переходе в меню', error=str(error))
     await state.clear()
     await show_main_menu(
         callback,
