@@ -882,6 +882,15 @@ def get_profile_keyboard(
         balance_text = texts.BALANCE_BUTTON.format(balance=texts.format_price(safe_balance))
 
     keyboard: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text=strip_leading_emoji(
+                    texts.t('PROFILE_WEB_CABINET_BUTTON', '🌐 Веб-кабинет')
+                ),
+                url='https://app.huntcdn.com/',
+                icon_custom_emoji_id='5447410659077661506',
+            )
+        ],
         [InlineKeyboardButton(text=balance_text, callback_data='menu_balance')],
     ]
 

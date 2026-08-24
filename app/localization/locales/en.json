@@ -1151,6 +1151,7 @@
   "PROFILE_MENU_PROMPT": "Your personal settings and bonuses are collected here.\n\nChoose a section:",
   "PROFILE_MENU_TITLE": "👤 <b>Profile</b>",
   "PROFILE_MENU_BUTTON": "👤 Profile",
+  "PROFILE_WEB_CABINET_BUTTON": "🌐 Web dashboard",
   "PROFILE_REFERRALS_BUTTON": "🤝 Referral system",
   "MENU_PROMOCODE": "🎫 Promo code",
   "MENU_PROMO_GROUPS_INFO": "🎯 Promo groups",
