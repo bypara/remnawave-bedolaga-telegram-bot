@@ -3493,7 +3493,14 @@ async def process_webauth_confirm(
         return
 
     if callback.data == 'webauth_deny':
-        await callback.message.edit_text('❌ Вход отменён.')
+        db_user = await get_user_by_telegram_id(db, callback.from_user.id)
+        texts = get_texts(db_user.language if db_user else 'ru')
+        await callback.message.edit_text(
+            texts.t(
+                'WEB_AUTH_DENIED',
+                '<tg-emoji emoji-id="5210952531676504517">❌</tg-emoji> Вход отменён.',
+            )
+        )
         return
 
     # Extract token from callback_data: "webauth_confirm:{token}"
@@ -3511,7 +3518,11 @@ async def process_webauth_confirm(
     texts = get_texts(user.language)
     if linked:
         await callback.message.edit_text(
-            texts.t('WEB_AUTH_SUCCESS', '✅ Авторизация в кабинете подтверждена! Вернитесь в браузер.'),
+            texts.t(
+                'WEB_AUTH_SUCCESS',
+                '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji> '
+                'Авторизация в кабинете подтверждена! Вернитесь в браузер.',
+            ),
         )
     else:
         await callback.message.edit_text(
