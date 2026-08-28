@@ -55,8 +55,10 @@ def _subscription(
         end_date=end_date,
         tariff_id=tariff_id,
         traffic_limit_gb=50,
+        applied_tariff_traffic_gb=50,
         traffic_used_gb=12.0,
         device_limit=3,
+        applied_tariff_device_limit=3,
         connected_squads=['old-squad'],
         purchased_traffic_gb=10,
         traffic_reset_at=datetime(2026, 1, 1, tzinfo=UTC),
@@ -110,7 +112,8 @@ async def test_change_tariff_preserves_remaining_period(db: AsyncMock) -> None:
     assert sub.end_date == end_date
     # The tariff/limits ARE relabelled to the new tariff.
     assert sub.tariff_id == 2
-    assert sub.traffic_limit_gb == 200
+    # Purchased 10 GB survives the relabel and is added to the new base.
+    assert sub.traffic_limit_gb == 210
 
 
 @pytest.mark.asyncio
@@ -176,4 +179,4 @@ async def test_change_tariff_keeps_trial_a_trial(db: AsyncMock) -> None:
     assert sub.end_date == end_date
     # The relabel itself still happened.
     assert sub.tariff_id == 2
-    assert sub.traffic_limit_gb == 200
+    assert sub.traffic_limit_gb == 210

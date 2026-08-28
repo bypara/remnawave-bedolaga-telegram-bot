@@ -41,6 +41,26 @@ ALIVE_SUBSCRIPTION_STATUSES: frozenset[str] = frozenset(
 # Кортеж для SQLAlchemy .in_() — вычисляется один раз, не аллоцируется при каждом вызове.
 _ALIVE_SUBSCRIPTION_STATUSES_TUPLE: tuple[str, ...] = tuple(ALIVE_SUBSCRIPTION_STATUSES)
 
+
+async def _tariff_limit_snapshot(
+    db: AsyncSession,
+    tariff_id: int | None,
+    *,
+    fallback_traffic_gb: int,
+    fallback_device_limit: int,
+) -> tuple[int | None, int | None]:
+    """Return tariff bases for a new/revived row without mistaking add-ons for base."""
+    if tariff_id is None:
+        return None, None
+    tariff = await db.get(Tariff, tariff_id)
+    traffic_base = getattr(tariff, 'traffic_limit_gb', None)
+    device_base = getattr(tariff, 'device_limit', None)
+    # AsyncMock-based unit sessions return another mock from ``get`` unless
+    # explicitly configured. Treat non-numeric attributes as "not found".
+    if not isinstance(traffic_base, int) or not isinstance(device_base, int):
+        return fallback_traffic_gb, fallback_device_limit
+    return int(traffic_base or 0), int(device_base or 1)
+
 # Имя частичного уникального индекса, конфликт по которому мы ожидаем
 # при гонке создания триальной подписки.
 UQ_TRIAL_CONSTRAINT = 'uq_subscriptions_user_tariff_active'
@@ -194,6 +214,12 @@ async def create_trial_subscription(
         traffic_limit_gb = settings.TRIAL_TRAFFIC_LIMIT_GB
     if device_limit is None:
         device_limit = settings.TRIAL_DEVICE_LIMIT
+    applied_traffic, applied_devices = await _tariff_limit_snapshot(
+        db,
+        tariff_id,
+        fallback_traffic_gb=traffic_limit_gb,
+        fallback_device_limit=device_limit,
+    )
 
     # Если переданы connected_squads, используем их.
     # Иначе используем squad_uuid или все доступные сквады по умолчанию.
@@ -235,7 +261,9 @@ async def create_trial_subscription(
         existing.start_date = datetime.now(UTC)
         existing.end_date = end_date
         existing.traffic_limit_gb = traffic_limit_gb
+        existing.applied_tariff_traffic_gb = applied_traffic
         existing.device_limit = device_limit
+        existing.applied_tariff_device_limit = applied_devices
         existing.connected_squads = final_squads
         existing.tariff_id = tariff_id
         if not existing.remnawave_short_id:
@@ -275,7 +303,9 @@ async def create_trial_subscription(
         start_date=datetime.now(UTC),
         end_date=end_date,
         traffic_limit_gb=traffic_limit_gb,
+        applied_tariff_traffic_gb=applied_traffic,
         device_limit=device_limit,
+        applied_tariff_device_limit=applied_devices,
         connected_squads=final_squads,
         autopay_enabled=False,
         autopay_days_before=settings.DEFAULT_AUTOPAY_DAYS_BEFORE,
@@ -369,6 +399,14 @@ async def _revive_paid_subscription(
     subscription.traffic_limit_gb = traffic_limit_gb
     if device_limit is not None:
         subscription.device_limit = device_limit
+    applied_traffic, applied_devices = await _tariff_limit_snapshot(
+        db,
+        subscription.tariff_id,
+        fallback_traffic_gb=traffic_limit_gb,
+        fallback_device_limit=device_limit or subscription.device_limit or 1,
+    )
+    subscription.applied_tariff_traffic_gb = applied_traffic
+    subscription.applied_tariff_device_limit = applied_devices
     if connected_squads:
         subscription.connected_squads = list(connected_squads)
 
@@ -640,6 +678,13 @@ async def create_paid_subscription(
     if device_limit is None:
         device_limit = settings.DEFAULT_DEVICE_LIMIT
 
+    applied_traffic, applied_devices = await _tariff_limit_snapshot(
+        db,
+        tariff_id,
+        fallback_traffic_gb=traffic_limit_gb,
+        fallback_device_limit=device_limit,
+    )
+
     final_squads = await _resolve_connected_squads(db, connected_squads, user_id=user_id)
 
     short_id = await generate_unique_short_id(db)
@@ -651,7 +696,9 @@ async def create_paid_subscription(
         start_date=datetime.now(UTC),
         end_date=end_date,
         traffic_limit_gb=traffic_limit_gb,
+        applied_tariff_traffic_gb=applied_traffic,
         device_limit=device_limit,
+        applied_tariff_device_limit=applied_devices,
         connected_squads=final_squads,
         autopay_enabled=settings.is_autopay_enabled_by_default(),
         autopay_days_before=settings.DEFAULT_AUTOPAY_DAYS_BEFORE,
@@ -1307,6 +1354,9 @@ async def extend_subscription(
         from app.database.crud.tariff import get_tariff_by_id
 
         new_tariff = await get_tariff_by_id(db, tariff_id)
+        if new_tariff:
+            subscription.applied_tariff_traffic_gb = int(new_tariff.traffic_limit_gb or 0)
+            subscription.applied_tariff_device_limit = int(new_tariff.device_limit or 1)
         old_was_daily = (
             getattr(subscription, 'is_daily_paused', False)
             or getattr(subscription, 'last_daily_charge_at', None) is not None
@@ -2453,6 +2503,12 @@ async def create_pending_subscription(
     trial_label = 'триальная ' if is_trial else ''
     current_time = datetime.now(UTC)
     end_date = current_time + timedelta(days=duration_days)
+    applied_traffic, applied_devices = await _tariff_limit_snapshot(
+        db,
+        tariff_id,
+        fallback_traffic_gb=traffic_limit_gb,
+        fallback_device_limit=device_limit,
+    )
 
     if settings.is_multi_tariff_enabled() and tariff_id:
         active_subs = await get_active_subscriptions_by_user_id(db, user_id)
@@ -2489,7 +2545,9 @@ async def create_pending_subscription(
         existing_subscription.start_date = current_time
         existing_subscription.end_date = end_date
         existing_subscription.traffic_limit_gb = traffic_limit_gb
+        existing_subscription.applied_tariff_traffic_gb = applied_traffic
         existing_subscription.device_limit = device_limit
+        existing_subscription.applied_tariff_device_limit = applied_devices
         existing_subscription.connected_squads = connected_squads or []
         existing_subscription.traffic_used_gb = 0.0
         existing_subscription.updated_at = current_time
@@ -2516,7 +2574,9 @@ async def create_pending_subscription(
         start_date=current_time,
         end_date=end_date,
         traffic_limit_gb=traffic_limit_gb,
+        applied_tariff_traffic_gb=applied_traffic,
         device_limit=device_limit,
+        applied_tariff_device_limit=applied_devices,
         connected_squads=connected_squads or [],
         tariff_id=tariff_id,
         autopay_enabled=settings.is_autopay_enabled_by_default(),
@@ -2571,7 +2631,9 @@ async def create_sbp_pending_subscription(
         start_date=now,
         end_date=now,
         traffic_limit_gb=tariff.traffic_limit_gb,
+        applied_tariff_traffic_gb=tariff.traffic_limit_gb,
         device_limit=tariff.device_limit,
+        applied_tariff_device_limit=tariff.device_limit,
         connected_squads=squads,
         tariff_id=tariff.id,
         autopay_enabled=False,

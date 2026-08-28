@@ -1,5 +1,6 @@
 """Управление тарифами в админ-панели."""
 
+import asyncio
 import html
 
 import structlog
@@ -7,6 +8,7 @@ from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -21,12 +23,13 @@ from app.database.crud.tariff import (
     get_tariffs_with_subscriptions_count,
     update_tariff,
 )
-from app.database.models import Tariff, User
+from app.database.models import Subscription, SubscriptionStatus, Tariff, TransactionType, User
 from app.handlers.admin.tariff_custom_traffic import (
     format_custom_traffic_settings,
     register_custom_traffic_handlers,
 )
 from app.localization.texts import Texts, get_texts
+from app.services.tariff_assignment_service import apply_tariff_limits, move_to_tariff, preview_limits
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatting import format_period, format_price_kopeks, format_traffic
@@ -233,6 +236,12 @@ def get_tariff_view_keyboard(
         buttons.append([InlineKeyboardButton(text='✅ Активировать', callback_data=f'admin_tariff_toggle:{tariff.id}')])
 
     # Удаление
+    buttons.append(
+        [InlineKeyboardButton(text='🔄 Обновить параметры подписок', callback_data=f'admin_tariff_sync_limits:{tariff.id}')]
+    )
+    buttons.append(
+        [InlineKeyboardButton(text='🚚 Перенести подписчиков', callback_data=f'admin_tariff_migrate:{tariff.id}')]
+    )
     buttons.append([InlineKeyboardButton(text='🗑️ Удалить', callback_data=f'admin_tariff_delete:{tariff.id}')])
 
     # Назад к списку
@@ -270,6 +279,24 @@ def _format_traffic_topup_packages(tariff: Tariff) -> str:
         lines.append(f'  • {gb} ГБ: {format_price_kopeks(price)}')
 
     return '\n'.join(lines)
+
+
+async def _managed_tariff_subscriptions(db: AsyncSession, tariff_id: int) -> list[Subscription]:
+    result = await db.execute(
+        select(Subscription)
+        .where(
+            Subscription.tariff_id == tariff_id,
+            Subscription.status.in_(
+                (
+                    SubscriptionStatus.ACTIVE.value,
+                    SubscriptionStatus.TRIAL.value,
+                    SubscriptionStatus.LIMITED.value,
+                )
+            ),
+        )
+        .order_by(Subscription.id)
+    )
+    return list(result.unique().scalars().all())
 
 
 def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> str:
@@ -2840,6 +2867,190 @@ async def set_traffic_reset_mode(
     )
 
 
+@admin_required
+@error_handler
+async def preview_tariff_limit_sync(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    tariff_id = int(callback.data.split(':')[1])
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff:
+        await callback.answer('Тариф не найден', show_alert=True)
+        return
+    subscriptions = await _managed_tariff_subscriptions(db, tariff_id)
+    changes = [preview_limits(sub, tariff) for sub in subscriptions]
+    traffic_count = sum(change.traffic_changed for change in changes)
+    device_count = sum(change.devices_changed for change in changes)
+    affected = sum(change.changed for change in changes)
+    if not affected:
+        await callback.answer('Все подписки уже используют актуальные параметры', show_alert=True)
+        return
+    await callback.message.edit_text(
+        f'🔄 <b>Обновить параметры «{html.escape(tariff.name)}»?</b>\n\n'
+        f'Подписок с расхождениями: <b>{affected}</b>\n'
+        f'• трафик: {traffic_count}\n'
+        f'• устройства: {device_count}\n\n'
+        'Срок, статус, использованный трафик и оплаченные дополнения сохранятся.',
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text='✅ Обновить', callback_data=f'admin_tariff_sync_limits_confirm:{tariff_id}')],
+                [InlineKeyboardButton(text='◀️ Назад', callback_data=f'admin_tariff_view:{tariff_id}')],
+            ]
+        ),
+        parse_mode='HTML',
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def confirm_tariff_limit_sync(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    tariff_id = int(callback.data.split(':')[1])
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff:
+        await callback.answer('Тариф не найден', show_alert=True)
+        return
+    subscriptions = await _managed_tariff_subscriptions(db, tariff_id)
+    updated = 0
+    for subscription in subscriptions:
+        if preview_limits(subscription, tariff).changed:
+            apply_tariff_limits(subscription, tariff)
+            updated += 1
+    await db.commit()
+    if updated:
+        from app.cabinet.routes.admin_tariffs import _background_sync_tariff_limits
+
+        asyncio.create_task(
+            _background_sync_tariff_limits(tariff_id),
+            name=f'bot-sync-limits-tariff-{tariff_id}',
+        )
+    await callback.answer(f'Обновлено подписок: {updated}', show_alert=True)
+    await callback.message.edit_text(
+        format_tariff_info(tariff, db_user.language, await get_tariff_subscriptions_count(db, tariff_id)),
+        reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
+        parse_mode='HTML',
+    )
+
+
+@admin_required
+@error_handler
+async def choose_tariff_migration_target(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    source_id = int(callback.data.split(':')[1])
+    source = await get_tariff_by_id(db, source_id)
+    if not source:
+        await callback.answer('Тариф не найден', show_alert=True)
+        return
+    tariffs = await get_tariffs_with_subscriptions_count(db, include_inactive=True)
+    buttons = [
+        [InlineKeyboardButton(text=tariff.name, callback_data=f'admin_tariff_migrate_target:{source_id}:{tariff.id}')]
+        for tariff, _ in tariffs
+        if tariff.id != source_id and bool(tariff.is_daily) == bool(source.is_daily)
+    ]
+    buttons.append([InlineKeyboardButton(text='◀️ Назад', callback_data=f'admin_tariff_view:{source_id}')])
+    await callback.message.edit_text(
+        f'🚚 <b>Перенос подписчиков «{html.escape(source.name)}»</b>\n\nВыберите новый тариф:',
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+        parse_mode='HTML',
+    )
+    await callback.answer()
+
+
+async def _migration_candidates(
+    db: AsyncSession, source_id: int, target_id: int
+) -> tuple[list[Subscription], list[Subscription], set[int]]:
+    subscriptions = await _managed_tariff_subscriptions(db, source_id)
+    user_ids = {sub.user_id for sub in subscriptions}
+    conflicts: set[int] = set()
+    if user_ids:
+        result = await db.execute(
+            select(Subscription.user_id).where(
+                Subscription.user_id.in_(user_ids),
+                Subscription.tariff_id == target_id,
+                Subscription.status.in_(
+                    (
+                        SubscriptionStatus.ACTIVE.value,
+                        SubscriptionStatus.TRIAL.value,
+                        SubscriptionStatus.LIMITED.value,
+                    )
+                ),
+            )
+        )
+        conflicts = set(result.scalars().all())
+    return subscriptions, [sub for sub in subscriptions if sub.user_id not in conflicts], conflicts
+
+
+@admin_required
+@error_handler
+async def preview_tariff_migration(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    _, source_raw, target_raw = callback.data.split(':')
+    source_id, target_id = int(source_raw), int(target_raw)
+    source = await get_tariff_by_id(db, source_id)
+    target = await get_tariff_by_id(db, target_id)
+    if not source or not target:
+        await callback.answer('Тариф не найден', show_alert=True)
+        return
+    subscriptions, movable, conflicts = await _migration_candidates(db, source_id, target_id)
+    await callback.message.edit_text(
+        f'🚚 <b>{html.escape(source.name)} → {html.escape(target.name)}</b>\n\n'
+        f'Будет перенесено: <b>{len(movable)}</b>\n'
+        f'Пропущено из-за существующей подписки: {len(conflicts)}\n\n'
+        'Срок и статус сохранятся. Автопродление старого тарифа будет отключено.',
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text='✅ Перенести', callback_data=f'admin_tariff_migrate_confirm:{source_id}:{target_id}')],
+                [InlineKeyboardButton(text='◀️ Назад', callback_data=f'admin_tariff_migrate:{source_id}')],
+            ]
+        ),
+        parse_mode='HTML',
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def confirm_tariff_migration(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    _, source_raw, target_raw = callback.data.split(':')
+    source_id, target_id = int(source_raw), int(target_raw)
+    source = await get_tariff_by_id(db, source_id)
+    target = await get_tariff_by_id(db, target_id)
+    if not source or not target:
+        await callback.answer('Тариф не найден', show_alert=True)
+        return
+    _, movable, conflicts = await _migration_candidates(db, source_id, target_id)
+    from app.database.crud.transaction import create_transaction
+    from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
+    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+    moved_ids: list[int] = []
+    for subscription in movable:
+        await cancel_platega_recurring_for_subscription_safe(db, subscription.id, commit=False)
+        await cancel_lava_recurring_for_subscription_safe(db, subscription.id, commit=False)
+        move_to_tariff(subscription, target)
+        subscription.autopay_enabled = False
+        subscription.autopay_period_days = None
+        moved_ids.append(subscription.id)
+        await create_transaction(
+            db=db,
+            user_id=subscription.user_id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=0,
+            description=f"Перенос администратором с тарифа '{source.name}' на '{target.name}'",
+            commit=False,
+        )
+    await db.commit()
+    if moved_ids:
+        from app.cabinet.routes.admin_tariffs import _background_sync_tariff_limits
+
+        asyncio.create_task(
+            _background_sync_tariff_limits(target_id, subscription_ids=moved_ids),
+            name=f'bot-migrate-tariff-{source_id}-to-{target_id}',
+        )
+    await callback.answer(f'Перенесено: {len(moved_ids)}, пропущено: {len(conflicts)}', show_alert=True)
+    await callback.message.edit_text(
+        format_tariff_info(source, db_user.language, await get_tariff_subscriptions_count(db, source_id)),
+        reply_markup=get_tariff_view_keyboard(source, db_user.language),
+        parse_mode='HTML',
+    )
+
+
 def register_handlers(dp: Dispatcher):
     """Регистрирует обработчики для управления тарифами."""
     # Произвольный трафик регистрируется до общего toggle-фильтра.
@@ -2862,6 +3073,15 @@ def register_handlers(dp: Dispatcher):
         & ~F.data.startswith('admin_tariff_toggle_daily:'),
     )
     dp.callback_query.register(toggle_trial_tariff, F.data.startswith('admin_tariff_toggle_trial:'))
+    dp.callback_query.register(
+        confirm_tariff_limit_sync, F.data.startswith('admin_tariff_sync_limits_confirm:')
+    )
+    dp.callback_query.register(preview_tariff_limit_sync, F.data.startswith('admin_tariff_sync_limits:'))
+    dp.callback_query.register(
+        confirm_tariff_migration, F.data.startswith('admin_tariff_migrate_confirm:')
+    )
+    dp.callback_query.register(preview_tariff_migration, F.data.startswith('admin_tariff_migrate_target:'))
+    dp.callback_query.register(choose_tariff_migration_target, F.data.startswith('admin_tariff_migrate:'))
 
     # Создание тарифа
     dp.callback_query.register(start_create_tariff, F.data == 'admin_tariff_create')

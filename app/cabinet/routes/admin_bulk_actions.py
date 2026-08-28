@@ -293,21 +293,18 @@ async def _do_change_tariff(
             username=user.username,
         )
 
-    # Preserve extra purchased devices above the old tariff's base limit
-    from app.database.crud.subscription import calc_device_limit_on_tariff_switch
+    from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
+    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+    from app.services.tariff_assignment_service import move_to_tariff
 
-    old_tariff = await get_tariff_by_id(db, sub.tariff_id) if sub.tariff_id else None
-
-    sub.tariff_id = tariff.id
-    sub.traffic_limit_gb = tariff.traffic_limit_gb
-    sub.device_limit = calc_device_limit_on_tariff_switch(
-        current_device_limit=sub.device_limit,
-        old_tariff_device_limit=old_tariff.device_limit if old_tariff else None,
-        new_tariff_device_limit=tariff.device_limit,
-        max_device_limit=tariff.max_device_limit,
-    )
-    # Set squads from tariff
-    sub.connected_squads = tariff.allowed_squads or []
+    tariff_changed = sub.tariff_id != tariff.id
+    if tariff_changed:
+        await cancel_platega_recurring_for_subscription_safe(db, sub.id, commit=False)
+        await cancel_lava_recurring_for_subscription_safe(db, sub.id, commit=False)
+    move_to_tariff(sub, tariff)
+    if tariff_changed:
+        sub.autopay_enabled = False
+        sub.autopay_period_days = None
 
     # NB: changing the tariff is a *relabel*, not a purchase — we deliberately
     # do NOT flip is_trial here. Bug #629889: flipping a 1-day trial to
@@ -315,11 +312,6 @@ async def _do_change_tariff(
     # day expired, got picked up by try_auto_extend_expired_after_topup (which
     # only renews is_trial=False subs) and granted a full ~30-day tariff period.
     # A trial stays a trial across a tariff change and expires normally.
-
-    # Reset purchased traffic on tariff change
-    await db.execute(sa_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == sub.id))
-    sub.purchased_traffic_gb = 0
-    sub.traffic_reset_at = None
 
     if settings.RESET_TRAFFIC_ON_TARIFF_SWITCH:
         sub.traffic_used_gb = 0.0

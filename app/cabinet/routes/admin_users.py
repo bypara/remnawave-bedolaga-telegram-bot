@@ -1509,17 +1509,6 @@ async def update_user_subscription(
                 detail='tariff_id parameter is required',
             )
 
-        # Смена тарифа делает СБП-привязку Platega несогласованной: она продолжила
-        # бы списывать СТАРУЮ сумму со СТАРЫМ каденсом. Отменяем привязку — юзер
-        # переподключит СБП-автопродление под новый тариф (нужна новая
-        # банковская авторизация, молча пересоздать нельзя).
-        if request.tariff_id != subscription.tariff_id:
-            from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
-            from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
-
-            await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
-
-            await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
         tariff = await get_tariff_by_id(db, request.tariff_id)
         if not tariff:
             raise HTTPException(
@@ -1539,22 +1528,23 @@ async def update_user_subscription(
                     detail='User already has an active subscription for the target tariff',
                 )
 
-        # Preserve extra purchased devices above the old tariff's base limit
-        from app.database.crud.subscription import calc_device_limit_on_tariff_switch
+        from app.services.tariff_assignment_service import move_to_tariff
 
-        old_tariff = await get_tariff_by_id(db, subscription.tariff_id) if subscription.tariff_id else None
+        # Only cancel billing after all validation has passed. Invalid targets
+        # and duplicate conflicts must not disable a perfectly valid recurring
+        # payment on the current tariff.
+        tariff_changed = request.tariff_id != subscription.tariff_id
+        if tariff_changed:
+            from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
+            from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
-        subscription.tariff_id = request.tariff_id
-        subscription.traffic_limit_gb = tariff.traffic_limit_gb
-        subscription.device_limit = calc_device_limit_on_tariff_switch(
-            current_device_limit=subscription.device_limit,
-            old_tariff_device_limit=old_tariff.device_limit if old_tariff else None,
-            new_tariff_device_limit=tariff.device_limit,
-            max_device_limit=tariff.max_device_limit,
-        )
-        # Set squads from tariff
-        if tariff.allowed_squads:
-            subscription.connected_squads = tariff.allowed_squads
+            await cancel_platega_recurring_for_subscription_safe(db, subscription.id, commit=False)
+            await cancel_lava_recurring_for_subscription_safe(db, subscription.id, commit=False)
+
+        move_to_tariff(subscription, tariff)
+        if tariff_changed:
+            subscription.autopay_enabled = False
+            subscription.autopay_period_days = None
 
         # NB: changing the tariff is a *relabel*, not a purchase — we deliberately
         # do NOT flip is_trial here. Bug #629889: flipping a 1-day trial to
@@ -1562,13 +1552,6 @@ async def update_user_subscription(
         # day expired, got picked up by try_auto_extend_expired_after_topup (which
         # only renews is_trial=False subs) and granted a full ~30-day tariff period.
         # A trial stays a trial across a tariff change and expires normally.
-
-        # Сбрасываем докупленный трафик при смене тарифа
-        from sqlalchemy import delete as sql_delete
-
-        await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
-        subscription.purchased_traffic_gb = 0
-        subscription.traffic_reset_at = None
 
         if settings.RESET_TRAFFIC_ON_TARIFF_SWITCH:
             subscription.traffic_used_gb = 0.0

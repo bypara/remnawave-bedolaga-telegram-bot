@@ -21,7 +21,18 @@ from app.database.crud.tariff import (
     set_tariff_promo_groups,
     update_tariff,
 )
-from app.database.models import PromoGroup, Subscription, SubscriptionStatus, Tariff, Transaction, TransactionType, User
+from app.database.models import (
+    LavaSubscription,
+    PlategaSubscription,
+    PromoGroup,
+    Subscription,
+    SubscriptionStatus,
+    Tariff,
+    Transaction,
+    TransactionType,
+    User,
+)
+from app.services.tariff_assignment_service import apply_tariff_limits, move_to_tariff, preview_limits
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.tariffs import (
@@ -35,6 +46,11 @@ from ..schemas.tariffs import (
     TariffDetailResponse,
     TariffListItem,
     TariffListResponse,
+    TariffLimitsPreviewResponse,
+    TariffLimitsSyncRequest,
+    TariffLimitsSyncResponse,
+    TariffMigrationRequest,
+    TariffMigrationResponse,
     TariffSortOrderRequest,
     TariffStatsResponse,
     TariffToggleResponse,
@@ -46,6 +62,51 @@ from ..schemas.tariffs import (
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/tariffs', tags=['Cabinet Admin Tariffs'])
+
+_MANAGED_SUBSCRIPTION_STATUSES = (
+    SubscriptionStatus.ACTIVE.value,
+    SubscriptionStatus.TRIAL.value,
+    SubscriptionStatus.LIMITED.value,
+)
+
+
+async def _tariff_subscriptions(db: AsyncSession, tariff_id: int) -> list[Subscription]:
+    result = await db.execute(
+        select(Subscription)
+        .where(
+            Subscription.tariff_id == tariff_id,
+            Subscription.status.in_(_MANAGED_SUBSCRIPTION_STATUSES),
+        )
+        .order_by(Subscription.id)
+    )
+    return list(result.unique().scalars().all())
+
+
+def _limits_preview(tariff: Tariff, subscriptions: list[Subscription]) -> TariffLimitsPreviewResponse:
+    traffic = 0
+    devices = 0
+    legacy = 0
+    affected: list[int] = []
+    for subscription in subscriptions:
+        change = preview_limits(subscription, tariff)
+        if change.traffic_changed:
+            traffic += 1
+        if change.devices_changed:
+            devices += 1
+        if change.legacy_device_baseline:
+            legacy += 1
+        if change.changed:
+            affected.append(subscription.user_id)
+    return TariffLimitsPreviewResponse(
+        tariff_id=tariff.id,
+        tariff_name=tariff.name,
+        total_subscriptions=len(subscriptions),
+        mismatched_subscriptions=len(affected),
+        traffic_mismatches=traffic,
+        device_mismatches=devices,
+        legacy_device_baselines=legacy,
+        affected_user_ids=affected[:100],
+    )
 
 
 async def _get_tariff_servers(
@@ -122,6 +183,8 @@ async def list_tariffs(
     items = []
     for tariff in tariffs:
         subs_count = await get_tariff_subscriptions_count(db, tariff.id)
+        managed_subscriptions = await _tariff_subscriptions(db, tariff.id)
+        limits_preview = _limits_preview(tariff, managed_subscriptions)
         items.append(
             TariffListItem(
                 id=tariff.id,
@@ -140,6 +203,9 @@ async def list_tariffs(
                 display_order=tariff.display_order,
                 servers_count=len(tariff.allowed_squads or []),
                 subscriptions_count=subs_count,
+                limits_drift_count=limits_preview.mismatched_subscriptions,
+                traffic_drift_count=limits_preview.traffic_mismatches,
+                devices_drift_count=limits_preview.device_mismatches,
                 created_at=tariff.created_at,
             )
         )
@@ -188,6 +254,174 @@ async def get_available_external_squads(
     except Exception:
         logger.warning('Failed to fetch external squads from RemnaWave', exc_info=True)
         return []
+
+
+@router.get('/{tariff_id}/limits-preview', response_model=TariffLimitsPreviewResponse)
+async def preview_tariff_limits(
+    tariff_id: int,
+    admin: User = Depends(require_permission('tariffs:read')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Show subscriptions whose effective limits differ from the tariff."""
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Tariff not found')
+    subscriptions = await _tariff_subscriptions(db, tariff_id)
+    return _limits_preview(tariff, subscriptions)
+
+
+@router.post('/{tariff_id}/sync-limits', response_model=TariffLimitsSyncResponse)
+async def sync_tariff_limits(
+    tariff_id: int,
+    request: TariffLimitsSyncRequest,
+    admin: User = Depends(require_permission('tariffs:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Apply current traffic/device bases while preserving paid add-ons."""
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Tariff not found')
+
+    subscriptions = await _tariff_subscriptions(db, tariff_id)
+    preview = _limits_preview(tariff, subscriptions)
+    if request.dry_run or not preview.mismatched_subscriptions:
+        return TariffLimitsSyncResponse(**preview.model_dump())
+
+    updated = 0
+    for subscription in subscriptions:
+        change = preview_limits(subscription, tariff)
+        if not change.changed:
+            continue
+        apply_tariff_limits(subscription, tariff)
+        updated += 1
+    await db.commit()
+
+    panel_sync_started = updated > 0
+    if panel_sync_started:
+        asyncio.create_task(
+            _background_sync_tariff_limits(tariff_id),
+            name=f'sync-limits-tariff-{tariff_id}',
+        )
+    logger.info(
+        'Admin synced tariff limits',
+        admin_id=admin.id,
+        tariff_id=tariff_id,
+        updated_count=updated,
+    )
+    return TariffLimitsSyncResponse(
+        **preview.model_dump(),
+        updated_count=updated,
+        panel_sync_started=panel_sync_started,
+    )
+
+
+@router.post('/{tariff_id}/migrate-subscriptions', response_model=TariffMigrationResponse)
+async def migrate_tariff_subscriptions(
+    tariff_id: int,
+    request: TariffMigrationRequest,
+    admin: User = Depends(require_permission('tariffs:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Move active/trial/limited subscriptions to another tariff safely."""
+    source = await get_tariff_by_id(db, tariff_id)
+    target = await get_tariff_by_id(db, request.target_tariff_id)
+    if not source or not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Source or target tariff not found')
+    if source.id == target.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Target tariff must be different')
+    if bool(source.is_daily) != bool(target.is_daily):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Daily and period tariffs require an explicit billing conversion and cannot be migrated in bulk',
+        )
+
+    subscriptions = await _tariff_subscriptions(db, source.id)
+    user_ids = {sub.user_id for sub in subscriptions}
+    target_users: set[int] = set()
+    if user_ids:
+        existing_result = await db.execute(
+            select(Subscription.user_id).where(
+                Subscription.user_id.in_(user_ids),
+                Subscription.tariff_id == target.id,
+                Subscription.status.in_(_MANAGED_SUBSCRIPTION_STATUSES),
+            )
+        )
+        target_users = set(existing_result.scalars().all())
+
+    movable = [sub for sub in subscriptions if sub.user_id not in target_users]
+    movable_ids = [sub.id for sub in movable]
+    recurring_ids: set[int] = set()
+    if movable_ids:
+        platega = await db.execute(
+            select(PlategaSubscription.subscription_id).where(
+                PlategaSubscription.subscription_id.in_(movable_ids),
+                PlategaSubscription.status.in_(('PENDING', 'ACTIVE', 'PAST_DUE')),
+            )
+        )
+        lava = await db.execute(
+            select(LavaSubscription.subscription_id).where(
+                LavaSubscription.subscription_id.in_(movable_ids),
+                LavaSubscription.status.in_(('PENDING', 'ACTIVE', 'PAST_DUE')),
+            )
+        )
+        recurring_ids.update(platega.scalars().all())
+        recurring_ids.update(lava.scalars().all())
+
+    legacy = sum(1 for sub in movable if preview_limits(sub, target).legacy_device_baseline)
+    response = TariffMigrationResponse(
+        source_tariff_id=source.id,
+        source_tariff_name=source.name,
+        target_tariff_id=target.id,
+        target_tariff_name=target.name,
+        total_subscriptions=len(subscriptions),
+        movable_count=len(movable),
+        conflict_count=len(target_users),
+        recurring_cancellations=len(recurring_ids),
+        legacy_device_baselines=legacy,
+        conflict_user_ids=sorted(target_users)[:100],
+    )
+    if request.dry_run or not movable:
+        return response
+
+    from app.database.crud.transaction import create_transaction
+    from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
+    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+    for subscription in movable:
+        await cancel_platega_recurring_for_subscription_safe(db, subscription.id, commit=False)
+        await cancel_lava_recurring_for_subscription_safe(db, subscription.id, commit=False)
+        move_to_tariff(subscription, target)
+        # A price/cadence from the previous tariff must never renew the new one.
+        subscription.autopay_enabled = False
+        subscription.autopay_period_days = None
+        if not target.is_daily:
+            subscription.is_daily_paused = False
+            subscription.last_daily_charge_at = None
+        await create_transaction(
+            db=db,
+            user_id=subscription.user_id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=0,
+            description=f"Перенос администратором с тарифа '{source.name}' на '{target.name}'",
+            commit=False,
+        )
+    await db.commit()
+
+    asyncio.create_task(
+        _background_sync_tariff_limits(target.id, subscription_ids=movable_ids),
+        name=f'migrate-tariff-{source.id}-to-{target.id}',
+    )
+    logger.info(
+        'Admin migrated tariff subscriptions',
+        admin_id=admin.id,
+        source_tariff_id=source.id,
+        target_tariff_id=target.id,
+        moved_count=len(movable),
+        conflict_count=len(target_users),
+    )
+    response.moved_count = len(movable)
+    response.panel_sync_started = True
+    return response
 
 
 @router.put('/order')
@@ -620,6 +854,71 @@ async def get_tariff_stats(
         revenue_kopeks=revenue_kopeks,
         revenue_rubles=revenue_kopeks / 100,
     )
+
+
+async def _background_sync_tariff_limits(
+    tariff_id: int,
+    *,
+    subscription_ids: list[int] | None = None,
+) -> None:
+    """Push already committed effective limits to Remnawave in background."""
+    from app.cabinet.routes.admin_users import _sync_subscription_to_panel
+    from app.database.database import AsyncSessionLocal
+
+    try:
+        async with AsyncSessionLocal() as db:
+            conditions = [
+                Subscription.tariff_id == tariff_id,
+                Subscription.status.in_(_MANAGED_SUBSCRIPTION_STATUSES),
+            ]
+            if subscription_ids is not None:
+                conditions.append(Subscription.id.in_(subscription_ids))
+            result = await db.execute(
+                select(Subscription)
+                .options(joinedload(Subscription.user))
+                .where(*conditions)
+                .order_by(Subscription.id)
+            )
+            subscriptions = list(result.unique().scalars().all())
+            synced = 0
+            failed = 0
+            for subscription in subscriptions:
+                if not subscription.user:
+                    continue
+                try:
+                    await _sync_subscription_to_panel(
+                        db,
+                        subscription.user,
+                        subscription,
+                        reset_traffic=False,
+                        reset_traffic_reason='обновление параметров тарифа',
+                        pinned_subscription_identity=True,
+                    )
+                    synced += 1
+                except Exception as exc:
+                    failed += 1
+                    from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+                    remnawave_retry_queue.enqueue(
+                        subscription.id,
+                        subscription.user_id,
+                        action='update',
+                    )
+                    logger.warning(
+                        'Failed to sync migrated tariff subscription',
+                        tariff_id=tariff_id,
+                        subscription_id=subscription.id,
+                        error=str(exc),
+                    )
+            logger.info(
+                'Background tariff limit sync completed',
+                tariff_id=tariff_id,
+                total=len(subscriptions),
+                synced=synced,
+                failed=failed,
+            )
+    except Exception:
+        logger.exception('Background tariff limit sync failed', tariff_id=tariff_id)
 
 
 async def _background_sync_squads(tariff_id: int, admin_id: int) -> None:

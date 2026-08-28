@@ -2309,6 +2309,10 @@ class Subscription(Base):
     end_date = Column(AwareDateTime(), nullable=False)
 
     traffic_limit_gb = Column(Integer, default=0)
+    # Снимок базового лимита тарифа на момент последнего применения. Нужен,
+    # чтобы при следующем изменении тарифа отличить базовый лимит от
+    # докупленных пользователем гигабайт.
+    applied_tariff_traffic_gb = Column(Integer, nullable=True)
     traffic_used_gb = Column(Float, default=0.0)
     purchased_traffic_gb = Column(Integer, default=0)  # Докупленный трафик
     traffic_reset_at = Column(
@@ -2319,6 +2323,10 @@ class Subscription(Base):
     subscription_crypto_link = Column(String, nullable=True)
 
     device_limit = Column(Integer, default=1)
+    # В отличие от traffic purchases отдельного ledger для докупленных
+    # устройств исторически нет. Снимок базы позволяет сохранить оплаченные
+    # слоты: extras = device_limit - applied_tariff_device_limit.
+    applied_tariff_device_limit = Column(Integer, nullable=True)
     modem_enabled = Column(Boolean, default=False)
 
     connected_squads = Column(JSON, default=list)

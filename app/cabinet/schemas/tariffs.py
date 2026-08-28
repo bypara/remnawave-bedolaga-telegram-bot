@@ -62,6 +62,9 @@ class TariffListItem(BaseModel):
     display_order: int
     servers_count: int
     subscriptions_count: int
+    limits_drift_count: int = 0
+    traffic_drift_count: int = 0
+    devices_drift_count: int = 0
     created_at: datetime
 
     class Config:
@@ -267,3 +270,43 @@ class SyncSquadsResponse(BaseModel):
     failed_count: int
     skipped_count: int
     errors: list[str] = Field(default_factory=list)
+
+
+class TariffLimitsPreviewResponse(BaseModel):
+    tariff_id: int
+    tariff_name: str
+    total_subscriptions: int
+    mismatched_subscriptions: int
+    traffic_mismatches: int
+    device_mismatches: int
+    legacy_device_baselines: int
+    affected_user_ids: list[int] = Field(default_factory=list)
+
+
+class TariffLimitsSyncRequest(BaseModel):
+    dry_run: bool = True
+
+
+class TariffLimitsSyncResponse(TariffLimitsPreviewResponse):
+    updated_count: int = 0
+    panel_sync_started: bool = False
+
+
+class TariffMigrationRequest(BaseModel):
+    target_tariff_id: int
+    dry_run: bool = True
+
+
+class TariffMigrationResponse(BaseModel):
+    source_tariff_id: int
+    source_tariff_name: str
+    target_tariff_id: int
+    target_tariff_name: str
+    total_subscriptions: int
+    movable_count: int
+    conflict_count: int
+    recurring_cancellations: int
+    legacy_device_baselines: int
+    moved_count: int = 0
+    panel_sync_started: bool = False
+    conflict_user_ids: list[int] = Field(default_factory=list)
