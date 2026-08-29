@@ -1,7 +1,10 @@
-"""Email service for sending verification and password reset emails."""
+"""Email delivery for authentication, notifications and broadcasts."""
 
+import base64
 import re
 import smtplib
+import time
+import uuid
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -9,6 +12,7 @@ from email.mime.text import MIMEText
 from email.utils import formataddr, formatdate, make_msgid
 from typing import Any
 
+import httpx
 import structlog
 
 from app.config import settings
@@ -18,7 +22,11 @@ logger = structlog.get_logger(__name__)
 
 
 class EmailService:
-    """Service for sending emails via SMTP."""
+    """Send rendered messages through SMTP or the Resend HTTPS API."""
+
+    @property
+    def provider(self) -> str:
+        return settings.get_email_provider()
 
     @property
     def host(self) -> str | None:
@@ -58,8 +66,8 @@ class EmailService:
         return settings.SMTP_USE_SSL or self.port == 465
 
     def is_configured(self) -> bool:
-        """Check if SMTP is properly configured."""
-        return settings.is_smtp_configured()
+        """Check whether the selected email transport is configured."""
+        return settings.is_email_delivery_configured()
 
     @staticmethod
     def _html_to_plain_text(body_html: str) -> str:
@@ -108,6 +116,190 @@ class EmailService:
 
         return smtp
 
+    def _get_unsubscribe_headers(self, unsubscribe_url: str | None) -> dict[str, str]:
+        """Build safe RFC 8058 headers shared by both delivery transports."""
+        if not unsubscribe_url:
+            return {}
+
+        safe_unsubscribe = unsubscribe_url.strip()
+        if any(ch in safe_unsubscribe for ch in '\r\n<>') or not safe_unsubscribe.startswith(('http://', 'https://')):
+            logger.warning('Некорректный unsubscribe_url — заголовки отписки пропущены')
+            return {}
+
+        from .email_unsubscribe import build_unsubscribe_mailto
+
+        targets = [f'<{safe_unsubscribe}>']
+        if mailto := build_unsubscribe_mailto():
+            targets.append(f'<{mailto}>')
+        return {
+            'List-Unsubscribe': ', '.join(targets),
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        }
+
+    def _get_safe_reply_to(self) -> str:
+        reply_to = self.reply_to
+        if not reply_to:
+            return ''
+        if any(ch in reply_to for ch in '\r\n') or '@' not in reply_to:
+            logger.warning('Некорректный SMTP_REPLY_TO — заголовок Reply-To пропущен')
+            return ''
+        return reply_to
+
+    def _send_via_smtp(
+        self,
+        *,
+        to_email: str,
+        subject: str,
+        body_html: str,
+        body_text: str,
+        sender_email: str,
+        sender_name: str,
+        attachments: list[tuple[str, bytes, str]] | None,
+        extra_headers: dict[str, str],
+    ) -> bool:
+        """Send one message using the legacy SMTP transport."""
+        try:
+            alternative = MIMEMultipart('alternative')
+            msg = MIMEMultipart('mixed') if attachments else alternative
+            msg['Subject'] = subject
+            msg['From'] = formataddr((sender_name, sender_email))
+            msg['To'] = to_email
+            if reply_to := self._get_safe_reply_to():
+                msg['Reply-To'] = formataddr((sender_name, reply_to))
+            msg['Date'] = formatdate(localtime=False)
+            msg['Message-ID'] = make_msgid(domain=sender_email.rsplit('@', maxsplit=1)[-1])
+            for header_name, header_value in extra_headers.items():
+                msg[header_name] = header_value
+
+            alternative.attach(MIMEText(body_text, 'plain', 'utf-8'))
+            alternative.attach(MIMEText(body_html, 'html', 'utf-8'))
+
+            if attachments:
+                msg.attach(alternative)
+                for filename, content, mimetype in attachments:
+                    maintype, _, subtype = (mimetype or 'application/octet-stream').partition('/')
+                    attachment_part = MIMEBase(maintype or 'application', subtype or 'octet-stream')
+                    attachment_part.set_payload(content)
+                    encoders.encode_base64(attachment_part)
+                    safe_filename = filename.replace('\n', '').replace('\r', '')
+                    attachment_part.add_header('Content-Disposition', 'attachment', filename=safe_filename)
+                    msg.attach(attachment_part)
+
+            with self._get_smtp_connection() as smtp:
+                smtp.sendmail(sender_email, to_email, msg.as_string())
+
+            logger.info('Email sent successfully', provider='smtp', to_email=to_email)
+            return True
+        except Exception as error:
+            logger.error('Failed to send email', provider='smtp', to_email=to_email, error=error)
+            return False
+
+    @staticmethod
+    def _retry_delay(response: httpx.Response | None, attempt: int) -> float:
+        """Return a short bounded retry delay, respecting numeric Retry-After."""
+        if response is not None:
+            try:
+                return min(10.0, max(0.0, float(response.headers.get('Retry-After', ''))))
+            except (TypeError, ValueError):
+                pass
+        base = max(0.0, float(settings.EMAIL_SEND_RETRY_BASE_SECONDS))
+        return min(10.0, base * (2 ** max(0, attempt - 1)))
+
+    def _send_via_resend(
+        self,
+        *,
+        to_email: str,
+        subject: str,
+        body_html: str,
+        body_text: str,
+        sender_email: str,
+        sender_name: str,
+        attachments: list[tuple[str, bytes, str]] | None,
+        extra_headers: dict[str, str],
+    ) -> bool:
+        """Send one message using Resend's HTTPS API with bounded retries."""
+        payload: dict[str, Any] = {
+            'from': formataddr((sender_name, sender_email)),
+            'to': [to_email],
+            'subject': subject,
+            'html': body_html,
+            'text': body_text,
+        }
+        if reply_to := self._get_safe_reply_to():
+            payload['reply_to'] = reply_to
+        if extra_headers:
+            payload['headers'] = extra_headers
+        if attachments:
+            payload['attachments'] = [
+                {
+                    'filename': filename.replace('\n', '').replace('\r', ''),
+                    'content': base64.b64encode(content).decode('ascii'),
+                    'content_type': mimetype or 'application/octet-stream',
+                }
+                for filename, content, mimetype in attachments
+            ]
+
+        headers = {
+            'Authorization': f'Bearer {settings.RESEND_API_KEY.strip()}',
+            'Content-Type': 'application/json',
+            # Reuse this value for every retry: if Resend accepted the first
+            # request but our connection died before the response, it will not
+            # create a duplicate email.
+            'Idempotency-Key': str(uuid.uuid4()),
+        }
+        max_attempts = max(1, min(5, int(settings.EMAIL_SEND_MAX_ATTEMPTS)))
+
+        with httpx.Client(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
+            for attempt in range(1, max_attempts + 1):
+                response: httpx.Response | None = None
+                try:
+                    response = client.post(settings.RESEND_API_URL, headers=headers, json=payload)
+                    if response.is_success:
+                        try:
+                            message_id = response.json().get('id')
+                        except ValueError:
+                            message_id = None
+                        logger.info(
+                            'Email accepted by provider',
+                            provider='resend',
+                            to_email=to_email,
+                            message_id=message_id,
+                            attempt=attempt,
+                        )
+                        return True
+
+                    retryable = response.status_code in {408, 429} or response.status_code >= 500
+                    error_message = ''
+                    try:
+                        error_message = str(response.json().get('message') or '')[:300]
+                    except ValueError:
+                        error_message = response.text[:300]
+                    logger.warning(
+                        'Email provider rejected request',
+                        provider='resend',
+                        to_email=to_email,
+                        status_code=response.status_code,
+                        error=error_message,
+                        attempt=attempt,
+                        retryable=retryable,
+                    )
+                    if not retryable:
+                        return False
+                except httpx.RequestError as error:
+                    logger.warning(
+                        'Email provider request failed',
+                        provider='resend',
+                        to_email=to_email,
+                        error=type(error).__name__,
+                        attempt=attempt,
+                    )
+
+                if attempt < max_attempts:
+                    time.sleep(self._retry_delay(response, attempt))
+
+        logger.error('Failed to send email after retries', provider='resend', to_email=to_email, attempts=max_attempts)
+        return False
+
     def send_email(
         self,
         to_email: str,
@@ -134,7 +326,7 @@ class EmailService:
             True if email was sent successfully, False otherwise
         """
         if not self.is_configured():
-            logger.warning('SMTP is not configured, cannot send email')
+            logger.warning('Email delivery provider is not configured', provider=self.provider)
             return False
 
         sender_email = self.from_email
@@ -142,84 +334,31 @@ class EmailService:
             logger.error('Invalid or missing SMTP from_email, cannot send email', from_email=sender_email)
             return False
 
-        # Defensive: strip newlines to prevent header injection
+        # Defensive: strip newlines to prevent header injection.
         to_email = to_email.strip().replace('\n', '').replace('\r', '')
         subject = subject.replace('\n', '').replace('\r', '')
+        safe_from_name = self.from_name.replace('\n', '').replace('\r', '') if self.from_name else ''
+        safe_from_email = sender_email.replace('\n', '').replace('\r', '')
+        body_text = body_text if body_text is not None else self._html_to_plain_text(body_html)
+        extra_headers = self._get_unsubscribe_headers(unsubscribe_url)
 
-        try:
-            # С вложениями письмо становится multipart/mixed: внутри него
-            # обычная alternative-пара text/html плюс файлы.
-            alternative = MIMEMultipart('alternative')
-            msg = MIMEMultipart('mixed') if attachments else alternative
-            msg['Subject'] = subject
-            safe_from_name = self.from_name.replace('\n', '').replace('\r', '') if self.from_name else ''
-            safe_from_email = sender_email.replace('\n', '').replace('\r', '')
-            msg['From'] = formataddr((safe_from_name, safe_from_email))
-            msg['To'] = to_email
-            # Адрес из .env: перенос строки в нём дописал бы произвольный
-            # заголовок в письмо, поэтому кривое значение не чиним, а
-            # выбрасываем — письмо важнее обратного канала.
-            if reply_to := self.reply_to:
-                if any(ch in reply_to for ch in '\r\n') or '@' not in reply_to:
-                    logger.warning('Некорректный SMTP_REPLY_TO — заголовок Reply-To пропущен')
-                else:
-                    msg['Reply-To'] = formataddr((safe_from_name, reply_to))
+        kwargs = {
+            'to_email': to_email,
+            'subject': subject,
+            'body_html': body_html,
+            'body_text': body_text,
+            'sender_email': safe_from_email,
+            'sender_name': safe_from_name,
+            'attachments': attachments,
+            'extra_headers': extra_headers,
+        }
+        if self.provider == 'resend':
+            return self._send_via_resend(**kwargs)
+        if self.provider == 'smtp':
+            return self._send_via_smtp(**kwargs)
 
-            msg['Date'] = formatdate(localtime=False)
-            msg['Message-ID'] = make_msgid(domain=safe_from_email.split('@')[-1])
-
-            # RFC 8058: пара List-Unsubscribe + List-Unsubscribe-Post — это то, из
-            # чего Gmail/Yahoo рисуют свою кнопку «Отписаться» рядом с адресом
-            # отправителя. Без -Post заголовок считается «старым» и кнопку дают
-            # не всегда.
-            if unsubscribe_url:
-                safe_unsubscribe = unsubscribe_url.strip()
-                # URL приходит из настроек/БД: перенос строки в нём дописал бы
-                # произвольный заголовок в письмо, поэтому такой URL не чиним, а
-                # выбрасываем целиком вместе с заголовками.
-                if any(ch in safe_unsubscribe for ch in '\r\n<>') or not safe_unsubscribe.startswith(
-                    ('http://', 'https://')
-                ):
-                    logger.warning('Некорректный unsubscribe_url — заголовки отписки пропущены')
-                else:
-                    from .email_unsubscribe import build_unsubscribe_mailto
-
-                    targets = [f'<{safe_unsubscribe}>']
-                    if mailto := build_unsubscribe_mailto():
-                        targets.append(f'<{mailto}>')
-                    msg['List-Unsubscribe'] = ', '.join(targets)
-                    msg['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'
-
-            # Plain text version
-            if body_text is None:
-                body_text = self._html_to_plain_text(body_html)
-
-            part1 = MIMEText(body_text, 'plain', 'utf-8')
-            part2 = MIMEText(body_html, 'html', 'utf-8')
-
-            alternative.attach(part1)
-            alternative.attach(part2)
-
-            if attachments:
-                msg.attach(alternative)
-                for filename, content, mimetype in attachments:
-                    maintype, _, subtype = (mimetype or 'application/octet-stream').partition('/')
-                    attachment_part = MIMEBase(maintype or 'application', subtype or 'octet-stream')
-                    attachment_part.set_payload(content)
-                    encoders.encode_base64(attachment_part)
-                    safe_filename = filename.replace('\n', '').replace('\r', '')
-                    attachment_part.add_header('Content-Disposition', 'attachment', filename=safe_filename)
-                    msg.attach(attachment_part)
-
-            with self._get_smtp_connection() as smtp:
-                smtp.sendmail(safe_from_email, to_email, msg.as_string())
-
-            logger.info('Email sent successfully to', to_email=to_email)
-            return True
-
-        except Exception as e:
-            logger.error('Failed to send email to', to_email=to_email, error=e)
-            return False
+        logger.error('Unknown email delivery provider', provider=self.provider)
+        return False
 
     def _render_default_template(
         self,

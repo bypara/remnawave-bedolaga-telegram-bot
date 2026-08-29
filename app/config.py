@@ -1409,6 +1409,15 @@ class Settings(BaseSettings):
     # Implicit TLS (SMTPS) — required for port 465. Auto-enabled when SMTP_PORT == 465.
     SMTP_USE_SSL: bool = False
 
+    # Email delivery transport. ``smtp`` remains the backwards-compatible
+    # default; ``resend`` sends the same rendered messages over HTTPS, which is
+    # useful on hosts that block outbound SMTP ports.
+    EMAIL_PROVIDER: Literal['smtp', 'resend'] = 'smtp'
+    RESEND_API_KEY: str = ''
+    RESEND_API_URL: str = 'https://api.resend.com/emails'
+    EMAIL_SEND_MAX_ATTEMPTS: int = 3
+    EMAIL_SEND_RETRY_BASE_SECONDS: float = 1.0
+
     # Отписка от маркетинговых писем (winback, промопредложения, email-рассылки).
     # Gmail/Yahoo для bulk-отправителей требуют one-click unsubscribe (RFC 8058),
     # а жалобы «Спам» вместо отписки бьют по репутации домена.
@@ -4000,6 +4009,20 @@ class Settings(BaseSettings):
         # For servers without AUTH, only host and from_email are required
         has_from = bool(self.SMTP_FROM_EMAIL or self.SMTP_USER)
         return bool(self.SMTP_HOST and has_from)
+
+    def get_email_provider(self) -> str:
+        return (self.EMAIL_PROVIDER or 'smtp').strip().lower()
+
+    def is_resend_configured(self) -> bool:
+        return bool(self.RESEND_API_KEY.strip() and self.get_smtp_from_email())
+
+    def is_email_delivery_configured(self) -> bool:
+        provider = self.get_email_provider()
+        if provider == 'resend':
+            return self.is_resend_configured()
+        if provider == 'smtp':
+            return self.is_smtp_configured()
+        return False
 
     def get_smtp_from_email(self) -> str | None:
         if self.SMTP_FROM_EMAIL:
