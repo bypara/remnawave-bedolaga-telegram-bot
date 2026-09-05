@@ -689,6 +689,16 @@ class UserService:
             if not user:
                 return False
 
+            from app.services.rbac_bootstrap_service import is_protected_from_blocking
+
+            if is_protected_from_blocking(user):
+                logger.warning(
+                    'Отказ в блокировке: аккаунт прописан в ADMIN_IDS/ADMIN_EMAILS',
+                    admin_id=admin_id,
+                    user_id=user_id,
+                )
+                return False
+
             from app.database.crud.subscription import deactivate_subscription, is_active_paid_subscription
 
             subs = getattr(user, 'subscriptions', None) or []
@@ -1232,10 +1242,12 @@ class UserService:
                 JupiterPayment,
                 LavaPayment,
                 OverpayPayment,
+                ParityPayPayment,
                 PayPearPayment,
                 RioPayPayment,
                 RollyPayPayment,
                 SeverPayPayment,
+                TabPayPayment,
             )
 
             extra_payment_models = (
@@ -1251,6 +1263,8 @@ class UserService:
                 DonutPayment,
                 LavaPayment,
                 CisPayPayment,
+                TabPayPayment,
+                ParityPayPayment,
             )
             for model in extra_payment_models:
                 try:

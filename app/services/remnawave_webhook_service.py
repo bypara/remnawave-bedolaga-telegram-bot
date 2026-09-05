@@ -42,6 +42,7 @@ from app.services.grace_access_runtime import get_open_grace_subscription_ids, g
 from app.services.grace_access_service import GraceReason
 from app.services.notification_delivery_service import NotificationType, notification_delivery_service
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button, strip_leading_emoji
+from app.utils.miniapp_buttons import build_subscription_extend_button
 
 
 logger = structlog.get_logger(__name__)
@@ -982,15 +983,12 @@ class RemnaWaveWebhookService:
     def _get_renew_keyboard(self, user: User, subscription_id: int | None = None) -> InlineKeyboardMarkup:
         texts = get_texts(user.language)
         button_text = texts.get('WEBHOOK_RENEW_BUTTON', 'Renew subscription')
-        extend_callback = (
-            f'se:{subscription_id}' if settings.is_multi_tariff_enabled() and subscription_id else 'subscription_extend'
-        )
         return InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    build_miniapp_or_callback_button(
+                    build_subscription_extend_button(
                         text=button_text,
-                        callback_data=extend_callback,
+                        subscription_id=subscription_id,
                         icon_custom_emoji_id='5416081784641168838',
                     )
                 ],

@@ -15,7 +15,7 @@ from app.database.crud.server_squad import (
 )
 from app.database.crud.subscription import (
     add_subscription_servers,
-    apply_default_autopay_on_trial_conversion,
+    apply_trial_conversion_defaults,
     create_paid_subscription,
     should_carry_trial_remaining_days,
 )
@@ -1079,7 +1079,6 @@ class MiniAppSubscriptionPurchaseService:
             bonus_period = timedelta()
             if subscription.is_trial:
                 was_trial_conversion = True
-                apply_default_autopay_on_trial_conversion(subscription)
                 trial_duration = (now - subscription.start_date).days
                 if should_carry_trial_remaining_days() and subscription.end_date:
                     remaining = subscription.end_date - now
@@ -1098,6 +1097,11 @@ class MiniAppSubscriptionPurchaseService:
                     logger.error('Failed to create subscription conversion record', conversion_error=conversion_error)
 
             subscription.is_trial = False
+            if was_trial_conversion:
+                # is_trial сбрасывается и для НЕ-триалов (обычное продление), поэтому
+                # дефолт автоплатежа вешаем на флаг конверсии, иначе продление платной
+                # подписки затирало бы выбор пользователя.
+                apply_trial_conversion_defaults(subscription)
             subscription.status = SubscriptionStatus.ACTIVE.value
             subscription.traffic_limit_gb = pricing.selection.traffic_value
             subscription.device_limit = pricing.selection.devices

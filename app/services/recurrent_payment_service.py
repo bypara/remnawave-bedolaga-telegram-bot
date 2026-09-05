@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 from aiogram import Bot
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -25,6 +25,7 @@ from app.database.models import (
     UserPromoGroup,
 )
 from app.utils.miniapp_buttons import strip_leading_emoji
+from app.utils.miniapp_buttons import build_subscription_extend_button
 
 
 logger = structlog.get_logger(__name__)
@@ -55,17 +56,12 @@ _daily_guard = _DailyGuard()
 
 def _build_extend_keyboard(texts, subscription_id: int | None = None) -> InlineKeyboardMarkup:
     """Клавиатура с кнопкой продления подписки для уведомлений."""
-    extend_callback = (
-        f'se:{subscription_id}' if settings.is_multi_tariff_enabled() and subscription_id else 'subscription_extend'
-    )
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text=strip_leading_emoji(
-                        texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку')
-                    ),
-                    callback_data=extend_callback,
+                build_subscription_extend_button(
+                    texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
+                    subscription_id,
                     icon_custom_emoji_id='5397916757333654639',
                 )
             ],
