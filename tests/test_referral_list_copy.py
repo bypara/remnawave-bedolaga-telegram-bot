@@ -29,6 +29,6 @@ def test_referral_list_keeps_pagination_and_continuous_numbering():
     source = inspect.getsource(referral.show_detailed_referral_list)
 
     assert 'limit=10' in source
-    assert "referral_list_page_{page - 1}" in source
-    assert "referral_list_page_{page + 1}" in source
+    assert 'referral_list_page_{page - 1}' in source
+    assert 'referral_list_page_{page + 1}' in source
     assert 'first_item_index = (page - 1) * 10 + 1' in source

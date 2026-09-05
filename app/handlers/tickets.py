@@ -626,7 +626,7 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
             pass
     # Показываем как текст (чтобы не упереться в caption лимит)
     page_text = pages[page - 1]
-    await safe_edit_or_resend(callback.message, page_text, keyboard)
+    await safe_edit_or_resend(callback.message, page_text, keyboard, parse_mode='HTML')
     await callback.answer()
 
 

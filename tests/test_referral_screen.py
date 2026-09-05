@@ -70,6 +70,7 @@ async def test_referral_main_uses_qr_copyable_links_and_retention_reward(monkeyp
         'settings',
         SimpleNamespace(
             is_referral_program_enabled=lambda: True,
+            is_referral_levels_scheme=lambda: False,
             get_bot_referral_link=lambda _code, _username: (
                 'https://t.me/example_bot?start=ref-code&source=test'
             ),

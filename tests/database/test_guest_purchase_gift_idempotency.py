@@ -88,8 +88,8 @@ async def test_duplicate_non_null_idempotency_key_is_rejected(monkeypatch):
             await db.commit()
 
 
-def test_migration_0107_upgrade_downgrade_upgrade_lifecycle():
-    """Verify revision 0107 upgrade, downgrade, and upgrade on a SQLite database with legacy null rows."""
+def test_migration_0115_upgrade_downgrade_upgrade_lifecycle():
+    """Verify the rebased migration lifecycle on a SQLite database with legacy null rows."""
     import importlib.util
     from pathlib import Path
 
@@ -98,9 +98,9 @@ def test_migration_0107_upgrade_downgrade_upgrade_lifecycle():
     from alembic.operations import Operations
 
     migration_path = (
-        Path(__file__).resolve().parents[2] / 'migrations/alembic/versions/0107_guest_purchase_idempotency.py'
+        Path(__file__).resolve().parents[2] / 'migrations/alembic/versions/0115_guest_purchase_idempotency.py'
     )
-    spec = importlib.util.spec_from_file_location('migration_0107', migration_path)
+    spec = importlib.util.spec_from_file_location('migration_0115', migration_path)
     assert spec is not None and spec.loader is not None
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)

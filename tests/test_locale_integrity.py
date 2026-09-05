@@ -18,6 +18,7 @@ import pytest
 
 
 LOCALE_DIR = Path(__file__).resolve().parents[1] / 'app' / 'localization' / 'locales'
+BRAND_LOCALE_DIR = Path(__file__).resolve().parents[1] / 'app' / 'localization' / 'brand_locales'
 APP_DIR = Path(__file__).resolve().parents[1] / 'app'
 LANGS = ['ru', 'en', 'ua', 'fa', 'zh']
 PLACEHOLDER_RE = re.compile(r'\{[^}]*\}')
@@ -84,7 +85,7 @@ def _iter_t_calls():
 def test_t_calls_without_default_exist_in_ru(locales):
     """texts.t('KEY') with NO fallback raises KeyError if the key is absent from ru.
     Every such referenced key must exist in ru.json."""
-    ru = locales['ru']
+    ru = locales['ru'] | json.loads((BRAND_LOCALE_DIR / 'ru.json').read_text(encoding='utf-8'))
     offenders = set()
     for path, node in _iter_t_calls():
         if len(node.args) != 1:
@@ -102,7 +103,7 @@ def test_t_calls_with_static_default_exist_in_ru(locales):
     дефолт ВСЕМ языкам — ключ обязан быть в локалях. Динамические дефолты
     (f-строки с настраиваемыми названиями платёжек и т.п.) — осознанный паттерн
     «locale override поверх настройки», их не проверяем."""
-    ru = locales['ru']
+    ru = locales['ru'] | json.loads((BRAND_LOCALE_DIR / 'ru.json').read_text(encoding='utf-8'))
     offenders = set()
     for path, node in _iter_t_calls():
         if len(node.args) < 2 or not isinstance(node.args[1], ast.Constant):

@@ -265,7 +265,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         cache_key = f'referral_channel_required:{telegram_id}'
         cached = await cache.get(cache_key)
         if cached is not None:
-            return cached in {1, True, '1', 'true', b'1', b'true'}
+            return cached in {1, '1', 'true', b'1', b'true'}
 
         requires_channel = False
         async with AsyncSessionLocal() as db:
@@ -683,7 +683,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 try:
                     if not settings.is_notifications_enabled():
                         await db.commit()
-                        return
+                        return None
                     texts = get_texts(user.language or DEFAULT_LANGUAGE)
                     if settings.is_multi_tariff_enabled() and len(disabled_subs) > 1:
                         notification_text = texts.t(

@@ -71,15 +71,12 @@ from app.utils.rich_notify import try_send_rich_notification
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
 )
-from app.utils.timezone import format_local_datetime, format_telegram_datetime
+from app.utils.timezone import format_telegram_datetime
 
 
 def _get_my_subscription_button_text(texts) -> str:
-    """Return a localized subscription button even for locales without the optional BTN key."""
-    return texts.t(
-        'BTN_MY_SUBSCRIPTION',
-        texts.t('MENU_SUBSCRIPTION', '📱 Моя подписка'),
-    )
+    """Return the canonical localized subscription button."""
+    return texts.t('MENU_SUBSCRIPTION', '📱 Моя подписка')
 
 
 def resolve_autopay_period_candidate(candidate, tariff) -> int | None:

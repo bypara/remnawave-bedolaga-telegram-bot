@@ -59,6 +59,7 @@ async def safe_edit_or_resend(
     message: types.Message,
     text: str,
     reply_markup: types.InlineKeyboardMarkup | None = None,
+    parse_mode: str | None = None,
 ) -> None:
     """Безопасно отредактировать текст сообщения или отправить новое при ошибке.
 
@@ -71,7 +72,7 @@ async def safe_edit_or_resend(
         reply_markup: Клавиатура (опционально).
     """
     try:
-        await message.edit_text(text, reply_markup=reply_markup)
+        await message.edit_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
     except TelegramBadRequest as error:
         # Контент не изменился (повторное нажатие кнопки) — ничего не делаем,
         # иначе будем без нужды пересоздавать сообщение и спамить чат.
@@ -81,7 +82,7 @@ async def safe_edit_or_resend(
         # Удаляем исходное и отправляем новое
         with suppress(TelegramAPIError):
             await message.delete()
-        await message.answer(text, reply_markup=reply_markup)
+        await message.answer(text, reply_markup=reply_markup, parse_mode=parse_mode)
 
 
 async def _answer_text(

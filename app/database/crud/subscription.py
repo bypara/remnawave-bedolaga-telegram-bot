@@ -400,7 +400,7 @@ async def _revive_paid_subscription(
 
     subscription.is_trial = False
     if was_trial:
-        apply_default_autopay_on_trial_conversion(subscription)
+        apply_trial_conversion_defaults(subscription)
     subscription.status = SubscriptionStatus.ACTIVE.value
     subscription.traffic_limit_gb = traffic_limit_gb
     if device_limit is not None:
@@ -1261,7 +1261,6 @@ async def extend_subscription(
         # попадёт в авто-продление (баг #629889).
         if subscription.is_trial and convert_trial:
             subscription.is_trial = False
-            apply_default_autopay_on_trial_conversion(subscription)
             # Transient marker (not persisted): lets purchase handlers report the
             # payment as a trial→paid conversion without a signature change.
             subscription._converted_from_trial = True
@@ -1365,8 +1364,12 @@ async def extend_subscription(
 
         new_tariff = await get_tariff_by_id(db, tariff_id)
         if new_tariff:
-            subscription.applied_tariff_traffic_gb = int(new_tariff.traffic_limit_gb or 0)
-            subscription.applied_tariff_device_limit = int(new_tariff.device_limit or 1)
+            subscription.applied_tariff_traffic_gb = int(
+                getattr(new_tariff, 'traffic_limit_gb', subscription.traffic_limit_gb) or 0
+            )
+            subscription.applied_tariff_device_limit = int(
+                getattr(new_tariff, 'device_limit', subscription.device_limit) or 1
+            )
         old_was_daily = (
             getattr(subscription, 'is_daily_paused', False)
             or getattr(subscription, 'last_daily_charge_at', None) is not None

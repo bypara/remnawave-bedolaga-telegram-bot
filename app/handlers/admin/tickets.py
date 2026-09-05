@@ -1141,14 +1141,13 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
         chat_id = int(user.telegram_id)
         texts = get_texts(user.language)
 
-        # Формируем уведомление. Превью экранируем ПОСЛЕ обрезки: бот шлёт с
-        # parse_mode=HTML, и угловая скобка в ответе поддержки («откройте
-        # <config>») ломает разбор — уведомление не доходит вовсе. Экранировать
-        # до обрезки нельзя: срез разорвал бы `&quot;` с тем же результатом.
+        # Бот шлёт сообщение с parse_mode=HTML, поэтому полный ответ поддержки
+        # экранируем перед подстановкой. Ответы уже ограничены безопасной длиной
+        # на входе, дополнительно обрезать уведомление не нужно.
         base_text = texts.t(
             'TICKET_REPLY_NOTIFICATION',
             '🎫 Получен ответ по тикету #{ticket_id}\n\n{reply_preview}\n\nНажмите кнопку ниже, чтобы перейти к тикету:',
-        ).format(ticket_id=ticket.id, reply_preview=html.escape(preview_text(reply_text)))
+        ).format(ticket_id=ticket.id, reply_preview=html.escape(reply_text))
         keyboard = _get_user_ticket_reply_notification_keyboard(texts, ticket.id)
 
         # Если было фото в последнем ответе админа — отправим как фото

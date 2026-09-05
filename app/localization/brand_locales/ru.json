@@ -68,7 +68,7 @@
   "REFERRAL_CODE_TITLE": "<tg-emoji emoji-id=\"5260341314095947411\">👀</tg-emoji> Ваш код: <code>{code}</code>",
   "REFERRAL_INVITE_CREATED_TITLE": "",
   "REFERRAL_INVITE_CREATED_INSTRUCTION": "Нажмите на текст ниже, чтобы скопировать:",
-  "REFERRAL_INVITE_TEXT": "Привет! Я использую Hunt VPN и не жалею\n\n— Быстрые сервера\n— Отзывчивая поддержка\n— Самая щедрая реферальная система\n\n👇 Переходи по ссылке:\n{bot_link}",
+  "REFERRAL_INVITE_TEXT": "Привет! Я использую Hunt VPN и не жалею{bonus_block}\n\n— Быстрые сервера\n— Отзывчивая поддержка\n— Самая щедрая реферальная система\n\n👇 Переходи по ссылке:\n{link}{cabinet_block}",
   "REFERRAL_LIST_EMPTY": "<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> У вас пока нет рефералов.\n\nПоделитесь своей реферальной ссылкой, чтобы начать зарабатывать!",
   "REFERRAL_ANALYTICS_TITLE": "<tg-emoji emoji-id=\"5258152182150077732\">⚡️</tg-emoji> Аналитика рефералов",
   "REFERRAL_LIST_HEADER": "<tg-emoji emoji-id=\"5258486128742244085\">👥</tg-emoji> <b>Ваши рефералы</b> (стр. {current}/{total})",
@@ -303,5 +303,6 @@
   "PAYMENT_INVOICE_EXPIRED": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> <b>Срок оплаты истёк</b>\n\n<tg-emoji emoji-id=\"5451882707875276247\">🕯</tg-emoji> Сумма счёта: {amount}\n\nЭтот счёт больше нельзя оплатить. Создайте новый, чтобы продолжить.",
   "PAYMENT_INVOICE_PAY_BUTTON": "Оплатить",
   "PAYMENT_INVOICE_MAIN_MENU_BUTTON": "Главное меню",
-  "PAYMENT_INVOICE_VALID_UNTIL": "<tg-emoji emoji-id=\"5258258882022612173\">⏲️</tg-emoji> Счёт действует до: {expires_at}"
+  "PAYMENT_INVOICE_VALID_UNTIL": "<tg-emoji emoji-id=\"5258258882022612173\">⏲️</tg-emoji> Счёт действует до: {expires_at}",
+  "TICKET_PROMPT_EDIT_ERROR": "Не удалось открыть форму создания тикета. Попробуйте ещё раз."
 }

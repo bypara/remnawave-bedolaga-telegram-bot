@@ -1292,7 +1292,7 @@ def _format_registration_rules_text(rules_text: str, texts) -> str:
     lines = content.splitlines()
 
     if lines:
-        first_line = re.sub(r'<[^>]+>', '', lines[0]).casefold()
+        first_line = re.sub(r'<[^<>]+>', '', lines[0]).casefold()
         if any(marker in first_line for marker in _RULES_HEADING_MARKERS):
             lines = lines[1:]
             while lines and not lines[0].strip():
@@ -1408,7 +1408,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     state_needs_update = False
 
     # Получаем payload из state или Redis
-    pending_start_payload = data.get('pending_start_payload', None)
+    pending_start_payload = data.get('pending_start_payload')
 
     # Если в FSM state нет payload, пробуем получить из Redis (резервный механизм)
     if not pending_start_payload:
@@ -3380,7 +3380,7 @@ async def required_sub_channel_check(
             await state.set_data(state_data)
             await query.answer()
             await complete_registration_from_callback(query, state, db)
-            return
+            return None
 
         # Invalidate cache for fresh check (user just clicked "I subscribed")
         await channel_subscription_service.invalidate_user_cache(query.from_user.id)

@@ -32,6 +32,13 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 # HTML/SVG file rendered inline would execute JS with access to the cabinet's
 # localStorage tokens (stored XSS → session/token theft).
 _SAFE_INLINE_IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
+_SAFE_INLINE_IMAGE_EXTENSIONS = {
+    '.gif': 'image/gif',
+    '.jpeg': 'image/jpeg',
+    '.jpg': 'image/jpeg',
+    '.png': 'image/png',
+    '.webp': 'image/webp',
+}
 
 # Active/scriptable content rejected at upload time (defense in depth — the
 # download endpoint already forces these to download, but refuse them at the door).
@@ -73,7 +80,9 @@ def _content_response_params(filename: str) -> tuple[str, dict[str, str]]:
     else to download as application/octet-stream. Adds nosniff + a locked-down CSP
     so a user file can never execute script in the cabinet origin.
     """
-    guessed_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+    suffix = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    guessed_type = _SAFE_INLINE_IMAGE_EXTENSIONS.get(f'.{suffix}') or mimetypes.guess_type(filename)[0]
+    guessed_type = guessed_type or 'application/octet-stream'
     if guessed_type in _SAFE_INLINE_IMAGE_TYPES:
         media_type = guessed_type
         disposition = 'inline'

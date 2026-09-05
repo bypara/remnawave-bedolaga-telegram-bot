@@ -2288,5 +2288,10 @@
   "GIFT_COPY_TEXT_HINT": "روی متن زیر بزنید تا کامل کپی شود، سپس آن را برای گیرنده بفرستید.",
   "GIFT_COPY_TEXT_BODY": "🎁 یک اشتراک {tariff_name} به مدت {period_days} روز به تو هدیه می‌دهم.\n\nفعال‌سازی: {claim_link}\n\nاگر لینک باز نشد، این کد را در ربات وارد کن: {public_code}",
   "GIFT_ITEM_NOT_CLAIMABLE": "این هدیه قبلاً فعال شده است — چیزی برای اشتراک‌گذاری نیست.",
-  "GIFT_MY_BACK_TO_CARD": "◀️ بازگشت به هدیه"
+  "GIFT_MY_BACK_TO_CARD": "◀️ بازگشت به هدیه",
+  "CHANNEL_CHECK_TEMPORARILY_UNAVAILABLE": "We could not verify your subscription. Please try again in a few seconds.",
+  "PROFILE_WEB_CABINET_BUTTON": "🌐 Web dashboard",
+  "REFERRAL_CHANNEL_NOT_CONFIGURED": "Subscription verification is temporarily unavailable. Please try again later.",
+  "REFERRAL_CHANNEL_REQUIRED_TEXT": "<tg-emoji emoji-id=\"5258486128742244085\">👥</tg-emoji> <b>Join the channel</b>\n\nA channel subscription is required for users who joined through a referral link.\n\nAfter joining, press “I have joined”.",
+  "WEB_AUTH_DENIED": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> Sign-in cancelled."
 }

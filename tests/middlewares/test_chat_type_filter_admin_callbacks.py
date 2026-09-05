@@ -36,8 +36,8 @@ async def test_allows_admin_callback_from_configured_notification_chat(
         chat_id,
     )
     monkeypatch.setattr(
-        'app.middlewares.chat_type_filter.settings.is_admin',
-        lambda user_id: user_id == admin_id,
+        'app.config.Settings.is_admin',
+        lambda _self, user_id=None, email=None: user_id == admin_id,
     )
     handler = AsyncMock(return_value='handled')
     event = _callback(
@@ -72,8 +72,8 @@ async def test_still_drops_untrusted_group_callbacks(
         -100123456,
     )
     monkeypatch.setattr(
-        'app.middlewares.chat_type_filter.settings.is_admin',
-        lambda candidate: candidate == 42,
+        'app.config.Settings.is_admin',
+        lambda _self, candidate=None, email=None: candidate == 42,
     )
     handler = AsyncMock()
     event = _callback(chat_id=chat_id, user_id=user_id, data=data)

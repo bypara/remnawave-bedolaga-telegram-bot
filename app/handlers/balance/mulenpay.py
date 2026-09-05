@@ -16,7 +16,6 @@ from app.handlers.balance.payment_ui import (
 )
 from app.keyboards.inline import get_back_keyboard
 from app.keyboards.topup_amounts import get_topup_amount_keyboard
-from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
@@ -31,8 +30,6 @@ async def start_mulenpay_payment(
     db_user: User,
     state: FSMContext,
 ):
-    texts = get_texts(db_user.language)
-
     # Проверка ограничения на пополнение
     if getattr(db_user, 'restriction_topup', False):
         await callback.message.edit_text(
@@ -84,8 +81,6 @@ async def process_mulenpay_payment_amount(
     amount_kopeks: int,
     state: FSMContext,
 ):
-    texts = get_texts(db_user.language)
-
     # Проверка ограничения на пополнение
     if getattr(db_user, 'restriction_topup', False):
         await message.answer(

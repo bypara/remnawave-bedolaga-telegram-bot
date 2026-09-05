@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 from aiogram import Bot
-from aiogram.types import InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -24,8 +24,7 @@ from app.database.models import (
     User,
     UserPromoGroup,
 )
-from app.utils.miniapp_buttons import strip_leading_emoji
-from app.utils.miniapp_buttons import build_subscription_extend_button
+from app.utils.miniapp_buttons import build_subscription_extend_button, strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
@@ -82,7 +81,7 @@ def _build_autopay_failed_keyboard(texts) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text=strip_leading_emoji(texts.t('BTN_MY_SUBSCRIPTION', '📱 Моя подписка')),
+                    text=strip_leading_emoji(texts.t('MENU_SUBSCRIPTION', '📱 Моя подписка')),
                     callback_data='menu_subscription',
                     icon_custom_emoji_id='5319272710688226013',
                 )

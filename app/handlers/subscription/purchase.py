@@ -120,7 +120,7 @@ from app.utils.subscription_utils import (
     get_display_subscription_link,
     resolve_simple_subscription_device_limit,
 )
-from app.utils.timezone import format_local_datetime, format_telegram_datetime
+from app.utils.timezone import format_telegram_datetime
 
 from .autopay import (
     handle_autopay_menu,
@@ -201,14 +201,14 @@ def _format_subscription_days(texts, days: int) -> str:
     return texts.t(key, fallback).format(days=days)
 
 
-def _format_trial_number(value: float | int) -> str:
+def _format_trial_number(value: float) -> str:
     numeric = float(value)
     if numeric.is_integer():
         return str(int(numeric))
     return f'{numeric:.2f}'.rstrip('0').rstrip('.')
 
 
-def _trial_plural_form(value: float | int, language: str) -> str:
+def _trial_plural_form(value: float, language: str) -> str:
     numeric = float(value)
     if language not in {'ru', 'ua'}:
         return 'one' if numeric == 1 else 'many'
@@ -224,7 +224,7 @@ def _trial_plural_form(value: float | int, language: str) -> str:
     return 'many'
 
 
-def _format_trial_traffic_amount(texts, traffic_gb: float | int) -> str:
+def _format_trial_traffic_amount(texts, traffic_gb: float) -> str:
     if float(traffic_gb) <= 0:
         return texts.t('TRIAL_OFFER_TRAFFIC_UNLIMITED', 'безлимитный трафик')
     form = _trial_plural_form(traffic_gb, texts.language)
@@ -370,12 +370,10 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         ).format(used=used_traffic, limit=subscription.traffic_limit_gb)
 
     devices_used_str = '—'
-    devices_list = []
     devices_count = 0
 
     show_devices = settings.is_devices_selection_enabled()
     devices_used_str = ''
-    devices_list: list[dict[str, Any]] = []
 
     if show_devices:
         try:
@@ -394,7 +392,6 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 
                     if isinstance(devices_info, dict):
                         devices_count = devices_info.get('total', 0)
-                        devices_list = devices_info.get('devices', [])
                         devices_used_str = str(devices_count)
                         logger.info(
                             'Найдено устройств для пользователя',
@@ -1977,7 +1974,7 @@ async def confirm_extend_subscription(
 
     try:
         renewal_service = SubscriptionRenewalService()
-        result = await renewal_service.finalize(
+        await renewal_service.finalize(
             db,
             db_user,
             subscription,

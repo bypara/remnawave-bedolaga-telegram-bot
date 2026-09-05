@@ -1472,8 +1472,8 @@ async def test_process_pal24_callback_success(monkeypatch: pytest.MonkeyPatch) -
     # duplicate post-topup message was dropped from production.
     assert bot.sent_messages
     success_message = bot.sent_messages[-1]
-    assert success_message['args'][0] == user.telegram_id
-    assert 'Пополнение успешно' in success_message['args'][1]
+    assert success_message['kwargs']['chat_id'] == user.telegram_id
+    assert 'Пополнение успешно' in success_message['kwargs']['text']
 
 
 @pytest.mark.anyio('asyncio')

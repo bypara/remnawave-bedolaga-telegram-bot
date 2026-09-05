@@ -261,7 +261,8 @@ def test_auto_purchase_service_uses_format_email_datetime() -> None:
     assert ".isoformat() if subscription.end_date else ''" not in source
 
     # Helper must be imported AND called.
-    assert 'from app.utils.timezone import format_email_datetime' in source
+    assert 'from app.utils.timezone import' in source
+    assert 'format_email_datetime' in source
     assert 'format_email_datetime(' in source
 
 

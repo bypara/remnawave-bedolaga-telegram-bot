@@ -133,54 +133,12 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
         await callback.answer(texts.t('REFERRAL_CODE_NOT_ASSIGNED', 'Реферальный код не назначен'), show_alert=True)
         return
 
-    summary = await get_user_referral_summary(db, db_user.id)
-
     bot_username = (await callback.bot.get_me()).username
     bot_referral_link = settings.get_bot_referral_link(db_user.referral_code, bot_username)
     cabinet_referral_link = settings.get_cabinet_referral_link(db_user.referral_code)
 
     referral_text = (
         texts.t('REFERRAL_PROGRAM_TITLE', '👥 <b>Реферальная программа</b>')
-        + '\n\n'
-        + texts.t('REFERRAL_STATS_HEADER', '📊 <b>Ваша статистика:</b>')
-        + '\n'
-        + texts.t(
-            'REFERRAL_STATS_INVITED',
-            '• Приглашено пользователей: <b>{count}</b>',
-        ).format(count=summary['invited_count'])
-        + '\n'
-        + texts.t(
-            'REFERRAL_STATS_FIRST_TOPUPS',
-            '• Сделали первое пополнение: <b>{count}</b>',
-        ).format(count=summary['paid_referrals_count'])
-        + '\n'
-        + texts.t(
-            'REFERRAL_STATS_ACTIVE',
-            '• Активных рефералов: <b>{count}</b>',
-        ).format(count=summary['active_referrals_count'])
-        + '\n'
-        + texts.t(
-            'REFERRAL_STATS_CONVERSION',
-            '• Конверсия: <b>{rate}%</b>',
-        ).format(rate=summary['conversion_rate'])
-        + '\n'
-        + texts.t(
-            'REFERRAL_STATS_TOTAL_EARNED',
-            '• Заработано всего: <b>{amount}</b>',
-        ).format(
-            amount=format_reward_total(
-                summary['total_earned_kopeks'], summary.get('total_earned_days', 0), db_user.language
-            )
-        )
-        + '\n'
-        + texts.t(
-            'REFERRAL_STATS_MONTH_EARNED',
-            '• За последний месяц: <b>{amount}</b>',
-        ).format(
-            amount=format_reward_total(
-                summary['month_earned_kopeks'], summary.get('month_earned_days', 0), db_user.language
-            )
-        )
         + '\n\n'
         + texts.t('REFERRAL_REWARDS_HEADER', '🎁 <b>Как работают награды:</b>')
     )
@@ -286,137 +244,6 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
             code=html_escape(str(db_user.referral_code or ''))
         )
     )
-
-    if summary['recent_earnings']:
-        # Награда днями имеет amount_kopeks == 0 by design: фильтр «только с
-        # деньгами» выкидывал из истории каждое такое начисление, и пользователь,
-        # только что получивший 7 дней, не видел ничего.
-        meaningful_earnings = [
-            earning
-            for earning in summary['recent_earnings'][:5]
-            if earning['amount_kopeks'] > 0 or earning.get('days_granted', 0) > 0
-        ]
-
-        if meaningful_earnings:
-            referral_text += (
-                texts.t(
-                    'REFERRAL_RECENT_EARNINGS_HEADER',
-                    '💰 <b>Последние начисления:</b>',
-                )
-                + '\n'
-            )
-            for earning in meaningful_earnings[:3]:
-                reason_text = {
-                    'referral_first_topup': texts.t(
-                        'REFERRAL_EARNING_REASON_FIRST_TOPUP',
-                        '🎉 Первое пополнение',
-                    ),
-                    'referral_commission_topup': texts.t(
-                        'REFERRAL_EARNING_REASON_COMMISSION_TOPUP',
-                        '💰 Комиссия с пополнения',
-                    ),
-                    'referral_commission': texts.t(
-                        'REFERRAL_EARNING_REASON_COMMISSION_PURCHASE',
-                        '💰 Комиссия с покупки',
-                    ),
-                    'referral_registration_reward': texts.t(
-                        'REFERRAL_EARNING_REASON_REGISTRATION',
-                        '👥 Награда за регистрацию',
-                    ),
-                    'referral_days_reward': texts.t(
-                        'REFERRAL_EARNING_REASON_DAYS',
-                        '📅 Дни подписки',
-                    ),
-                    'referral_days_bonus': texts.t(
-                        'REFERRAL_EARNING_REASON_DAYS_BONUS',
-                        '🎁 Бонусные дни',
-                    ),
-                }.get(earning['reason'], earning['reason'])
-
-                # В режиме рангов level это ступень партнёра, а не глубина сети:
-                # получатель всегда прямой пригласивший, и «ур. 3» рядом с именем
-                # его собственного реферала утверждает несуществующую цепочку.
-                level = earning.get('level', 1)
-                if level > 1:
-                    reason_text += (
-                        texts.t('REFERRAL_EARNING_TIER_SUFFIX', ' (ранг {level})')
-                        if settings.is_referral_tier_levels()
-                        else texts.t('REFERRAL_EARNING_LEVEL_SUFFIX', ' (ур. {level})')
-                    ).format(level=level)
-
-                referral_text += (
-                    texts.t(
-                        'REFERRAL_RECENT_EARNINGS_ITEM',
-                        '• {reason}: <b>{amount}</b> от {referral_name}',
-                    ).format(
-                        reason=reason_text,
-                        amount=format_reward_total(
-                            earning['amount_kopeks'], earning.get('days_granted', 0), db_user.language
-                        ),
-                        referral_name=html_escape(str(earning['referral_name'] or '')),
-                    )
-                    + '\n'
-                )
-            referral_text += '\n'
-
-    if summary['earnings_by_type']:
-        referral_text += (
-            texts.t(
-                'REFERRAL_EARNINGS_BY_TYPE_HEADER',
-                '📈 <b>Доходы по типам:</b>',
-            )
-            + '\n'
-        )
-
-        if 'referral_first_topup' in summary['earnings_by_type']:
-            data = summary['earnings_by_type']['referral_first_topup']
-            if data['total_amount_kopeks'] > 0 or data.get('total_days', 0) > 0:
-                referral_text += (
-                    texts.t(
-                        'REFERRAL_EARNINGS_FIRST_TOPUPS',
-                        '• Бонусы за первые пополнения: <b>{count}</b> ({amount})',
-                    ).format(
-                        count=data['count'],
-                        amount=format_reward_total(
-                            data['total_amount_kopeks'], data.get('total_days', 0), db_user.language
-                        ),
-                    )
-                    + '\n'
-                )
-
-        if 'referral_commission_topup' in summary['earnings_by_type']:
-            data = summary['earnings_by_type']['referral_commission_topup']
-            if data['total_amount_kopeks'] > 0 or data.get('total_days', 0) > 0:
-                referral_text += (
-                    texts.t(
-                        'REFERRAL_EARNINGS_TOPUPS',
-                        '• Комиссии с пополнений: <b>{count}</b> ({amount})',
-                    ).format(
-                        count=data['count'],
-                        amount=format_reward_total(
-                            data['total_amount_kopeks'], data.get('total_days', 0), db_user.language
-                        ),
-                    )
-                    + '\n'
-                )
-
-        if 'referral_commission' in summary['earnings_by_type']:
-            data = summary['earnings_by_type']['referral_commission']
-            if data['total_amount_kopeks'] > 0 or data.get('total_days', 0) > 0:
-                referral_text += (
-                    texts.t(
-                        'REFERRAL_EARNINGS_PURCHASES',
-                        '• Комиссии с покупок: <b>{count}</b> ({amount})',
-                    ).format(
-                        count=data['count'],
-                        amount=format_reward_total(
-                            data['total_amount_kopeks'], data.get('total_days', 0), db_user.language
-                        ),
-                    )
-                    + '\n'
-                )
-
-        referral_text += '\n'
 
     referral_text += texts.t(
         'REFERRAL_INVITE_FOOTER',
@@ -652,7 +479,7 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
         + '\n\n'
     )
 
-    if analytics['top_referrals']:
+    if analytics.get('top_referrals'):
         text += (
             texts.t(
                 'REFERRAL_ANALYTICS_TOP_TITLE',
@@ -820,24 +647,23 @@ async def show_withdrawal_info(callback: types.CallbackQuery, db_user: User, db:
                 )
             ]
         )
+    elif stats['available_total'] < min_amount:
+        text += (
+            texts.t(
+                'REFERRAL_WITHDRAWAL_MIN_AVAILABLE_ERROR',
+                '❌ Минимальная сумма вывода: {minimum}. Доступно: {available}',
+            ).format(
+                minimum=texts.format_price(min_amount),
+                available=texts.format_price(stats['available_total']),
+            )
+            + '\n'
+        )
     else:
-        if stats['available_total'] < min_amount:
-            text += (
-                texts.t(
-                    'REFERRAL_WITHDRAWAL_MIN_AVAILABLE_ERROR',
-                    '❌ Минимальная сумма вывода: {minimum}. Доступно: {available}',
-                ).format(
-                    minimum=texts.format_price(min_amount),
-                    available=texts.format_price(stats['available_total']),
-                )
-                + '\n'
-            )
-        else:
-            error_prefix = texts.t(
-                'REFERRAL_WITHDRAWAL_ERROR_PREFIX',
-                '<tg-emoji emoji-id="5210952531676504517">❌</tg-emoji>',
-            )
-            text += f'{error_prefix} {html_escape(str(reason))}\n'
+        error_prefix = texts.t(
+            'REFERRAL_WITHDRAWAL_ERROR_PREFIX',
+            '<tg-emoji emoji-id="5210952531676504517">❌</tg-emoji>',
+        )
+        text += f'{error_prefix} {html_escape(str(reason))}\n'
 
     keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_referrals')])
 

@@ -11,8 +11,8 @@ from app.middlewares.auth import (
     _should_refresh_last_activity,
 )
 from app.utils import photo_message
-from app.utils.callback_answer import answer_callback_in_background
 from app.utils.cache import ChannelSubCache, cache
+from app.utils.callback_answer import answer_callback_in_background
 
 
 def test_last_activity_is_refreshed_at_most_once_per_interval() -> None:

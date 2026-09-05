@@ -83,7 +83,7 @@ async def test_disabled_referral_notifications_skip_email_delivery(monkeypatch):
     notify_referral_bonus.assert_not_awaited()
 
 
-async def test_no_referral_rewards_before_minimum_first_topup(monkeypatch):
+async def test_small_first_topup_pays_commission_but_not_fixed_bonuses(monkeypatch):
     user = SimpleNamespace(
         id=1,
         telegram_id=101,
@@ -125,8 +125,9 @@ async def test_no_referral_rewards_before_minimum_first_topup(monkeypatch):
     assert result is True
     assert user.has_made_first_topup is False
 
-    add_user_balance_mock.assert_not_awaited()
-    create_referral_earning_mock.assert_not_awaited()
+    add_user_balance_mock.assert_awaited_once()
+    assert add_user_balance_mock.await_args.args[2] == 3750
+    create_referral_earning_mock.assert_awaited_once()
 
 
 async def test_first_topup_inviter_gets_fixed_plus_commission(monkeypatch):
@@ -225,7 +226,7 @@ async def test_recurring_commission_percent_uses_paid_referrals_tier(monkeypatch
     assert percent == 15
 
 
-async def test_small_topup_after_previous_rewards_still_pays_nothing(monkeypatch):
+async def test_small_topup_after_previous_rewards_uses_recurring_commission_tier(monkeypatch):
     user = SimpleNamespace(
         id=1,
         telegram_id=101,
@@ -266,8 +267,9 @@ async def test_small_topup_after_previous_rewards_still_pays_nothing(monkeypatch
     result = await referral_service.process_referral_topup(db, user.id, 15000)
 
     assert result is True
-    add_user_balance_mock.assert_not_awaited()
-    create_referral_earning_mock.assert_not_awaited()
+    add_user_balance_mock.assert_awaited_once()
+    assert add_user_balance_mock.await_args.args[2] == 2250
+    create_referral_earning_mock.assert_awaited_once()
 
 
 @pytest.mark.parametrize(

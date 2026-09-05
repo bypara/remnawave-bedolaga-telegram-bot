@@ -486,7 +486,7 @@ async def get_traffic_packages_info() -> str:
         return f'⚠️ Ошибка получения информации: {e}'
 
 
-async def select_traffic(callback: types.CallbackQuery, state: FSMContext, db_user: User):
+async def select_traffic(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
     traffic_gb = int(callback.data.split('_')[1])
     texts = get_texts(db_user.language)
 

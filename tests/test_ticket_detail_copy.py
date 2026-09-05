@@ -79,5 +79,5 @@ def test_ticket_detail_does_not_render_status_emoji_and_uses_html():
 
     assert 'ticket.status_emoji' not in source
     assert "parse_mode='HTML'" in source
-    assert "TICKET_MESSAGE_USER" in source
-    assert "TICKET_MESSAGE_SUPPORT" in source
+    assert 'TICKET_MESSAGE_USER' in source
+    assert 'TICKET_MESSAGE_SUPPORT' in source

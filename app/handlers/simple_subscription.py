@@ -474,7 +474,7 @@ async def handle_simple_subscription_pay_with_balance(
 
         # Проверяем, есть ли у пользователя уже подписка
         from app.database.crud.subscription import (
-            apply_default_autopay_on_trial_conversion,
+            apply_trial_conversion_defaults,
             extend_subscription,
             get_subscription_by_user_id,
         )
@@ -501,7 +501,7 @@ async def handle_simple_subscription_pay_with_balance(
                 from app.database.models import SubscriptionStatus
 
                 # Переводим подписку из пробной в активную платную
-                apply_default_autopay_on_trial_conversion(subscription)
+                apply_trial_conversion_defaults(subscription)
                 subscription.status = SubscriptionStatus.ACTIVE.value
                 subscription.is_trial = False
 
@@ -2227,7 +2227,7 @@ async def confirm_simple_subscription_purchase(
 
         # Проверяем, есть ли у пользователя уже подписка
         from app.database.crud.subscription import (
-            apply_default_autopay_on_trial_conversion,
+            apply_trial_conversion_defaults,
             extend_subscription,
             get_subscription_by_user_id,
         )
@@ -2254,7 +2254,7 @@ async def confirm_simple_subscription_purchase(
                 from app.database.models import SubscriptionStatus
 
                 # Переводим подписку из пробной в активную платную
-                apply_default_autopay_on_trial_conversion(subscription)
+                apply_trial_conversion_defaults(subscription)
                 subscription.status = SubscriptionStatus.ACTIVE.value
                 subscription.is_trial = False
 

@@ -364,8 +364,11 @@ class CryptoBotPaymentMixin:
                     try:
                         from app.localization.texts import get_texts
 
-                        keyboard = await self.build_topup_success_keyboard(user)
-                        message_text = get_texts(user.language).t('PAYMENT_SUCCESS_STANDARD').format(
+                        user_snapshot = await self._ensure_user_snapshot(user.telegram_id, user, db=db)
+                        keyboard = await self.build_topup_success_keyboard(user_snapshot)
+                        message_text = get_texts(getattr(user_snapshot, 'language', 'ru')).t(
+                            'PAYMENT_SUCCESS_STANDARD'
+                        ).format(
                             amount=settings.format_price(amount_kopeks),
                             method='CryptoBot',
                         )

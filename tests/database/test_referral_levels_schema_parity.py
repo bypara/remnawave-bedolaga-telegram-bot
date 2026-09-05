@@ -28,7 +28,7 @@ VERSIONS = pathlib.Path(__file__).resolve().parents[2] / 'migrations/alembic/ver
 # Вся цепочка миграций реферальных уровней, по порядку. Сверять модель с одной
 # ревизией нельзя: следующая добавляет колонки, и «расхождение» показывало бы не
 # ошибку, а собственную неполноту проверки.
-MIGRATIONS = ('0108_referral_reward_levels.py', '0109_referral_level_thresholds.py')
+MIGRATIONS = ('0116_referral_reward_levels.py', '0117_referral_level_thresholds.py')
 
 
 def _load_migrations():

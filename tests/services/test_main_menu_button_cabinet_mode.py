@@ -211,7 +211,7 @@ def test_topup_success_keyboard_main_menu_button_is_callback() -> None:
     source = common_path.read_text(encoding='utf-8')
 
     # The corrected form must be present.
-    assert 'build_main_menu_button(texts.MAIN_MENU_BUTTON)' in source, (
+    assert 'build_main_menu_button(texts.MAIN_MENU_BUTTON' in source, (
         'build_topup_success_keyboard must call build_main_menu_button() for '
         'the Главное меню row to guarantee bot-callback semantics regardless '
         'of MAIN_MENU_MODE. AST scan below catches the buggy pattern.'

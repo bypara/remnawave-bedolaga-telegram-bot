@@ -63,8 +63,8 @@ def test_reply_handlers_render_custom_emoji_as_html_and_keep_full_notification_t
 
     assert "parse_mode='HTML'" in user_source
     assert "parse_mode='HTML'" in admin_source
-    assert "reply_preview=html.escape(reply_text)" in notification_source
-    assert "reply_text[:100]" not in notification_source
+    assert 'reply_preview=html.escape(reply_text)' in notification_source
+    assert 'reply_text[:100]' not in notification_source
 
 
 def test_user_reply_notification_buttons_use_requested_icons():

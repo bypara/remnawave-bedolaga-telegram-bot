@@ -295,7 +295,7 @@ async def show_profile_menu(callback: types.CallbackQuery, db_user: User, state:
     # Opening the profile is an explicit exit from nested input flows (promo code,
     # support forms, etc.). Clear FSM so following messages are not consumed by
     # the handler the user just left.
-    answer_callback_in_background(callback)
+    await callback.answer()
     await state.clear()
 
     texts = get_texts(db_user.language)

@@ -1,13 +1,10 @@
-"""428 «нужно согласие» не должен гасить одноразовый Telegram-credential.
+"""Telegram-credential не должен теряться на первом входе в кабинет.
 
 Виджет и OIDC защищены от повтора: payload виджета и id_token помечаются
-использованными при первом же запросе. Но гейт согласия с офертой отвечает 428
-и просит кабинет повторить ТОТ ЖЕ запрос с галочками. Если credential погашен
-до проверки согласия, повтор получает 401 «уже использован», и новый
-пользователь не может войти через Telegram из веба вообще — только через бота.
-
-Порядок обязан быть: подпись → кто это → согласие (428 без побочных эффектов)
-→ погасить credential → создать аккаунт.
+использованными при первом запросе. Для нового Telegram-пользователя кабинет
+создаёт аккаунт с отложенным согласием, а затем показывает полноценный экран
+онбординга с триалом. Так credential не приходится отправлять повторно, а доступ
+к защищённым операциям всё равно закрыт до принятия документов.
 """
 
 from __future__ import annotations
@@ -15,7 +12,6 @@ from __future__ import annotations
 from contextlib import ExitStack
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -89,19 +85,15 @@ def _oidc_request(accepted: list[str] | None) -> TelegramOIDCAuthRequest:
 
 
 @pytest.mark.asyncio
-async def test_widget_428_leaves_the_payload_unconsumed() -> None:
+async def test_widget_first_login_defers_consent_without_retry() -> None:
     replay = AsyncMock(return_value=False)
     create = AsyncMock()
     with ExitStack() as s:
         _widget_patches(s, replay=replay, user=None, create_user=create)
-        with pytest.raises(HTTPException) as exc:
-            await auth_telegram_widget(request=_widget_request(None), raw_request=MagicMock(), db=AsyncMock())
+        await auth_telegram_widget(request=_widget_request(None), raw_request=MagicMock(), db=AsyncMock())
 
-    assert exc.value.status_code == status.HTTP_428_PRECONDITION_REQUIRED
-    detail = cast('dict[str, object]', exc.value.detail)
-    assert detail['missing'] == DOCUMENTS
-    replay.assert_not_awaited()
-    create.assert_not_awaited()
+    replay.assert_awaited_once()
+    create.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -131,19 +123,15 @@ async def test_widget_existing_user_is_still_one_time() -> None:
 
 
 @pytest.mark.asyncio
-async def test_oidc_428_leaves_the_token_unconsumed() -> None:
+async def test_oidc_first_login_defers_consent_without_retry() -> None:
     replay = AsyncMock(return_value=False)
     create = AsyncMock()
     with ExitStack() as s:
         _oidc_patches(s, replay=replay, user=None, create_user=create)
-        with pytest.raises(HTTPException) as exc:
-            await auth_telegram_oidc(request=_oidc_request(None), raw_request=MagicMock(), db=AsyncMock())
+        await auth_telegram_oidc(request=_oidc_request(None), raw_request=MagicMock(), db=AsyncMock())
 
-    assert exc.value.status_code == status.HTTP_428_PRECONDITION_REQUIRED
-    detail = cast('dict[str, object]', exc.value.detail)
-    assert detail['missing'] == DOCUMENTS
-    replay.assert_not_awaited()
-    create.assert_not_awaited()
+    replay.assert_awaited_once()
+    create.assert_awaited_once()
 
 
 @pytest.mark.asyncio

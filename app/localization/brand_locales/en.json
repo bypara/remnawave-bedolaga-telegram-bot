@@ -68,7 +68,7 @@
   "REFERRAL_CODE_TITLE": "<tg-emoji emoji-id=\"5260341314095947411\">👀</tg-emoji> Your code: <code>{code}</code>",
   "REFERRAL_INVITE_CREATED_TITLE": "",
   "REFERRAL_INVITE_CREATED_INSTRUCTION": "Tap the text below to copy:",
-  "REFERRAL_INVITE_TEXT": "Hi! I use Hunt VPN and have no regrets\n\n— Fast servers\n— Responsive support\n— The most generous referral program\n\n👇 Follow the link:\n{bot_link}",
+  "REFERRAL_INVITE_TEXT": "Hi! I use Hunt VPN and have no regrets{bonus_block}\n\n— Fast servers\n— Responsive support\n— The most generous referral program\n\n👇 Follow the link:\n{link}{cabinet_block}",
   "REFERRAL_LIST_EMPTY": "<tg-emoji emoji-id=\"5257965174979042426\">📝</tg-emoji> You don't have any referrals yet.\n\nShare your referral link to start earning!",
   "REFERRAL_ANALYTICS_TITLE": "<tg-emoji emoji-id=\"5258152182150077732\">⚡️</tg-emoji> Referral analytics",
   "REFERRAL_LIST_HEADER": "<tg-emoji emoji-id=\"5258486128742244085\">👥</tg-emoji> <b>Your referrals</b> (page {current}/{total})",
@@ -303,5 +303,6 @@
   "PAYMENT_INVOICE_EXPIRED": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> <b>The payment period has expired</b>\n\n<tg-emoji emoji-id=\"5451882707875276247\">🕯</tg-emoji> Invoice amount: {amount}\n\nThis invoice can no longer be paid. Create a new one to continue.",
   "PAYMENT_INVOICE_PAY_BUTTON": "Pay",
   "PAYMENT_INVOICE_MAIN_MENU_BUTTON": "Main menu",
-  "PAYMENT_INVOICE_VALID_UNTIL": "<tg-emoji emoji-id=\"5258258882022612173\">⏲️</tg-emoji> Invoice valid until: {expires_at}"
+  "PAYMENT_INVOICE_VALID_UNTIL": "<tg-emoji emoji-id=\"5258258882022612173\">⏲️</tg-emoji> Invoice valid until: {expires_at}",
+  "TICKET_PROMPT_EDIT_ERROR": "Could not open the ticket form. Please try again."
 }

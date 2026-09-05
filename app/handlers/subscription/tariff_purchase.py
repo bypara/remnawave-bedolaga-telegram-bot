@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.subscription import (
-    apply_default_autopay_on_trial_conversion,
+    apply_trial_conversion_defaults,
     create_paid_subscription,
     extend_subscription,
     get_active_subscriptions_by_user_id,
@@ -37,11 +37,11 @@ from app.utils.promo_offer import get_user_active_promo_discount_percent
 logger = structlog.get_logger(__name__)
 
 
-def _format_gb(value: float | int) -> str:
+def _format_gb(value: float) -> str:
     return f'{float(value):g}'
 
 
-def _format_tariff_traffic(texts, limit_gb: float | int) -> str:
+def _format_tariff_traffic(texts, limit_gb: float) -> str:
     if limit_gb == 0:
         return texts.t(
             'TARIFF_TRAFFIC_UNLIMITED',
@@ -592,11 +592,6 @@ def format_tariff_info_for_user(
         text += texts.t('TARIFF_PURCHASE_YOUR_DISCOUNT', '\n🎁 <b>Ваша скидка: {percent}%</b>\n').format(
             percent=discount_percent
         )
-
-    # Для суточных тарифов не показываем выбор периода
-    is_daily = getattr(tariff, 'is_daily', False)
-    if not is_daily:
-        text += texts.t('TARIFF_PURCHASE_CHOOSE_PERIOD', '\nВыберите период подписки:')
 
     return text
 
@@ -2416,7 +2411,7 @@ async def confirm_daily_tariff_purchase(
             existing_subscription.connected_squads = squads
             existing_subscription.status = 'active'
             if existing_subscription.is_trial:
-                apply_default_autopay_on_trial_conversion(existing_subscription)
+                apply_trial_conversion_defaults(existing_subscription)
             existing_subscription.is_trial = False  # Сбрасываем триальный статус
             existing_subscription.is_daily_paused = False
             existing_subscription.last_daily_charge_at = datetime.now(UTC)
@@ -4215,7 +4210,7 @@ async def confirm_daily_tariff_switch(
         subscription.connected_squads = squads
         subscription.status = 'active'
         if subscription.is_trial:
-            apply_default_autopay_on_trial_conversion(subscription)
+            apply_trial_conversion_defaults(subscription)
         subscription.is_trial = False  # Сбрасываем триальный статус
         subscription.is_daily_paused = False
         subscription.last_daily_charge_at = datetime.now(UTC)
@@ -5175,7 +5170,7 @@ async def confirm_instant_switch(
 
             subscription.end_date = datetime.now(UTC) + timedelta(days=1)
             if subscription.is_trial:
-                apply_default_autopay_on_trial_conversion(subscription)
+                apply_trial_conversion_defaults(subscription)
             subscription.is_trial = False
             subscription.is_daily_paused = False
             subscription.last_daily_charge_at = datetime.now(UTC)

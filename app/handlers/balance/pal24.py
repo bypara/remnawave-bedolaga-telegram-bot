@@ -124,7 +124,7 @@ async def _send_pal24_payment_message(
             db_user.language,
             'PayPalych',
             amount_kopeks,
-            expires_at=result.get('expires_at'),
+            expires_at=payment_result.get('expires_at'),
         )
 
         invoice_message = await message.answer(

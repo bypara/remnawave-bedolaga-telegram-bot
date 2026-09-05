@@ -2288,5 +2288,10 @@
   "GIFT_COPY_TEXT_HINT": "点击下方文本即可整段复制，然后发送给接收者。",
   "GIFT_COPY_TEXT_BODY": "🎁 送你一份 {tariff_name} 订阅，为期 {period_days} 天。\n\n激活：{claim_link}\n\n如果链接打不开，请在机器人中输入代码：{public_code}",
   "GIFT_ITEM_NOT_CLAIMABLE": "该礼物已被激活——没有可分享的内容。",
-  "GIFT_MY_BACK_TO_CARD": "◀️ 返回礼物"
+  "GIFT_MY_BACK_TO_CARD": "◀️ 返回礼物",
+  "CHANNEL_CHECK_TEMPORARILY_UNAVAILABLE": "We could not verify your subscription. Please try again in a few seconds.",
+  "PROFILE_WEB_CABINET_BUTTON": "🌐 Web dashboard",
+  "REFERRAL_CHANNEL_NOT_CONFIGURED": "Subscription verification is temporarily unavailable. Please try again later.",
+  "REFERRAL_CHANNEL_REQUIRED_TEXT": "<tg-emoji emoji-id=\"5258486128742244085\">👥</tg-emoji> <b>Join the channel</b>\n\nA channel subscription is required for users who joined through a referral link.\n\nAfter joining, press “I have joined”.",
+  "WEB_AUTH_DENIED": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> Sign-in cancelled."
 }

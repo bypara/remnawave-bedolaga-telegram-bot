@@ -195,7 +195,7 @@ async def process_wata_payment_amount(
         'Создан WATA платеж',
         telegram_id=db_user.telegram_id,
         amount_kopeks=amount_kopeks / 100,
-        payment_link_id=payment_link_id,
+        payment_link_id=local_payment_id,
     )
 
 

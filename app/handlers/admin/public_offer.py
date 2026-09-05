@@ -16,7 +16,7 @@ from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 from app.utils.display_mode import display_mode_label
 from app.utils.telegram_html import stored_html_to_telegram_pages
-from app.utils.validators import get_html_help_text, validate_html_tags
+from app.utils.validators import get_html_help_text
 
 
 logger = structlog.get_logger(__name__)

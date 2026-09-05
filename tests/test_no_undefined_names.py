@@ -47,6 +47,7 @@ def _undefined_names() -> dict[str, set[str]]:
         [sys.executable, '-m', 'ruff', 'check', '--select', 'F821', '--no-cache', '--output-format', 'json', 'app'],
         capture_output=True,
         text=True,
+        encoding='utf-8',
         cwd=ROOT,
         check=False,
     )
@@ -55,7 +56,7 @@ def _undefined_names() -> dict[str, set[str]]:
 
     found: dict[str, set[str]] = {}
     for item in json.loads(result.stdout or '[]'):
-        path = str(pathlib.Path(item['filename']).relative_to(ROOT))
+        path = pathlib.Path(item['filename']).relative_to(ROOT).as_posix()
         name = item['message'].removeprefix('Undefined name ').strip('`')
         found.setdefault(path, set()).add(name)
     return found

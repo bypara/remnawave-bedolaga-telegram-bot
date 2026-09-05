@@ -548,7 +548,7 @@ async def select_country(callback: types.CallbackQuery, state: FSMContext, db_us
     await callback.answer()
 
 
-async def countries_continue(callback: types.CallbackQuery, state: FSMContext, db_user: User):
+async def countries_continue(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
     data = await state.get_data()
     texts = get_texts(db_user.language)
 

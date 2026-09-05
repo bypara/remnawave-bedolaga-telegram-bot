@@ -2288,5 +2288,10 @@
   "GIFT_COPY_TEXT_HINT": "Натисніть на текст нижче — він скопіюється повністю. Надішліть його отримувачу.",
   "GIFT_COPY_TEXT_BODY": "🎁 Дарую тобі підписку {tariff_name} на {period_days} дн.\n\nАктивувати: {claim_link}\n\nЯкщо посилання не відкривається, введи код у боті: {public_code}",
   "GIFT_ITEM_NOT_CLAIMABLE": "Цей подарунок уже активовано — ділитися нічим.",
-  "GIFT_MY_BACK_TO_CARD": "◀️ До подарунка"
+  "GIFT_MY_BACK_TO_CARD": "◀️ До подарунка",
+  "CHANNEL_CHECK_TEMPORARILY_UNAVAILABLE": "Не вдалося перевірити підписку. Спробуйте ще раз за кілька секунд.",
+  "PROFILE_WEB_CABINET_BUTTON": "🌐 Вебкабінет",
+  "REFERRAL_CHANNEL_NOT_CONFIGURED": "Перевірка підписки тимчасово недоступна. Спробуйте пізніше.",
+  "REFERRAL_CHANNEL_REQUIRED_TEXT": "<tg-emoji emoji-id=\"5258486128742244085\">👥</tg-emoji> <b>Підпишіться на канал</b>\n\nДля користувачів, які перейшли за реферальним посиланням, потрібна підписка на канал.\n\nПісля підписки натисніть «Я підписався».",
+  "WEB_AUTH_DENIED": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> Вхід скасовано."
 }

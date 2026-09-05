@@ -6,8 +6,8 @@
 ``can't parse entities``; исключение проглатывается общим ``except``, и
 пользователь просто не узнаёт, что ему ответили.
 
-Раньше окно превью было 100 символов, теперь 500 — попасть в него угловой
-скобкой стало впятеро проще.
+Ответы уже ограничены безопасной для Telegram длиной при вводе, поэтому
+уведомление сохраняет их полностью.
 """
 
 from __future__ import annotations
@@ -56,16 +56,11 @@ async def test_reply_preview_is_escaped() -> None:
 
 
 @pytest.mark.asyncio
-async def test_escaping_does_not_split_entities_on_the_cut() -> None:
-    """Обрезка идёт до экранирования, поэтому `&quot;` не разрывается.
-
-    При обратном порядке хвост страницы обрывался бы на `&qu`, и Telegram
-    отклонил бы уведомление ровно так же, как при сыром `<`.
-    """
+async def test_escaping_preserves_the_full_reply() -> None:
     text = await _send_notification('"' * 900)
 
     assert '&qu' not in text.replace('&quot;', '')
-    assert text.count('&quot;') == 500
+    assert text.count('&quot;') == 900
 
 
 @pytest.mark.asyncio

@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.server_squad import get_server_squad_by_uuid
 from app.database.crud.subscription import (
-    apply_default_autopay_on_trial_conversion,
+    apply_trial_conversion_defaults,
     create_paid_subscription,
     create_trial_subscription,
     decrement_subscription_server_counts,
@@ -1029,7 +1029,7 @@ async def purchase_tariff(
             # отработает по DISABLED-строке.
             if subscription and subscription.id in {kt.id for kt in killed_trials}:
                 subscription.status = 'active'
-                apply_default_autopay_on_trial_conversion(subscription)
+                apply_trial_conversion_defaults(subscription)
                 subscription.is_trial = False
                 await db.flush()
 

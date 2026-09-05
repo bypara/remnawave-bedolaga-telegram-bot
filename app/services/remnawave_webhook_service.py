@@ -41,8 +41,11 @@ from app.services.admin_notification_service import AdminNotificationService
 from app.services.grace_access_runtime import get_open_grace_subscription_ids, grace_access_runtime
 from app.services.grace_access_service import GraceReason
 from app.services.notification_delivery_service import NotificationType, notification_delivery_service
-from app.utils.miniapp_buttons import build_miniapp_or_callback_button, strip_leading_emoji
-from app.utils.miniapp_buttons import build_subscription_extend_button
+from app.utils.miniapp_buttons import (
+    build_miniapp_or_callback_button,
+    build_subscription_extend_button,
+    strip_leading_emoji,
+)
 
 
 logger = structlog.get_logger(__name__)

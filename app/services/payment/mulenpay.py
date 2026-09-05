@@ -191,7 +191,6 @@ class MulenPayPaymentMixin:
     ) -> bool:
         """Обрабатывает callback от MulenPay, обновляет статус и начисляет баланс."""
         display_name = settings.get_mulenpay_display_name()
-        display_name_html = settings.get_mulenpay_display_name_html()
         try:
             payment_module = import_module('app.services.payment_service')
             uuid_value = callback_data.get('uuid')
