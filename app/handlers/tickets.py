@@ -620,10 +620,8 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
             nav_row.append(
                 types.InlineKeyboardButton(text='➡️', callback_data=f'ticket_view_page_{ticket_id}_{page + 1}')
             )
-        try:
+        if getattr(keyboard, 'inline_keyboard', None) is not None:
             keyboard.inline_keyboard.insert(0, nav_row)
-        except Exception:
-            pass
     # Показываем как текст (чтобы не упереться в caption лимит)
     page_text = pages[page - 1]
     await safe_edit_or_resend(callback.message, page_text, keyboard, parse_mode='HTML')
@@ -806,8 +804,8 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         if limited:
             try:
                 asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug('Антиспам тикетов: сообщение не поставлено на удаление', error=str(exc))
             return
     except Exception:
         pass
@@ -818,12 +816,13 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         if last_ts and (now_ts - float(last_ts)) < 2:
             try:
                 asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug('Антиспам тикетов: сообщение не поставлено на удаление', error=str(exc))
             return
         await state.update_data(rl_ts_reply=now_ts)
-    except Exception:
-        pass
+    except Exception as exc:
+        # Антиспам — вспомогательный механизм: без состояния ответ всё равно обрабатывается.
+        logger.debug('Антиспам ответа на тикет: состояние не обновлено', error=str(exc))
 
     """Обработать ответ на тикет"""
     # Поддержка фото для ответа пользователя

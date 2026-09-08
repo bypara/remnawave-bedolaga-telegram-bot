@@ -5,6 +5,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 from app.config import settings
+from app.middlewares.stale_callback_answer import StaleCallbackAnswerMiddleware
 from app.utils.custom_emoji_buttons import CustomEmojiButtonsMiddleware
 
 
@@ -28,4 +29,6 @@ def create_bot(token: str | None = None, **kwargs) -> Bot:
     kwargs.setdefault('default', DefaultBotProperties(parse_mode=ParseMode.HTML))
     bot = Bot(token=token or settings.BOT_TOKEN, session=session, **kwargs)
     bot.session.middleware.register(CustomEmojiButtonsMiddleware())
+    # Поздний ответ на нажатие кнопки — предупреждение, а не исключение (см. middleware).
+    bot.session.middleware(StaleCallbackAnswerMiddleware())
     return bot

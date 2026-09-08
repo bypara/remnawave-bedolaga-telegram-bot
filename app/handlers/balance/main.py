@@ -1,4 +1,5 @@
 import html
+from contextlib import nullcontext
 
 import structlog
 from aiogram import Dispatcher, F, types
@@ -664,6 +665,12 @@ async def handle_sbp_payment(callback: types.CallbackQuery, db: AsyncSession):
         await callback.answer('❌ Ошибка обработки платежа', show_alert=True)
 
 
+async def _reply_after_answer(callback: types.CallbackQuery, text: str) -> None:
+    """Нажатие уже подтверждено — второй answer() Telegram отвергнет, поэтому пишем сообщением."""
+    if isinstance(callback.message, types.Message):
+        await callback.message.answer(text)
+
+
 @error_handler
 async def handle_topup_amount_callback(
     callback: types.CallbackQuery,
@@ -681,12 +688,36 @@ async def handle_topup_amount_callback(
         await callback.answer('❌ Некорректная сумма', show_alert=True)
         return
 
+    # Сценарии, которым передаётся сам callback, отвечают на нажатие сами (у них свои алерты).
+    if method == 'tribute':
+        from .tribute import start_tribute_payment
+
+        await start_tribute_payment(callback, db_user)
+        return
+
+    if method == 'platega':
+        data = await state.get_data()
+        if (int(data.get('platega_method', 0)) if data else 0) <= 0:
+            from .platega import start_platega_payment
+
+            await state.update_data(platega_pending_amount=amount_kopeks)
+            await start_platega_payment(callback, db_user, state)
+            return
+
+    # Снимаем «часики» до похода к провайдеру: создание платежа может идти секунды, а Telegram
+    # ждёт ответ на нажатие недолго. Поздний answer() падал с «query is too old», собственный
+    # except считал это ошибкой пополнения и слал отчёт админам, хотя ссылка на оплату уже ушла.
+    await callback.answer()
     try:
-        with manual_topup_messages(
-            chat_id=callback.message.chat.id,
-            user_message_id=callback.message.message_id,
-            prompt_message_id=None,
-        ):
+        message_chat = getattr(callback.message, 'chat', None)
+        chat_id = getattr(message_chat, 'id', None)
+        message_id = getattr(callback.message, 'message_id', None)
+        cleanup_scope = (
+            manual_topup_messages(chat_id=chat_id, user_message_id=message_id, prompt_message_id=None)
+            if isinstance(chat_id, int) and isinstance(message_id, int)
+            else nullcontext()
+        )
+        with cleanup_scope:
             # Особые случаи, требующие специальной логики
             if method.startswith('platega_m'):
                 from app.database.database import AsyncSessionLocal
@@ -723,14 +754,14 @@ async def handle_topup_amount_callback(
                 await state.update_data(payment_method=method)
                 await state.set_state(BalanceStates.waiting_for_amount)
                 if not await route_payment_by_method(callback.message, db_user, amount_kopeks, state, method):
-                    await callback.answer('❌ Неизвестный способ оплаты', show_alert=True)
+                    await _reply_after_answer(callback, '❌ Неизвестный способ оплаты')
                     return
 
-        await callback.answer()
-
+    except TelegramBadRequest:
+        raise  # устаревший запрос и прочие ответы Telegram классифицирует @error_handler
     except Exception as error:
         logger.error('Ошибка быстрого пополнения', error=error)
-        await callback.answer('❌ Ошибка обработки запроса', show_alert=True)
+        await _reply_after_answer(callback, '❌ Ошибка обработки запроса')
 
 
 def register_balance_handlers(dp: Dispatcher):

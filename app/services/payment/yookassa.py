@@ -1129,7 +1129,7 @@ class YooKassaPaymentMixin:
                 )
 
             if critical_flow_completed and not processing_marked:
-                payment_metadata = await self._mark_yookassa_payment_processing_completed(
+                await self._mark_yookassa_payment_processing_completed(
                     db,
                     payment,
                     payment_metadata,
