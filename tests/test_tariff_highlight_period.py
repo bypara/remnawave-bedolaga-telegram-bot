@@ -178,12 +178,15 @@ def test_highlighted_tariff_is_marked_in_the_list():
         SimpleNamespace(id=1, name='Базовый', is_highlighted=False),
         SimpleNamespace(id=2, name='Про', is_highlighted=True),
     ]
-    labels = _labels(get_tariffs_keyboard(tariffs, 'ru'))
+    keyboard = get_tariffs_keyboard(tariffs, 'ru')
+    labels = _labels(keyboard)
 
     marked = [label for label in labels if BADGE in label]
     assert len(marked) == 1, labels
     assert 'Про' in marked[0]
     assert 'Базовый' in labels
+    highlighted_button = next(button for row in keyboard.inline_keyboard for button in row if BADGE in button.text)
+    assert highlighted_button.style == 'success'
 
 
 def test_purchased_mark_wins_over_the_badge():
@@ -191,10 +194,12 @@ def test_purchased_mark_wins_over_the_badge():
     from app.handlers.subscription.tariff_purchase import get_tariffs_keyboard
 
     tariffs = [SimpleNamespace(id=2, name='Про', is_highlighted=True)]
-    labels = _labels(get_tariffs_keyboard(tariffs, 'ru', purchased_tariff_ids={2}))
+    keyboard = get_tariffs_keyboard(tariffs, 'ru', purchased_tariff_ids={2})
+    labels = _labels(keyboard)
 
     assert any(label.startswith('✅') for label in labels)
     assert not [label for label in labels if BADGE in label]
+    assert keyboard.inline_keyboard[0][0].style is None
 
 
 def test_tariff_list_survives_objects_without_the_flag():

@@ -303,14 +303,20 @@ def get_tariffs_keyboard(
 
     badge = texts.t('TARIFF_BEST_VALUE_BADGE', '⭐ выгодно')
     for tariff in tariffs:
+        button_style = None
         if tariff.id in purchased_tariff_ids:
             # Уже купленный тариф важнее подсказки «выгодно».
             label = f'✅ {tariff.name}'
         elif getattr(tariff, 'is_highlighted', False):
             label = f'{badge} · {tariff.name}'
+            button_style = 'success'
         else:
             label = tariff.name
-        button = InlineKeyboardButton(text=label, callback_data=f'tariff_select:{tariff.id}')
+        button = InlineKeyboardButton(
+            text=label,
+            callback_data=f'tariff_select:{tariff.id}',
+            style=button_style,
+        )
 
         if len(label) > 24:
             if pending_row:
