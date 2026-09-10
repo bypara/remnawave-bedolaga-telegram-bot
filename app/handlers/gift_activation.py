@@ -17,6 +17,7 @@ from app.services.gift_claim_service import (
     claim_bound_gift_for_user,
 )
 from app.services.guest_purchase_service import GuestPurchaseError
+from app.utils.custom_emoji_buttons import decorate_gift_html
 
 
 logger = structlog.get_logger(__name__)
@@ -45,7 +46,7 @@ async def handle_gift_activate(callback: types.CallbackQuery) -> None:
         return
 
     await callback.answer()
-    await callback.message.edit_text('⏳ Активируем подарок...', parse_mode=None)
+    await callback.message.edit_text(decorate_gift_html('⏳ Активируем подарок...'), parse_mode='HTML')
 
     async with AsyncSessionLocal() as db:
         user = await get_user_by_telegram_id(db, callback.from_user.id)
@@ -69,17 +70,24 @@ async def handle_gift_activate(callback: types.CallbackQuery) -> None:
             return
         except GiftClaimSelfActivationError:
             await callback.message.edit_text(
-                texts.t(
-                    'GIFT_ACTIVATION_SELF_CLAIM_ERROR',
-                    '⚠️ Нельзя активировать свой собственный подарок.\nОтправьте код другу!',
+                decorate_gift_html(
+                    texts.t(
+                        'GIFT_ACTIVATION_SELF_CLAIM_ERROR',
+                        '⚠️ Нельзя активировать свой собственный подарок.\nОтправьте код другу!',
+                    )
                 ),
-                parse_mode=None,
+                parse_mode='HTML',
             )
             return
         except GiftClaimNotActivatableError:
             await callback.message.edit_text(
-                texts.t('GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR', '❌ Этот подарок невозможно активировать.'),
-                parse_mode=None,
+                decorate_gift_html(
+                    texts.t(
+                        'GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR',
+                        '❌ Этот подарок невозможно активировать.',
+                    )
+                ),
+                parse_mode='HTML',
             )
             return
         except GuestPurchaseError as exc:
@@ -91,19 +99,23 @@ async def handle_gift_activate(callback: types.CallbackQuery) -> None:
             )
             if exc.status_code >= 500:
                 await callback.message.edit_text(
-                    texts.t(
-                        'GIFT_ACTIVATION_GENERIC_ERROR',
-                        'Произошла ошибка при активации. Попробуйте позже.',
+                    decorate_gift_html(
+                        texts.t(
+                            'GIFT_ACTIVATION_GENERIC_ERROR',
+                            'Произошла ошибка при активации. Попробуйте позже.',
+                        )
                     ),
-                    parse_mode=None,
+                    parse_mode='HTML',
                 )
             else:
                 await callback.message.edit_text(
-                    texts.t(
-                        'GIFT_ACTIVATION_FAILED_PREFIX',
-                        'Не удалось активировать подарок: {error}',
-                    ).format(error=html_mod.escape(exc.message)),
-                    parse_mode=None,
+                    decorate_gift_html(
+                        texts.t(
+                            'GIFT_ACTIVATION_FAILED_PREFIX',
+                            'Не удалось активировать подарок: {error}',
+                        ).format(error=html_mod.escape(exc.message))
+                    ),
+                    parse_mode='HTML',
                 )
             return
         except Exception:
@@ -113,11 +125,13 @@ async def handle_gift_activate(callback: types.CallbackQuery) -> None:
                 telegram_id=callback.from_user.id,
             )
             await callback.message.edit_text(
-                texts.t(
-                    'GIFT_ACTIVATION_GENERIC_ERROR',
-                    'Произошла ошибка при активации. Попробуйте позже.',
+                decorate_gift_html(
+                    texts.t(
+                        'GIFT_ACTIVATION_GENERIC_ERROR',
+                        'Произошла ошибка при активации. Попробуйте позже.',
+                    )
                 ),
-                parse_mode=None,
+                parse_mode='HTML',
             )
             return
 
@@ -127,12 +141,15 @@ async def handle_gift_activate(callback: types.CallbackQuery) -> None:
         tariff_text = f'{tariff_name} — {period_text}' if tariff_name else period_text
 
         await callback.message.edit_text(
-            texts.t(
-                'GIFT_ACTIVATION_CALLBACK_SUCCESS_TEXT',
-                '✅ <b>Подарок активирован!</b>\n{tariff_text}\n\nВаша подписка обновлена.',
-            ).format(
-                tariff_text=tariff_text,
+            decorate_gift_html(
+                texts.t(
+                    'GIFT_ACTIVATION_CALLBACK_SUCCESS_TEXT',
+                    '✅ <b>Подарок активирован!</b>\n{tariff_text}\n\nВаша подписка обновлена.',
+                ).format(
+                    tariff_text=tariff_text,
+                )
             ),
+            parse_mode='HTML',
         )
 
 

@@ -86,6 +86,7 @@ from app.services.subscription_service import SubscriptionService
 from app.services.support_settings_service import SupportSettingsService
 from app.services.web_auth_service import WEB_AUTH_TOKEN_MIN_LENGTH, link_web_auth_token
 from app.states import RegistrationStates
+from app.utils.custom_emoji_buttons import decorate_gift_html
 from app.utils.gift_links import InvalidGiftTokenError, parse_gift_claim_input
 from app.utils.long_messages import answer_long_text, edit_long_text, send_long_text
 from app.utils.miniapp_buttons import strip_leading_emoji
@@ -617,27 +618,33 @@ async def _activate_pending_gift_after_registration(
             )
         except GiftClaimSelfActivationError:
             await answer_func(
-                texts.t(
-                    'GIFT_ACTIVATION_SELF_CLAIM_ERROR',
-                    '⚠️ Нельзя активировать свой собственный подарок.\nОтправьте код другу!',
+                decorate_gift_html(
+                    texts.t(
+                        'GIFT_ACTIVATION_SELF_CLAIM_ERROR',
+                        '⚠️ Нельзя активировать свой собственный подарок.\nОтправьте код другу!',
+                    )
                 ),
                 parse_mode=ParseMode.HTML,
             )
             return
         except GiftClaimAlreadyOwnedError:
             await answer_func(
-                texts.t(
-                    'GIFT_ACTIVATION_ALREADY_OWNED_ERROR',
-                    'ℹ️ Этот подарок уже был активирован.',
+                decorate_gift_html(
+                    texts.t(
+                        'GIFT_ACTIVATION_ALREADY_OWNED_ERROR',
+                        'ℹ️ Этот подарок уже был активирован.',
+                    )
                 ),
                 parse_mode=ParseMode.HTML,
             )
             return
         except GiftClaimNotActivatableError:
             await answer_func(
-                texts.t(
-                    'GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR',
-                    '❌ Этот подарок невозможно активировать.',
+                decorate_gift_html(
+                    texts.t(
+                        'GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR',
+                        '❌ Этот подарок невозможно активировать.',
+                    )
                 ),
                 parse_mode=ParseMode.HTML,
             )
@@ -648,12 +655,14 @@ async def _activate_pending_gift_after_registration(
 
         tariff_name = html.escape(gift_purchase.tariff.name) if gift_purchase.tariff else ''
         await answer_func(
-            texts.t(
-                'GIFT_ACTIVATION_SUCCESS_TEXT',
-                '🎁 <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\nВаша подписка обновлена.',
-            ).format(
-                tariff_name=tariff_name,
-                period_days=gift_purchase.period_days,
+            decorate_gift_html(
+                texts.t(
+                    'GIFT_ACTIVATION_SUCCESS_TEXT',
+                    '🎁 <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\nВаша подписка обновлена.',
+                ).format(
+                    tariff_name=tariff_name,
+                    period_days=gift_purchase.period_days,
+                )
             ),
             parse_mode=ParseMode.HTML,
         )
@@ -665,9 +674,11 @@ async def _activate_pending_gift_after_registration(
         try:
             texts = get_texts(user.language)
             await answer_func(
-                texts.t(
-                    'GIFT_ACTIVATION_GENERIC_ERROR',
-                    '❌ Произошла ошибка при активации подарка. Попробуйте активировать через личный кабинет.',
+                decorate_gift_html(
+                    texts.t(
+                        'GIFT_ACTIVATION_GENERIC_ERROR',
+                        '❌ Произошла ошибка при активации подарка. Попробуйте активировать через личный кабинет.',
+                    )
                 ),
                 parse_mode=ParseMode.HTML,
             )

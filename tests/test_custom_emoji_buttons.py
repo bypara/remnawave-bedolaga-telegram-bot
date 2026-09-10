@@ -1,6 +1,10 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from app.utils.custom_emoji_buttons import CUSTOM_EMOJI_IDS, apply_custom_emoji_icons
+from app.utils.custom_emoji_buttons import (
+    CUSTOM_EMOJI_IDS,
+    apply_custom_emoji_icons,
+    decorate_gift_html,
+)
 
 
 def _button(text: str, callback_data: str | None = None, url: str | None = None):
@@ -72,6 +76,15 @@ def test_requested_custom_emoji_icons_are_applied_by_button_action():
         ('📊 Проверить статус', 'check_yookassa_1', 'show_qr'),
         ('📅 30 дн.', 'noop', 'renewal_period'),
         ('📊 100 ГБ', 'noop', 'buy_traffic'),
+        ('🎁 Подарить подписку', 'subscription_gift', 'gift'),
+        ('📦 Максимум', 'gift_tariff:7', 'tariff'),
+        ('📅 30 дней', 'gift_period:7:30', 'renewal_period'),
+        ('✅ Подтвердить подарок', 'gift_confirm', 'confirm_purchase'),
+        ('🎁 Мои подарки', 'gift_my', 'gift'),
+        ('🎁 Активировать код', 'gift_enter_code', 'activate'),
+        ('📱 QR-код', 'gift_my_qr:42', 'show_qr'),
+        ('📋 Текст для отправки', 'gift_my_text:42', 'gift_copy'),
+        ('🎁 Вернуться к подарку', 'return_to_gift_cart', 'gift'),
     ]
     markup = InlineKeyboardMarkup(
         inline_keyboard=[[_button(text, callback_data=callback)] for text, callback, _ in cases]
@@ -89,6 +102,18 @@ def test_requested_custom_emoji_icons_are_applied_by_button_action():
     assert CUSTOM_EMOJI_IDS['channel_check'] == '5416081784641168838'
     assert CUSTOM_EMOJI_IDS['claim_discount'] == '5406683434124859552'
     assert CUSTOM_EMOJI_IDS['confirm_switch'] == '5206607081334906820'
+    assert CUSTOM_EMOJI_IDS['gift'] == '5255850874248399164'
+
+
+def test_gift_html_uses_custom_emoji_and_preserves_existing_tags():
+    existing = '<tg-emoji emoji-id="1">🎁</tg-emoji>'
+    decorated = decorate_gift_html(f'🎁 Подарок\n📦 Тариф\n{existing}')
+    gift_id = CUSTOM_EMOJI_IDS['gift']
+    tariff_id = CUSTOM_EMOJI_IDS['tariff']
+
+    assert f'<tg-emoji emoji-id="{gift_id}">🎁</tg-emoji>' in decorated
+    assert f'<tg-emoji emoji-id="{tariff_id}">📦</tg-emoji>' in decorated
+    assert decorated.count(existing) == 1
 
 
 def test_claim_discount_requested_icon_overrides_legacy_explicit_icon():

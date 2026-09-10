@@ -1,6 +1,7 @@
 """Apply the project's fixed custom emoji icons to outgoing inline keyboards."""
 
 import asyncio
+import re
 
 import structlog
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
@@ -76,6 +77,10 @@ CUSTOM_EMOJI_IDS: dict[str, str] = {
     'channel_check': '5416081784641168838',
     'claim_discount': '5406683434124859552',
     'confirm_switch': '5206607081334906820',
+    'gift': '5255850874248399164',
+    'gift_copy': '5424818078833715060',
+    'gift_open_bot': '5319272710688226013',
+    'gift_open_cabinet': '5388632425314140043',
 }
 
 PRIORITY_CALLBACK_TO_ICON: dict[str, str] = {
@@ -151,6 +156,21 @@ CALLBACK_TO_ICON: dict[str, str] = {
     'referral_withdrawal_confirm': 'referral_withdrawal_confirm',
     'menu_support': 'support',
     'sub_channel_check': 'channel_check',
+    'subscription_gift': 'gift',
+    'gift_tariff': 'tariff',
+    'gift_period': 'renewal_period',
+    'gift_confirm': 'confirm_purchase',
+    'gift_my': 'gift',
+    'gift_enter_code': 'activate',
+    'gift_activate': 'activate',
+    'gift_my_qr': 'show_qr',
+    'gift_my_text': 'gift_copy',
+    'return_to_gift_cart': 'gift',
+    'gift_back_tariffs': 'back',
+    'gift_back_periods': 'back',
+    'gift_my_back': 'back',
+    'gift_cancel': 'cancel',
+    'gift_activation_cancel': 'cancel',
 }
 
 CALLBACK_PREFIX_TO_ICON: dict[str, str] = {
@@ -219,6 +239,49 @@ LEGACY_BUTTON_TEXT_OVERRIDES: dict[tuple[str, str], str] = {
     ('menu_privacy_policy', 'политика конф.'): 'Политика конфиденциальности',
     ('menu_privacy_policy', 'політика конф.'): 'Політика конфіденційності',
 }
+
+
+GIFT_HTML_EMOJI_IDS: dict[str, str] = {
+    '🎁': CUSTOM_EMOJI_IDS['gift'],
+    '🎉': CUSTOM_EMOJI_IDS['gift'],
+    '📦': CUSTOM_EMOJI_IDS['tariff'],
+    '📅': CUSTOM_EMOJI_IDS['renewal_period'],
+    '📊': CUSTOM_EMOJI_IDS['buy_traffic'],
+    '📱': CUSTOM_EMOJI_IDS['manage_devices'],
+    '💳': CUSTOM_EMOJI_IDS['balance'],
+    '💰': CUSTOM_EMOJI_IDS['balance'],
+    '💵': CUSTOM_EMOJI_IDS['payment_pay'],
+    '🏷': CUSTOM_EMOJI_IDS['promocode'],
+    '🔑': CUSTOM_EMOJI_IDS['activate'],
+    '🔗': CUSTOM_EMOJI_IDS['connect'],
+    '✅': CUSTOM_EMOJI_IDS['confirm_purchase'],
+    '❌': CUSTOM_EMOJI_IDS['disable'],
+    '⚠️': CUSTOM_EMOJI_IDS['rules'],
+    'ℹ️': '5289599503194661657',
+    '⏳': CUSTOM_EMOJI_IDS['renewal_period'],
+    '🛒': CUSTOM_EMOJI_IDS['buy_main'],
+    '👤': '5307943162486994719',
+    '🤖': CUSTOM_EMOJI_IDS['gift_open_bot'],
+    '🌐': CUSTOM_EMOJI_IDS['gift_open_cabinet'],
+    '📋': CUSTOM_EMOJI_IDS['gift_copy'],
+}
+
+_CUSTOM_EMOJI_TAG_RE = re.compile(r'(<tg-emoji\b[^>]*>.*?</tg-emoji>)', re.DOTALL)
+
+
+def decorate_gift_html(text: str) -> str:
+    """Replace gift-flow Unicode icons with Telegram custom emoji markup.
+
+    Existing ``tg-emoji`` tags are preserved, so the function is safe to call
+    on a composed message whose localized fragments may already be decorated.
+    """
+    parts = _CUSTOM_EMOJI_TAG_RE.split(text)
+    for index in range(0, len(parts), 2):
+        fragment = parts[index]
+        for emoji, emoji_id in GIFT_HTML_EMOJI_IDS.items():
+            fragment = fragment.replace(emoji, f'<tg-emoji emoji-id="{emoji_id}">{emoji}</tg-emoji>')
+        parts[index] = fragment
+    return ''.join(parts)
 
 
 def _resolve_icon_name(button: InlineKeyboardButton, plain_text: str) -> str | None:

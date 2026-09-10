@@ -21,6 +21,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from app.config import settings
 from app.localization.texts import Texts, get_texts
 from app.services.gift_purchase_service import GiftPurchaseResult
+from app.utils.custom_emoji_buttons import CUSTOM_EMOJI_IDS, decorate_gift_html
 from app.utils.gift_links import (
     GiftClaimArtifacts,
     _normalize_bot_username,
@@ -98,6 +99,7 @@ def _format_claim_link_and_action_buttons(
             InlineKeyboardButton(
                 text=texts.t('GIFT_SEND_BUTTON', '🎁 Отправить подарок'),
                 url=share_url,
+                icon_custom_emoji_id=CUSTOM_EMOJI_IDS['gift'],
             )
         ]
     ]
@@ -111,10 +113,12 @@ def _format_claim_link_and_action_buttons(
                 InlineKeyboardButton(
                     text=texts.t('GIFT_OPEN_BOT_BUTTON', '🤖 Открыть в боте'),
                     url=artifacts.bot_claim_url,
+                    icon_custom_emoji_id=CUSTOM_EMOJI_IDS['gift_open_bot'],
                 ),
                 InlineKeyboardButton(
                     text=texts.t('GIFT_OPEN_CABINET_BUTTON', '🌐 Открыть в кабинете'),
                     url=artifacts.cabinet_claim_url,
+                    icon_custom_emoji_id=CUSTOM_EMOJI_IDS['gift_open_cabinet'],
                 ),
             ]
         )
@@ -125,6 +129,7 @@ def _format_claim_link_and_action_buttons(
                 InlineKeyboardButton(
                     text=texts.t('GIFT_OPEN_BUTTON', '🔗 Открыть подарок'),
                     url=artifacts.bot_claim_url,
+                    icon_custom_emoji_id=CUSTOM_EMOJI_IDS['connect'],
                 )
             ]
         )
@@ -135,6 +140,7 @@ def _format_claim_link_and_action_buttons(
                 InlineKeyboardButton(
                     text=texts.t('GIFT_OPEN_BUTTON', '🔗 Открыть подарок'),
                     url=artifacts.cabinet_claim_url,
+                    icon_custom_emoji_id=CUSTOM_EMOJI_IDS['connect'],
                 )
             ]
         )
@@ -253,7 +259,7 @@ def build_gift_result_presentation(
     ]
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
-    return text, keyboard
+    return decorate_gift_html(text), keyboard
 
 
 def build_gift_history_detail_presentation(
@@ -347,10 +353,12 @@ def build_gift_history_detail_presentation(
                 InlineKeyboardButton(
                     text=texts.t('GIFT_QR_BUTTON', '📱 QR-код подарка'),
                     callback_data=f'gift_my_qr:{item.purchase_id}',
+                    icon_custom_emoji_id=CUSTOM_EMOJI_IDS['show_qr'],
                 ),
                 InlineKeyboardButton(
                     text=texts.t('GIFT_COPY_TEXT_BUTTON', '📋 Текст для отправки'),
                     callback_data=f'gift_my_text:{item.purchase_id}',
+                    icon_custom_emoji_id=CUSTOM_EMOJI_IDS['gift_copy'],
                 ),
             ],
             [
@@ -360,7 +368,7 @@ def build_gift_history_detail_presentation(
                 )
             ],
         ]
-        return text, InlineKeyboardMarkup(inline_keyboard=buttons)
+        return decorate_gift_html(text), InlineKeyboardMarkup(inline_keyboard=buttons)
 
     # Delivered / other final state
     status_text = texts.t('GIFT_STATUS_DELIVERED', '✅ Активирован')
@@ -409,7 +417,7 @@ def build_gift_history_detail_presentation(
             )
         ]
     ]
-    return text, InlineKeyboardMarkup(inline_keyboard=buttons)
+    return decorate_gift_html(text), InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 async def send_gift_result_message(

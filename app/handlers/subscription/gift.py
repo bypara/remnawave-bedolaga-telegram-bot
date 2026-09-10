@@ -58,6 +58,7 @@ from app.services.gift_purchase_service import (
 from app.services.guest_purchase_service import GuestPurchaseError
 from app.services.user_cart_service import user_cart_service
 from app.states import GiftActivationStates, GiftPurchaseStates
+from app.utils.custom_emoji_buttons import CUSTOM_EMOJI_IDS, decorate_gift_html
 from app.utils.gift_links import build_gift_claim_artifacts
 
 
@@ -101,7 +102,7 @@ def _render_tariff_catalog(db_user: User, offers: list[GiftTariffOffer]) -> tupl
     )
     buttons.append([InlineKeyboardButton(text=texts.t('GIFT_CANCEL_BUTTON', '❌ Отмена'), callback_data='gift_cancel')])
 
-    return text, InlineKeyboardMarkup(inline_keyboard=buttons)
+    return decorate_gift_html(text), InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def _render_history_list(
@@ -131,7 +132,7 @@ def _render_history_list(
                 )
             ],
         ]
-        return text, InlineKeyboardMarkup(inline_keyboard=buttons)
+        return decorate_gift_html(text), InlineKeyboardMarkup(inline_keyboard=buttons)
 
     total_pages = max(1, (total_count + GIFT_HISTORY_PAGE_SIZE - 1) // GIFT_HISTORY_PAGE_SIZE)
     if total_pages > 1:
@@ -157,7 +158,15 @@ def _render_history_list(
             tariff_name=raw_name,
             period_days=item.period_days,
         )
-        buttons.append([InlineKeyboardButton(text=item_label, callback_data=f'gift_my_open:{item.purchase_id}')])
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=item_label,
+                    callback_data=f'gift_my_open:{item.purchase_id}',
+                    icon_custom_emoji_id=CUSTOM_EMOJI_IDS['enable' if item.is_delivered else 'renewal_period'],
+                )
+            ]
+        )
 
     nav_row: list[InlineKeyboardButton] = []
     if page > 1:
@@ -186,7 +195,7 @@ def _render_history_list(
         ]
     )
 
-    return text, InlineKeyboardMarkup(inline_keyboard=buttons)
+    return decorate_gift_html(text), InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def _render_period_selection(db_user: User, offer: GiftTariffOffer) -> tuple[str, InlineKeyboardMarkup]:
@@ -239,7 +248,7 @@ def _render_period_selection(db_user: User, offer: GiftTariffOffer) -> tuple[str
     ]
     buttons.append(nav_row)
 
-    return text, InlineKeyboardMarkup(inline_keyboard=buttons)
+    return decorate_gift_html(text), InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def _render_confirmation_summary(db_user: User, quote: GiftQuote) -> tuple[str, InlineKeyboardMarkup]:
@@ -298,7 +307,7 @@ def _render_confirmation_summary(db_user: User, quote: GiftQuote) -> tuple[str, 
         ],
     ]
 
-    return text, InlineKeyboardMarkup(inline_keyboard=buttons)
+    return decorate_gift_html(text), InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 # ── Callback Handlers ───────────────────────────────────────────────────────
@@ -325,6 +334,7 @@ async def handle_gift_catalog(
                 'GIFT_FEATURE_DISABLED_WITH_HISTORY',
                 '🎁 <b>Подарки</b>\n\nПокупка новых подарков временно недоступна, но вы можете просмотреть свои подарки или активировать код.',
             )
+            text = decorate_gift_html(text)
             back_kb = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
@@ -355,6 +365,7 @@ async def handle_gift_catalog(
             'GIFT_FEATURE_DISABLED_NO_HISTORY',
             '🎁 <b>Подарки</b>\n\nПокупка новых подарков временно недоступна, но вы можете активировать полученный подарочный код.',
         )
+        text = decorate_gift_html(text)
         back_kb = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -762,6 +773,7 @@ async def handle_gift_confirm(
             balance=avail_str,
             missing=missing_str,
         )
+        text = decorate_gift_html(text)
         reply_markup = get_insufficient_balance_keyboard(
             language=db_user.language,
             amount_kopeks=missing_amount,
@@ -1032,6 +1044,7 @@ async def handle_return_to_gift_cart(
             balance=bal_str,
             missing=missing_str,
         )
+        text = decorate_gift_html(text)
         reply_markup = get_insufficient_balance_keyboard(
             language=db_user.language,
             amount_kopeks=new_missing,
@@ -1085,6 +1098,7 @@ async def handle_gift_enter_code(
         'GIFT_ENTER_CODE_PROMPT',
         '🎁 <b>Активация подарка</b>\n\nОтправьте код подарка или полученную ссылку:',
     )
+    text = decorate_gift_html(text)
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -1138,9 +1152,11 @@ async def handle_gift_code_input(
 
     if not message.text:
         await message.answer(
-            texts.t(
-                'GIFT_ACTIVATION_NON_TEXT_ERROR',
-                '⚠️ Пожалуйста, отправьте текстовый код или ссылку на подарок.',
+            decorate_gift_html(
+                texts.t(
+                    'GIFT_ACTIVATION_NON_TEXT_ERROR',
+                    '⚠️ Пожалуйста, отправьте текстовый код или ссылку на подарок.',
+                )
             ),
             reply_markup=cancel_kb,
             parse_mode='HTML',
@@ -1158,9 +1174,11 @@ async def handle_gift_code_input(
         )
     except GiftClaimNotFoundError:
         await message.answer(
-            texts.t(
-                'GIFT_ACTIVATION_NOT_FOUND',
-                'Подарок не найден или недоступен.',
+            decorate_gift_html(
+                texts.t(
+                    'GIFT_ACTIVATION_NOT_FOUND',
+                    'Подарок не найден или недоступен.',
+                )
             ),
             reply_markup=cancel_kb,
             parse_mode='HTML',
@@ -1168,9 +1186,11 @@ async def handle_gift_code_input(
         return
     except GiftClaimSelfActivationError:
         await message.answer(
-            texts.t(
-                'GIFT_ACTIVATION_SELF_CLAIM_ERROR',
-                '⚠️ Нельзя активировать свой собственный подарок.\nОтправьте код другу!',
+            decorate_gift_html(
+                texts.t(
+                    'GIFT_ACTIVATION_SELF_CLAIM_ERROR',
+                    '⚠️ Нельзя активировать свой собственный подарок.\nОтправьте код другу!',
+                )
             ),
             reply_markup=cancel_kb,
             parse_mode='HTML',
@@ -1178,9 +1198,11 @@ async def handle_gift_code_input(
         return
     except GiftClaimAlreadyOwnedError:
         await message.answer(
-            texts.t(
-                'GIFT_ACTIVATION_ALREADY_OWNED_ERROR',
-                'ℹ️ Этот подарок уже был активирован.',
+            decorate_gift_html(
+                texts.t(
+                    'GIFT_ACTIVATION_ALREADY_OWNED_ERROR',
+                    'ℹ️ Этот подарок уже был активирован.',
+                )
             ),
             reply_markup=cancel_kb,
             parse_mode='HTML',
@@ -1188,9 +1210,11 @@ async def handle_gift_code_input(
         return
     except GiftClaimNotActivatableError:
         await message.answer(
-            texts.t(
-                'GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR',
-                '❌ Этот подарок невозможно активировать.',
+            decorate_gift_html(
+                texts.t(
+                    'GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR',
+                    '❌ Этот подарок невозможно активировать.',
+                )
             ),
             reply_markup=cancel_kb,
             parse_mode='HTML',
@@ -1212,7 +1236,7 @@ async def handle_gift_code_input(
                 'GIFT_ACTIVATION_FAILED_PREFIX',
                 'Не удалось активировать подарок: {error}',
             ).format(error=html.escape(exc.message))
-        await message.answer(msg_text, reply_markup=cancel_kb, parse_mode='HTML')
+        await message.answer(decorate_gift_html(msg_text), reply_markup=cancel_kb, parse_mode='HTML')
         return
     except Exception:
         logger.exception(
@@ -1220,9 +1244,11 @@ async def handle_gift_code_input(
             claimant_user_id=db_user.id,
         )
         await message.answer(
-            texts.t(
-                'GIFT_ACTIVATION_GENERIC_ERROR',
-                '❌ Произошла ошибка при активации подарка. Попробуйте активировать через личный кабинет.',
+            decorate_gift_html(
+                texts.t(
+                    'GIFT_ACTIVATION_GENERIC_ERROR',
+                    '❌ Произошла ошибка при активации подарка. Попробуйте активировать через личный кабинет.',
+                )
             ),
             reply_markup=cancel_kb,
             parse_mode='HTML',
@@ -1237,6 +1263,7 @@ async def handle_gift_code_input(
         'GIFT_ACTIVATION_SUCCESS_TEXT',
         '🎁 <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\nВаша подписка обновлена.',
     ).format(tariff_name=tariff_name, period_days=period_days)
+    success_text = decorate_gift_html(success_text)
 
     success_kb = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -1486,6 +1513,7 @@ async def handle_gift_my_qr(
         'GIFT_QR_CAPTION',
         '📱 <b>QR-код подарка</b>\n\nПокажите его получателю — камера откроет активацию.\n\n🔑 Код: <code>{public_code}</code>',
     ).format(public_code=html.escape(artifacts.public_code))
+    caption = decorate_gift_html(caption)
     keyboard = _gift_back_keyboard(texts, item.purchase_id)
     photo = FSInputFile(file_path)
 
@@ -1535,9 +1563,13 @@ async def handle_gift_my_text(
         public_code=artifacts.public_code,
     )
 
+    title = decorate_gift_html(texts.t('GIFT_COPY_TEXT_TITLE', '📋 <b>Текст для отправки</b>'))
+    hint = decorate_gift_html(
+        texts.t('GIFT_COPY_TEXT_HINT', 'Нажмите на текст ниже — он скопируется целиком.')
+    )
     text = (
-        f'{texts.t("GIFT_COPY_TEXT_TITLE", "📋 <b>Текст для отправки</b>")}\n\n'
-        f'{texts.t("GIFT_COPY_TEXT_HINT", "Нажмите на текст ниже — он скопируется целиком.")}\n\n'
+        f'{title}\n\n'
+        f'{hint}\n\n'
         # Экранируется ВСЁ содержимое: имя тарифа задаёт человек, и угловая
         # скобка в нём иначе оборвала бы разметку сообщения.
         f'<pre>{html.escape(body)}</pre>'

@@ -15,6 +15,7 @@ Covers:
 from __future__ import annotations
 
 import html
+import re
 import urllib.parse
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -63,6 +64,11 @@ def _button_urls(keyboard: InlineKeyboardMarkup) -> list[str]:
 def _button_texts(keyboard: InlineKeyboardMarkup) -> list[str]:
     """Extract text from all buttons in an inline keyboard."""
     return [button.text for row in keyboard.inline_keyboard for button in row]
+
+
+def _plain_custom_emoji_html(text: str) -> str:
+    """Keep the fallback emoji while removing Telegram custom-emoji markup."""
+    return re.sub(r'<tg-emoji\b[^>]*>(.*?)</tg-emoji>', r'\1', text, flags=re.DOTALL)
 
 
 @pytest.fixture
@@ -539,6 +545,7 @@ class TestGiftReplayAndPresentation:
             purchase_result=sample_purchase_result,
             bot_username='test_gift_bot',
         )
+        plain_text = _plain_custom_emoji_html(text)
 
         # 1. HTML escaping of tariff name
         assert html.escape('Premium <VIP> Plan & More') in text
@@ -549,12 +556,12 @@ class TestGiftReplayAndPresentation:
         assert '100 GB' in text or '100 ГБ' in text
 
         # 3. No financial data in message text
-        assert '300' not in text  # 300 RUB / 30000 kopeks
-        assert '350' not in text
-        assert '500' not in text  # user balance
-        assert '50' not in text  # discount
-        assert '555' not in text  # transaction id
-        assert 'gift_bot_chk' not in text
+        assert '300' not in plain_text  # 300 RUB / 30000 kopeks
+        assert '350' not in plain_text
+        assert '500' not in plain_text  # user balance
+        assert '50' not in plain_text  # discount
+        assert '555' not in plain_text  # transaction id
+        assert 'gift_bot_chk' not in plain_text
 
         # 4. Standalone token must not appear outside the canonical link
         raw_token = sample_purchase_result.purchase.token
@@ -625,9 +632,10 @@ class TestGiftReplayAndPresentation:
             bot_username='test_gift_bot',
             cabinet_url='https://cabinet.example.com',
         )
+        plain_text = _plain_custom_emoji_html(text)
 
-        assert bot_label in text
-        assert cabinet_label in text
+        assert bot_label in plain_text
+        assert cabinet_label in plain_text
         assert bot_claim_url in text
         assert cabinet_claim_url in text
         assert f'<code>{build_gift_public_code(raw_token)}</code>' in text

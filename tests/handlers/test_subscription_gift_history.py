@@ -22,6 +22,7 @@ Covers:
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -61,6 +62,11 @@ def _button_texts(keyboard: InlineKeyboardMarkup) -> list[str]:
 def _urls(keyboard: InlineKeyboardMarkup) -> list[str]:
     """Extract URLs from all url buttons in an inline keyboard."""
     return [button.url for row in keyboard.inline_keyboard for button in row if button.url]
+
+
+def _plain_custom_emoji_html(text: str) -> str:
+    """Keep the fallback emoji while removing Telegram custom-emoji markup."""
+    return re.sub(r'<tg-emoji\b[^>]*>(.*?)</tg-emoji>', r'\1', text, flags=re.DOTALL)
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
@@ -456,11 +462,12 @@ class TestSourceNeutralPresentation:
         assert _urls(kb_bot) == _urls(kb_cab)
 
         # Financial info must NOT appear
-        assert '30000' not in text_bot
-        assert '300.00' not in text_bot
-        assert 'руб' not in text_bot.lower()
-        assert '🤖 В Telegram:' in text_bot
-        assert '🌐 В личном кабинете:' in text_bot
+        plain_text = _plain_custom_emoji_html(text_bot)
+        assert '30000' not in plain_text
+        assert '300.00' not in plain_text
+        assert 'руб' not in plain_text.lower()
+        assert '🤖 В Telegram:' in plain_text
+        assert '🌐 В личном кабинете:' in plain_text
         assert any('t.me/TestGiftBot' in url for url in _urls(kb_bot))
         assert any('cabinet.example.com/buy/gift/' in url for url in _urls(kb_bot))
 
