@@ -119,6 +119,11 @@ class _Api:
             user_traffic=None,
         )
 
+    async def get_user_by_short_uuid(self, short_uuid):
+        # Same exact subscription identity, only through the pre-numeric-id
+        # Remnawave lookup used by migrated/disabled subscriptions.
+        return await self.get_user_by_id(short_uuid)
+
     async def get_user_devices_all(self, user_id):
         self._record('get_user_devices_all', user_id)
         return {'devices': [{'hwid': 'owned-hwid', 'platform': 'ios'}], 'total': 1}
@@ -310,6 +315,31 @@ async def test_panel_info_does_not_fall_back_to_user_panel_id_for_selected_unlin
         'remove_device': 0,
         'panel_ids': [],
     }
+
+
+async def test_panel_info_resolves_disabled_subscription_by_exact_short_uuid(monkeypatch, panel_service):
+    """A disabled panel user is not missing merely because its numeric id was never backfilled."""
+    selected = _subscription(OWNED_ID, OWNER_ID, panel_id=None)
+    selected.status = 'disabled'
+    selected.remnawave_short_uuid = 'disabled-short-uuid'
+    user = _user(selected, remnawave_id=LEGACY_USER_PANEL_ID)
+    monkeypatch.setattr(admin_users, 'get_user_by_id', AsyncMock(return_value=user))
+    monkeypatch.setattr(
+        admin_users,
+        '_get_owned_subscription_or_404',
+        AsyncMock(return_value=selected),
+    )
+
+    response = await admin_users.get_user_panel_info(
+        OWNER_ID,
+        admin=SimpleNamespace(id=1),
+        db=AsyncMock(),
+        subscription_id=OWNED_ID,
+    )
+
+    assert response.found is True
+    assert response.trojan_password == 'owned-panel-marker'  # pragma: allowlist secret
+    assert panel_service['panel_ids'] == ['disabled-short-uuid']
 
 
 @pytest.mark.parametrize(

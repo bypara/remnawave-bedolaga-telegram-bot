@@ -1035,10 +1035,20 @@ async def get_user_panel_info(
             detail='User not found',
         )
 
+    selected_subscription = None
     panel_user_id = None
+    panel_user_short_uuid = None
     if subscription_id is not None:
-        panel_user_id = (await _get_owned_subscription_or_404(db, subscription_id, user_id)).remnawave_id
-        if panel_user_id is None:
+        selected_subscription = await _get_owned_subscription_or_404(db, subscription_id, user_id)
+        panel_user_id = selected_subscription.remnawave_id
+        panel_user_short_uuid = getattr(selected_subscription, 'remnawave_short_uuid', None)
+        # Some subscriptions created before the numeric Remnawave id migration
+        # only retain their exact shortUuid.  DISABLED users still exist in the
+        # panel, so treating a missing numeric id as "not found" hid perfectly
+        # valid panel data in the admin cabinet.  shortUuid is subscription-scoped
+        # and therefore safe here; unlike telegram_id/email it cannot select a
+        # sibling subscription in multi-tariff mode.
+        if panel_user_id is None and not panel_user_short_uuid:
             return UserPanelInfoResponse(found=False)
 
     try:
@@ -1053,6 +1063,8 @@ async def get_user_panel_info(
 
             if subscription_id is not None and panel_user_id:
                 panel_user = await api.get_user_by_id(panel_user_id)
+            elif subscription_id is not None and panel_user_short_uuid:
+                panel_user = await api.get_user_by_short_uuid(panel_user_short_uuid)
             # Legacy fallback is only for callers that did not select a subscription.
             elif subscription_id is None and user.remnawave_id:
                 panel_user = await api.get_user_by_id(user.remnawave_id)
