@@ -24,10 +24,13 @@ from app.database.crud.tariff import (
     update_tariff,
 )
 from app.database.models import Subscription, SubscriptionStatus, Tariff, TransactionType, User
+from app.handlers.admin.tariff_custom_days import format_custom_days_settings, register_custom_days_handlers
 from app.handlers.admin.tariff_custom_traffic import (
     format_custom_traffic_settings,
     register_custom_traffic_handlers,
 )
+from app.handlers.admin.tariff_panel_settings import format_panel_settings, register_panel_settings_handlers
+from app.handlers.admin.tariff_server_limits import format_server_limits_summary, register_server_limits_handlers
 from app.localization.texts import Texts, get_texts
 from app.services.tariff_assignment_service import apply_tariff_limits, move_to_tariff, preview_limits
 from app.states import AdminStates
@@ -194,6 +197,10 @@ def get_tariff_view_keyboard(
                 text='⚙️ Произвольный трафик',
                 callback_data=f'admin_tariff_edit_custom_traffic:{tariff.id}',
             ),
+            InlineKeyboardButton(
+                text='📅 Произвольные дни',
+                callback_data=f'admin_tariff_edit_custom_days:{tariff.id}',
+            ),
         ]
     )
     buttons.append(
@@ -212,6 +219,14 @@ def get_tariff_view_keyboard(
         [
             InlineKeyboardButton(text='🌐 Серверы', callback_data=f'admin_tariff_edit_squads:{tariff.id}'),
             InlineKeyboardButton(text='👥 Промогруппы', callback_data=f'admin_tariff_edit_promo:{tariff.id}'),
+        ]
+    )
+    buttons.append(
+        [
+            InlineKeyboardButton(
+                text='🗄️ Лимиты по серверам', callback_data=f'admin_tariff_edit_server_limits:{tariff.id}'
+            ),
+            InlineKeyboardButton(text='⚙️ Ещё настройки', callback_data=f'admin_tariff_edit_more:{tariff.id}'),
         ]
     )
 
@@ -254,7 +269,11 @@ def get_tariff_view_keyboard(
 
     # Удаление
     buttons.append(
-        [InlineKeyboardButton(text='🔄 Обновить параметры подписок', callback_data=f'admin_tariff_sync_limits:{tariff.id}')]
+        [
+            InlineKeyboardButton(
+                text='🔄 Обновить параметры подписок', callback_data=f'admin_tariff_sync_limits:{tariff.id}'
+            )
+        ]
     )
     buttons.append(
         [InlineKeyboardButton(text='🚚 Перенести подписчиков', callback_data=f'admin_tariff_migrate:{tariff.id}')]
@@ -362,7 +381,10 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
 
     # Форматируем произвольный трафик и докупку трафика
     custom_traffic_display = format_custom_traffic_settings(tariff)
+    custom_days_display = format_custom_days_settings(tariff)
     traffic_topup_display = _format_traffic_topup_packages(tariff)
+    server_limits_display = format_server_limits_summary(tariff)
+    panel_settings_display = format_panel_settings(tariff)
 
     # Форматируем режим сброса трафика
     traffic_reset_mode = getattr(tariff, 'traffic_reset_mode', None)
@@ -397,6 +419,9 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
 <b>Произвольный трафик:</b>
 {custom_traffic_display}
 
+<b>Произвольные дни:</b>
+{custom_days_display}
+
 <b>Докупка трафика:</b>
 {traffic_topup_display}
 
@@ -405,7 +430,11 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
 {price_block}
 
 <b>Серверы:</b> {squads_display}
+<b>Лимиты по серверам:</b> {server_limits_display}
 <b>Промогруппы:</b> {promo_display}
+
+<b>Панель и прочее:</b>
+{panel_settings_display}
 
 📊 Подписок на тарифе: {subs_count}
 
@@ -3036,7 +3065,11 @@ async def preview_tariff_limit_sync(callback: types.CallbackQuery, db_user: User
         'Срок, статус, использованный трафик и оплаченные дополнения сохранятся.',
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text='✅ Обновить', callback_data=f'admin_tariff_sync_limits_confirm:{tariff_id}')],
+                [
+                    InlineKeyboardButton(
+                        text='✅ Обновить', callback_data=f'admin_tariff_sync_limits_confirm:{tariff_id}'
+                    )
+                ],
                 [InlineKeyboardButton(text='◀️ Назад', callback_data=f'admin_tariff_view:{tariff_id}')],
             ]
         ),
@@ -3140,7 +3173,11 @@ async def preview_tariff_migration(callback: types.CallbackQuery, db_user: User,
         'Срок и статус сохранятся. Автопродление старого тарифа будет отключено.',
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text='✅ Перенести', callback_data=f'admin_tariff_migrate_confirm:{source_id}:{target_id}')],
+                [
+                    InlineKeyboardButton(
+                        text='✅ Перенести', callback_data=f'admin_tariff_migrate_confirm:{source_id}:{target_id}'
+                    )
+                ],
                 [InlineKeyboardButton(text='◀️ Назад', callback_data=f'admin_tariff_migrate:{source_id}')],
             ]
         ),
@@ -3198,8 +3235,11 @@ async def confirm_tariff_migration(callback: types.CallbackQuery, db_user: User,
 
 def register_handlers(dp: Dispatcher):
     """Регистрирует обработчики для управления тарифами."""
-    # Произвольный трафик регистрируется до общего toggle-фильтра.
+    # Отдельные экраны регистрируются до общего toggle-фильтра.
     register_custom_traffic_handlers(dp)
+    register_custom_days_handlers(dp)
+    register_panel_settings_handlers(dp)
+    register_server_limits_handlers(dp)
 
     # Список тарифов
     dp.callback_query.register(show_tariffs_list, F.data == 'admin_tariffs')
@@ -3218,13 +3258,9 @@ def register_handlers(dp: Dispatcher):
         & ~F.data.startswith('admin_tariff_toggle_daily:'),
     )
     dp.callback_query.register(toggle_trial_tariff, F.data.startswith('admin_tariff_toggle_trial:'))
-    dp.callback_query.register(
-        confirm_tariff_limit_sync, F.data.startswith('admin_tariff_sync_limits_confirm:')
-    )
+    dp.callback_query.register(confirm_tariff_limit_sync, F.data.startswith('admin_tariff_sync_limits_confirm:'))
     dp.callback_query.register(preview_tariff_limit_sync, F.data.startswith('admin_tariff_sync_limits:'))
-    dp.callback_query.register(
-        confirm_tariff_migration, F.data.startswith('admin_tariff_migrate_confirm:')
-    )
+    dp.callback_query.register(confirm_tariff_migration, F.data.startswith('admin_tariff_migrate_confirm:'))
     dp.callback_query.register(preview_tariff_migration, F.data.startswith('admin_tariff_migrate_target:'))
     dp.callback_query.register(choose_tariff_migration_target, F.data.startswith('admin_tariff_migrate:'))
 

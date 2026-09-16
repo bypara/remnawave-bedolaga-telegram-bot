@@ -2024,6 +2024,11 @@
   "REFERRAL_WITHDRAWAL_STATS_PENDING": "⏳ در حال بررسی: <b>{amount}</b>",
   "AUTO_PURCHASE_DEVICES_SUCCESS": "✅ <b>دستگاه‌ها به‌طور خودکار اضافه شدند!</b>\n\n📱 افزوده‌شده: {devices_to_add} دستگاه\n📊 سقف جدید: {new_limit} دستگاه\n💰 کسرشده: {price}",
   "AUTO_PURCHASE_TRAFFIC_SUCCESS": "✅ <b>ترافیک به‌طور خودکار اضافه شد!</b>\n\n📈 افزوده‌شده: {traffic_gb} گیگابایت\n📊 سقف جدید: {new_limit} گیگابایت\n💰 کسرشده: {price}",
+  "ADDON_CART_STILL_INSUFFICIENT": "❌ هنوز موجودی کافی نیست\n\nمورد نیاز: {required}\nموجودی شما: {balance}\nکمبود: {missing}",
+  "ADDON_CART_COMPLETED": "✅ انجام شد!",
+  "ADDON_CART_FAILED": "❌ خرید تکمیل نشد. دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.",
+  "ADDON_PURCHASE_TRAFFIC_SUCCESS": "✅ <b>ترافیک اضافه شد!</b>\n\n📈 اضافه شده: {traffic_gb} گیگابایت\n📊 محدودیت جدید: {new_limit} گیگابایت\n💰 کسر شده: {price}",
+  "ADDON_PURCHASE_DEVICES_SUCCESS": "✅ <b>دستگاه‌ها اضافه شدند!</b>\n\n📱 اضافه شده: {devices_to_add} دستگاه\n📊 محدودیت جدید: {new_limit} دستگاه\n💰 کسر شده: {price}",
   "BTN_RENEW_SUBSCRIPTION": "⏰ تمدید اشتراک",
   "BTN_TOPUP_BALANCE": "💳 شارژ موجودی",
   "PAYMENT_SUCCESS_CLOUDPAYMENTS": "✅ <b>پرداخت دریافت شد!</b>\n\n💰 مبلغ: {amount}₽\n💳 روش: CloudPayments\n💵 موجودی: {balance}₽\n\nاز شارژ شما متشکریم!",
@@ -2295,5 +2300,8 @@
   "PROFILE_WEB_CABINET_BUTTON": "🌐 Web dashboard",
   "REFERRAL_CHANNEL_NOT_CONFIGURED": "Subscription verification is temporarily unavailable. Please try again later.",
   "REFERRAL_CHANNEL_REQUIRED_TEXT": "<tg-emoji emoji-id=\"5258486128742244085\">👥</tg-emoji> <b>Join the channel</b>\n\nA channel subscription is required for users who joined through a referral link.\n\nAfter joining, press “I have joined”.",
-  "WEB_AUTH_DENIED": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> Sign-in cancelled."
+  "WEB_AUTH_DENIED": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> Sign-in cancelled.",
+  "GRACE_ACCESS_GRANTED_EXPIRED": "🛟 <b>اشتراک{tariff_label} تمام شد، اما ارتباط قطع نشد</b>\n\nتا {hours} ساعت فقط این در دسترس می‌ماند: {allowed}. برای این مدت {traffic_gb} گیگابایت ترافیک دارید تا بتوانید اشتراک را تمدید کنید. بقیه تا تمدید کار نمی‌کند.\n\n⏳ تا {until}.",
+  "GRACE_ACCESS_GRANTED_LIMITED": "🛟 <b>ترافیک اشتراک{tariff_label} تمام شد، اما ارتباط قطع نشد</b>\n\nتا {hours} ساعت فقط این در دسترس می‌ماند: {allowed}. برای این مدت {traffic_gb} گیگابایت ترافیک دارید تا بتوانید ترافیک بخرید یا اشتراک را تمدید کنید. بقیه تا پرداخت کار نمی‌کند.\n\n⏳ تا {until}.",
+  "GRACE_ACCESS_ENDED": "⌛ <b>دسترسی موقت تمام شد</b>\n\nاشتراک{tariff_label} تمدید نشد و دسترسی موقت بسته شد. آنچه باقی مانده بود هم دیگر کار نمی‌کند: {allowed}. برای بازگشت VPN اشتراک را تمدید کنید."
 }

@@ -30,10 +30,7 @@ logger = structlog.get_logger(__name__)
 def _build_poll_invitation_text(poll: Poll, language: str) -> str:
     texts = get_texts(language)
 
-    lines: list[str] = [
-        '<tg-emoji emoji-id="5424818078833715060">📣</tg-emoji> '
-        f'<b>{html.escape(poll.title)}</b>'
-    ]
+    lines: list[str] = [(f'<tg-emoji emoji-id="5424818078833715060">📣</tg-emoji> <b>{html.escape(poll.title)}</b>')]
     if poll.description:
         lines.append(html.escape(poll.description))
 

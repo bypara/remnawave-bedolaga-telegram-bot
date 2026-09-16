@@ -1792,6 +1792,11 @@
   "REFERRAL_WITHDRAWAL_STATS_PENDING": "⏳ На розгляді: <b>{amount}</b>",
   "AUTO_PURCHASE_DEVICES_SUCCESS": "✅ <b>Пристрої додано автоматично!</b>\n\n📱 Додано: {devices_to_add} пристроїв\n📊 Новий ліміт: {new_limit} пристроїв\n💰 Списано: {price}",
   "AUTO_PURCHASE_TRAFFIC_SUCCESS": "✅ <b>Трафік додано автоматично!</b>\n\n📈 Додано: {traffic_gb} ГБ\n📊 Новий ліміт: {new_limit} ГБ\n💰 Списано: {price}",
+  "ADDON_CART_STILL_INSUFFICIENT": "❌ Все ще недостатньо коштів\n\nПотрібно: {required}\nУ вас: {balance}\nНе вистачає: {missing}",
+  "ADDON_CART_COMPLETED": "✅ Готово!",
+  "ADDON_CART_FAILED": "❌ Не вдалося завершити покупку. Спробуйте ще раз або напишіть у підтримку.",
+  "ADDON_PURCHASE_TRAFFIC_SUCCESS": "✅ <b>Трафік додано!</b>\n\n📈 Додано: {traffic_gb} ГБ\n📊 Новий ліміт: {new_limit} ГБ\n💰 Списано: {price}",
+  "ADDON_PURCHASE_DEVICES_SUCCESS": "✅ <b>Пристрої додано!</b>\n\n📱 Додано: {devices_to_add} пристроїв\n📊 Новий ліміт: {new_limit} пристроїв\n💰 Списано: {price}",
   "BTN_RENEW_SUBSCRIPTION": "⏰ Продовжити підписку",
   "BTN_TOPUP_BALANCE": "💳 Поповнити баланс",
   "PAYMENT_SUCCESS_CLOUDPAYMENTS": "✅ <b>Оплату отримано!</b>\n\n💰 Сума: {amount}₽\n💳 Спосіб: CloudPayments\n💵 Баланс: {balance}₽\n\nДякуємо за поповнення!",
@@ -2295,5 +2300,8 @@
   "PROFILE_WEB_CABINET_BUTTON": "🌐 Вебкабінет",
   "REFERRAL_CHANNEL_NOT_CONFIGURED": "Перевірка підписки тимчасово недоступна. Спробуйте пізніше.",
   "REFERRAL_CHANNEL_REQUIRED_TEXT": "<tg-emoji emoji-id=\"5258486128742244085\">👥</tg-emoji> <b>Підпишіться на канал</b>\n\nДля користувачів, які перейшли за реферальним посиланням, потрібна підписка на канал.\n\nПісля підписки натисніть «Я підписався».",
-  "WEB_AUTH_DENIED": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> Вхід скасовано."
+  "WEB_AUTH_DENIED": "<tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> Вхід скасовано.",
+  "GRACE_ACCESS_GRANTED_EXPIRED": "🛟 <b>Підписка{tariff_label} закінчилась, але зв'язок залишили</b>\n\nНа {hours} год. доступно лише: {allowed}. Трафіку на цей час — {traffic_gb} ГБ, щоб ви встигли продовжити підписку. Решта не працює до продовження.\n\n⏳ До {until}.",
+  "GRACE_ACCESS_GRANTED_LIMITED": "🛟 <b>Трафік за підпискою{tariff_label} закінчився, але зв'язок залишили</b>\n\nНа {hours} год. доступно лише: {allowed}. Трафіку на цей час — {traffic_gb} ГБ, щоб ви встигли докупити трафік або продовжити підписку. Решта не працює до оплати.\n\n⏳ До {until}.",
+  "GRACE_ACCESS_ENDED": "⌛ <b>Тимчасовий доступ закінчився</b>\n\nПідписку{tariff_label} так і не продовжено, тимчасовий доступ закрито. Більше не працює і те, що залишалось: {allowed}. Продовжте підписку, щоб повернути VPN."
 }

@@ -1,129 +1,53 @@
-"""Режим поддержки из JSON не доезжал до ``settings`` после рестарта.
-
-``SupportSettingsService`` хранит режим в ``data/support_settings.json``.
-``set_system_mode`` писал JSON *и* обновлял ``settings.SUPPORT_SYSTEM_MODE`` в
-памяти — поэтому в рамках одного запуска всё выглядело согласованно. Но
-``_load`` при старте поднимал JSON и ``settings`` не трогал.
-
-После рестарта источников истины становилось два:
-
-* бот читает режим через сервис — видит значение из JSON;
-* веб-кабинет (``cabinet/routes/tickets.py``, ``cabinet/routes/info.py``)
-  читает ``settings.is_support_tickets_enabled()`` — видит значение из ``.env``.
-
-Итог: режим ``contact``, выставленный из админки бота, после рестарта в
-кабинете игнорировался и тикеты снова открывались.
-
-Фикс: ``_load`` зеркалит persisted-значения в ``settings`` через
-``_sync_settings``.
-"""
-
-from __future__ import annotations
+"""Support settings stay shared by the bot and cabinet across DB initialization."""
 
 import json
 
 import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.config import settings
+from app.database.crud.system_setting import get_setting_value
+from app.database.models import SystemSetting
 from app.services.support_settings_service import SupportSettingsService
 from app.services.system_settings_service import bot_configuration_service
+from tests.fixtures.sqlite_memory import memory_session
 
 
-@pytest.fixture
-def support_storage(tmp_path, monkeypatch):
-    """Изолированное JSON-хранилище + сброс кеша класса на каждый тест."""
-    storage = tmp_path / 'support_settings.json'
-    monkeypatch.setattr(SupportSettingsService, '_storage_path', storage)
-    monkeypatch.setattr(SupportSettingsService, '_data', {})
-    monkeypatch.setattr(SupportSettingsService, '_loaded', False)
+@pytest.fixture(autouse=True)
+def isolated_settings(monkeypatch, tmp_path):
+    bot_configuration_service.initialize_definitions()
+    for key in ('SUPPORT_SYSTEM_MODE', 'SUPPORT_MENU_ENABLED'):
+        monkeypatch.setattr(settings, key, getattr(settings, key))
+    monkeypatch.setattr(bot_configuration_service, '_overrides_raw', {})
+    monkeypatch.setattr(bot_configuration_service, '_env_override_keys', set())
+    monkeypatch.setattr(SupportSettingsService, '_legacy_path', tmp_path / 'support_settings.json')
+
+
+@pytest.mark.asyncio
+async def test_support_mode_survives_db_initialization(monkeypatch):
+    async with memory_session(monkeypatch, [SystemSetting.__table__]) as db:
+        assert await SupportSettingsService.set_system_mode(db, 'contact')
+        assert await SupportSettingsService.set_support_menu_enabled(db, False)
+        maker = async_sessionmaker(db.bind, expire_on_commit=False)
+        monkeypatch.setattr('app.services.system_settings_service.AsyncSessionLocal', maker)
+        monkeypatch.setattr(settings, 'SUPPORT_SYSTEM_MODE', 'both')
+        monkeypatch.setattr(settings, 'SUPPORT_MENU_ENABLED', True)
+        bot_configuration_service._overrides_raw.clear()
+        await bot_configuration_service.initialize(sync_web_api_token=False)
+        assert SupportSettingsService.get_system_mode() == 'contact'
+        assert settings.is_support_tickets_enabled() is False
+        assert SupportSettingsService.is_support_menu_enabled() is False
+
+
+@pytest.mark.asyncio
+async def test_legacy_import_does_not_clobber_env_mode(monkeypatch):
+    legacy = SupportSettingsService._legacy_path
+    legacy.write_text(json.dumps({'system_mode': 'tickets'}), encoding='utf-8')
     monkeypatch.setattr(settings, 'SUPPORT_SYSTEM_MODE', 'both')
-    monkeypatch.setattr(settings, 'SUPPORT_MENU_ENABLED', True)
-    return storage
-
-
-def _simulate_restart(monkeypatch) -> None:
-    """Сбросить кеш класса, как при старте нового процесса."""
-    monkeypatch.setattr(SupportSettingsService, '_data', {})
-    monkeypatch.setattr(SupportSettingsService, '_loaded', False)
-
-
-def test_load_syncs_system_mode_into_settings(support_storage, monkeypatch):
-    """REGRESSION: persisted-режим должен доезжать до settings при загрузке —
-    иначе кабинет продолжает отдавать значение из .env."""
-    support_storage.write_text(json.dumps({'system_mode': 'contact'}), encoding='utf-8')
-
-    assert SupportSettingsService.get_system_mode() == 'contact'
-    assert settings.SUPPORT_SYSTEM_MODE == 'contact'
-    # Главное следствие: кабинетный guard тикетов теперь согласован с ботом
-    assert settings.is_support_tickets_enabled() is False
-
-
-def test_mode_survives_restart_for_cabinet(support_storage, monkeypatch):
-    """REGRESSION (сквозной сценарий): админ выключил тикеты в боте, бот
-    перезапустился — кабинет обязан по-прежнему считать тикеты выключенными."""
-    assert SupportSettingsService.set_system_mode('contact') is True
-    assert settings.is_support_tickets_enabled() is False
-
-    # Рестарт: settings поднимается из .env, кеш сервиса пуст
-    _simulate_restart(monkeypatch)
-    monkeypatch.setattr(settings, 'SUPPORT_SYSTEM_MODE', 'both')
-
-    SupportSettingsService._load()
-
-    assert settings.SUPPORT_SYSTEM_MODE == 'contact'
-    assert settings.is_support_tickets_enabled() is False
-
-
-def test_env_mode_is_not_clobbered_by_stale_json_on_first_load(support_storage, monkeypatch):
-    """ENV остаётся источником истины даже если legacy JSON загрузился первым."""
-    support_storage.write_text(json.dumps({'system_mode': 'tickets'}), encoding='utf-8')
-    monkeypatch.setattr(settings, 'SUPPORT_SYSTEM_MODE', 'both')
-    monkeypatch.setattr(bot_configuration_service, 'is_env_overridden', lambda key: key == 'SUPPORT_SYSTEM_MODE')
-    monkeypatch.setattr(bot_configuration_service, 'has_override', lambda key: False)
-
-    SupportSettingsService._load()
-
-    assert settings.SUPPORT_SYSTEM_MODE == 'both'
-    assert SupportSettingsService.get_system_mode() == 'both'
-    assert SupportSettingsService.is_tickets_enabled() is True
-    assert SupportSettingsService.is_contact_enabled() is True
-
-
-def test_load_syncs_menu_enabled_into_settings(support_storage):
-    """REGRESSION: у menu_enabled была ровно та же проблема."""
-    support_storage.write_text(json.dumps({'menu_enabled': False}), encoding='utf-8')
-
-    assert SupportSettingsService.is_support_menu_enabled() is False
-    assert settings.SUPPORT_MENU_ENABLED is False
-
-
-def test_set_support_menu_enabled_syncs_settings(support_storage):
-    """Сеттер меню тоже обязан обновлять settings (раньше не обновлял вовсе)."""
-    assert SupportSettingsService.set_support_menu_enabled(False) is True
-    assert settings.SUPPORT_MENU_ENABLED is False
-
-
-def test_absent_json_keeps_env_value(support_storage):
-    """Без сохранённого значения settings остаётся как задан в .env."""
-    SupportSettingsService._load()
-
-    assert settings.SUPPORT_SYSTEM_MODE == 'both'
-    assert settings.SUPPORT_MENU_ENABLED is True
-
-
-def test_invalid_persisted_mode_does_not_clobber_settings(support_storage):
-    """Мусор в JSON не должен затирать settings невалидным режимом."""
-    support_storage.write_text(json.dumps({'system_mode': 'nonsense'}), encoding='utf-8')
-
-    assert SupportSettingsService.get_system_mode() == 'both'  # нормализация
-    assert settings.SUPPORT_SYSTEM_MODE == 'both'
-
-
-def test_corrupt_json_does_not_clobber_settings(support_storage, monkeypatch):
-    """Битый JSON: _load глотает ошибку, settings остаётся из .env."""
-    monkeypatch.setattr(settings, 'SUPPORT_SYSTEM_MODE', 'tickets')
-    support_storage.write_text('{not json', encoding='utf-8')
-
-    SupportSettingsService._load()
-
-    assert settings.SUPPORT_SYSTEM_MODE == 'tickets'
+    monkeypatch.setattr(bot_configuration_service, '_env_override_keys', {'SUPPORT_SYSTEM_MODE'})
+    async with memory_session(monkeypatch, [SystemSetting.__table__]) as db:
+        await SupportSettingsService.import_legacy_file(db)
+        assert await get_setting_value(db, 'SUPPORT_SYSTEM_MODE') == 'tickets'
+        assert SupportSettingsService.get_system_mode() == 'both'
+        assert SupportSettingsService.is_tickets_enabled() is True
+        assert SupportSettingsService.is_contact_enabled() is True

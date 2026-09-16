@@ -110,6 +110,19 @@ class Settings(BaseSettings):
     SUPPORT_TICKET_SLA_MINUTES: int = 60
     SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS: int = 300
     SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES: int = 30
+    # Настройки поддержки из админки бота и кабинета. Хранятся в базе (system_settings), а не в файле.
+    SUPPORT_ADMIN_TICKET_NOTIFICATIONS_ENABLED: bool = True
+    SUPPORT_USER_TICKET_NOTIFICATIONS_ENABLED: bool = True
+    SUPPORT_CABINET_USER_NOTIFICATIONS_ENABLED: bool = True
+    SUPPORT_CABINET_ADMIN_NOTIFICATIONS_ENABLED: bool = True
+    # Telegram ID модераторов поддержки через запятую, как ADMIN_IDS.
+    SUPPORT_MODERATOR_IDS: str = ''
+    # Текст «о поддержке» по языкам (HTML); пусто — текст локали.
+    SUPPORT_INFO_TEXT_RU: str = ''
+    SUPPORT_INFO_TEXT_EN: str = ''
+    SUPPORT_INFO_TEXT_UA: str = ''
+    SUPPORT_INFO_TEXT_ZH: str = ''
+    SUPPORT_INFO_TEXT_FA: str = ''
 
     # MiniApp tickets settings
     MINIAPP_TICKETS_ENABLED: bool = True  # Enable/disable tickets section in miniapp
@@ -216,6 +229,10 @@ class Settings(BaseSettings):
     # таймауты логируются как WARNING, чтобы не спамить админ-чат ошибками.
     REMNAWAVE_API_CONNECT_TIMEOUT: int = 30
     REMNAWAVE_API_TOTAL_TIMEOUT: int = 60
+    # Свой потолок запросов к панели в минуту (0 — без ограничения). Нужен, когда перед
+    # панелью прокси с лимитом частоты (шаблонный Caddyfile: 100/мин на /api/*), а
+    # исключить адрес бота из него нельзя: иначе массовая синхронизация ловит 429.
+    REMNAWAVE_API_REQUESTS_PER_MINUTE: int = 0
 
     REMNAWAVE_USERNAME: str | None = None
     REMNAWAVE_PASSWORD: str | None = None
@@ -253,6 +270,15 @@ class Settings(BaseSettings):
     GRACE_ACCESS_TRIAL_ENABLED: bool = False
     GRACE_ACCESS_DAILY_ENABLED: bool = False
     GRACE_ACCESS_FREE_ENABLED: bool = False
+    # Уведомления о выдаче и завершении grace: админам в чат уведомлений (категория
+    # «Продления») и самому человеку в бота. Молчаливая выдача — «втухлую» — оставляла
+    # и админа, и человека в неведении, что доступ временный и только к Telegram.
+    GRACE_ACCESS_NOTIFY_ADMINS: bool = True
+    GRACE_ACCESS_NOTIFY_USER: bool = True
+    # Что остаётся доступным во время grace — словами оператора для сообщений
+    # человеку («Telegram», «Telegram и личный кабинет», «сайт проекта»…). Сквад
+    # grace пропускает то, что настроено на нодах; бот об этом только сообщает.
+    GRACE_ACCESS_ALLOWED_SERVICES: str = 'Telegram'
     GRACE_ACCESS_RECONCILE_INTERVAL_SECONDS: int = 60
     GRACE_ACCESS_RECONCILE_BATCH_SIZE: int = 200
     GRACE_ACCESS_CANDIDATE_LOOKBACK_MINUTES: int = 30
@@ -305,6 +331,17 @@ class Settings(BaseSettings):
     TRIAL_WARNING_HOURS: int = 2
     ENABLE_NOTIFICATIONS: bool = True
     NOTIFICATION_RETRY_ATTEMPTS: int = 3
+    # Уведомления истёкшим и отписавшимся от канала — переключатели меню «Уведомления пользователям»
+    # в админке бота и раздела настроек кабинета. Хранятся в базе (system_settings), а не в файле.
+    NOTIFICATION_TRIAL_CHANNEL_UNSUBSCRIBED_ENABLED: bool = True
+    NOTIFICATION_EXPIRED_1D_ENABLED: bool = True
+    NOTIFICATION_EXPIRED_WAVE2_ENABLED: bool = True
+    NOTIFICATION_EXPIRED_WAVE2_DISCOUNT_PERCENT: int = 10
+    NOTIFICATION_EXPIRED_WAVE2_VALID_HOURS: int = 24
+    NOTIFICATION_EXPIRED_WAVE3_ENABLED: bool = True
+    NOTIFICATION_EXPIRED_WAVE3_DISCOUNT_PERCENT: int = 20
+    NOTIFICATION_EXPIRED_WAVE3_VALID_HOURS: int = 24
+    NOTIFICATION_EXPIRED_WAVE3_TRIGGER_DAYS: int = 5
 
     MONITORING_LOGS_RETENTION_DAYS: int = 30
     NOTIFICATION_CACHE_HOURS: int = 24
@@ -1760,11 +1797,11 @@ class Settings(BaseSettings):
 
     def get_proxy_url(self) -> str | None:
         """Return SOCKS5 proxy URL or None."""
-        return self.PROXY_URL if self.PROXY_URL else None
+        return self.PROXY_URL or None
 
     def get_telegram_api_url(self) -> str | None:
         """Return custom Telegram Bot API server URL or None."""
-        return self.TELEGRAM_API_URL if self.TELEGRAM_API_URL else None
+        return self.TELEGRAM_API_URL or None
 
     def get_nalogo_proxy_url(self) -> str | None:
         """Return SOCKS proxy URL for nalogo or None.
@@ -2894,7 +2931,7 @@ class Settings(BaseSettings):
 
     def get_severpay_display_name(self) -> str:
         name = (self.SEVERPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'SeverPay'
+        return name or 'SeverPay'
 
     def get_severpay_display_name_html(self) -> str:
         return html.escape(self.get_severpay_display_name())
@@ -2982,7 +3019,7 @@ class Settings(BaseSettings):
 
     def get_paypear_display_name(self) -> str:
         name = (self.PAYPEAR_DISPLAY_NAME or '').strip()
-        return name if name else 'PayPear'
+        return name or 'PayPear'
 
     def get_paypear_display_name_html(self) -> str:
         return html.escape(self.get_paypear_display_name())
@@ -2996,7 +3033,7 @@ class Settings(BaseSettings):
 
     def get_rollypay_display_name(self) -> str:
         name = (self.ROLLYPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'RollyPay'
+        return name or 'RollyPay'
 
     def get_rollypay_display_name_html(self) -> str:
         return html.escape(self.get_rollypay_display_name())
@@ -3019,7 +3056,7 @@ class Settings(BaseSettings):
 
     def get_overpay_display_name(self) -> str:
         name = (self.OVERPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'Overpay'
+        return name or 'Overpay'
 
     def get_overpay_display_name_html(self) -> str:
         return html.escape(self.get_overpay_display_name())
@@ -3056,7 +3093,7 @@ class Settings(BaseSettings):
 
     def get_aurapay_display_name(self) -> str:
         name = (self.AURAPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'AuraPay'
+        return name or 'AuraPay'
 
     def get_aurapay_display_name_html(self) -> str:
         return html.escape(self.get_aurapay_display_name())
@@ -3101,7 +3138,7 @@ class Settings(BaseSettings):
 
     def get_antilopay_display_name(self) -> str:
         name = (self.ANTILOPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'Antilopay'
+        return name or 'Antilopay'
 
     def get_antilopay_display_name_html(self) -> str:
         return html.escape(self.get_antilopay_display_name())
@@ -3145,7 +3182,7 @@ class Settings(BaseSettings):
 
     def get_jupiter_display_name(self) -> str:
         name = (self.JUPITER_DISPLAY_NAME or '').strip()
-        return name if name else 'Jupiter'
+        return name or 'Jupiter'
 
     def get_jupiter_display_name_html(self) -> str:
         return html.escape(self.get_jupiter_display_name())
@@ -3282,7 +3319,7 @@ class Settings(BaseSettings):
 
     def get_donut_display_name(self) -> str:
         name = (self.DONUT_DISPLAY_NAME or '').strip()
-        return name if name else 'Donut'
+        return name or 'Donut'
 
     def get_donut_display_name_html(self) -> str:
         return html.escape(self.get_donut_display_name())
@@ -3333,7 +3370,7 @@ class Settings(BaseSettings):
 
     def get_lava_display_name(self) -> str:
         name = (self.LAVA_DISPLAY_NAME or '').strip()
-        return name if name else 'Lava'
+        return name or 'Lava'
 
     def get_lava_display_name_html(self) -> str:
         return html.escape(self.get_lava_display_name())
@@ -3374,7 +3411,7 @@ class Settings(BaseSettings):
 
     def get_etoplatezhi_display_name(self) -> str:
         name = (self.ETOPLATEZHI_DISPLAY_NAME or '').strip()
-        return name if name else 'Etoplatezhi'
+        return name or 'Etoplatezhi'
 
     def get_etoplatezhi_display_name_html(self) -> str:
         return html.escape(self.get_etoplatezhi_display_name())
@@ -3404,7 +3441,7 @@ class Settings(BaseSettings):
 
     def get_kassa_ai_sbp_display_name(self) -> str:
         name = (self.KASSA_AI_SBP_DISPLAY_NAME or '').strip()
-        return name if name else 'СБП (KassaAI)'
+        return name or 'СБП (KassaAI)'
 
     def get_kassa_ai_sbp_display_name_html(self) -> str:
         return html.escape(self.get_kassa_ai_sbp_display_name())
@@ -3414,7 +3451,7 @@ class Settings(BaseSettings):
 
     def get_kassa_ai_card_display_name(self) -> str:
         name = (self.KASSA_AI_CARD_DISPLAY_NAME or '').strip()
-        return name if name else 'Карта (KassaAI)'
+        return name or 'Карта (KassaAI)'
 
     def get_kassa_ai_card_display_name_html(self) -> str:
         return html.escape(self.get_kassa_ai_card_display_name())
@@ -3424,7 +3461,7 @@ class Settings(BaseSettings):
 
     def get_kassa_ai_sberpay_display_name(self) -> str:
         name = (self.KASSA_AI_SBERPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'SberPay (KassaAI)'
+        return name or 'SberPay (KassaAI)'
 
     def get_kassa_ai_sberpay_display_name_html(self) -> str:
         return html.escape(self.get_kassa_ai_sberpay_display_name())
@@ -3816,7 +3853,7 @@ class Settings(BaseSettings):
         Неизвестное значение трактуется как 'chain', а не как ошибка: опечатка в
         .env не должна менять схему выплат на ту, которую админ не выбирал.
         """
-        from app.database.crud.referral_reward_level import LEVELS_MODE_CHAIN, LEVELS_MODE_TIERS
+        from app.referral_levels import LEVELS_MODE_CHAIN, LEVELS_MODE_TIERS
 
         value = str(self.REFERRAL_LEVELS_MODE or '').strip().lower()
         return LEVELS_MODE_TIERS if value == LEVELS_MODE_TIERS else LEVELS_MODE_CHAIN
@@ -3839,7 +3876,7 @@ class Settings(BaseSettings):
         Проверяется вместе со схемой: режим — это уточнение внутри 'levels', и
         сам по себе, при классической схеме, он ничего не значит.
         """
-        from app.database.crud.referral_reward_level import LEVELS_MODE_TIERS
+        from app.referral_levels import LEVELS_MODE_TIERS
 
         return self.is_referral_levels_scheme() and self.get_referral_levels_mode() == LEVELS_MODE_TIERS
 
@@ -3857,7 +3894,7 @@ class Settings(BaseSettings):
         get_referral_effective_max_level(), а показывать глубину пользователю в
         режиме рангов не нужно вовсе — там её нет.
         """
-        from app.database.crud.referral_reward_level import MAX_SUPPORTED_LEVEL
+        from app.referral_levels import MAX_SUPPORTED_LEVEL
 
         return max(1, min(MAX_SUPPORTED_LEVEL, int(self.REFERRAL_MAX_LEVEL_DEPTH or 1)))
 
@@ -3869,7 +3906,7 @@ class Settings(BaseSettings):
         В режиме рангов ограничения нет — ранг не обходится, а выбирается по числу
         рефералов, поэтому работают все заведённые уровни.
         """
-        from app.database.crud.referral_reward_level import MAX_SUPPORTED_LEVEL
+        from app.referral_levels import MAX_SUPPORTED_LEVEL
 
         if self.is_referral_tier_levels():
             return MAX_SUPPORTED_LEVEL

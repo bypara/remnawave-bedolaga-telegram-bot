@@ -45,6 +45,7 @@ from app.services.legal_document_link_service import (
 )
 from app.services.pricing_engine import pricing_engine
 from app.services.remnawave_service import RemnaWaveConfigurationError
+from app.services.subscription_auto_purchase_service import ADDON_CART_MODES
 from app.services.subscription_checkout_service import (
     clear_subscription_checkout_draft,
     get_subscription_checkout_draft,
@@ -1443,6 +1444,14 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
         await return_to_saved_tariff_cart(callback, state, db_user, db, cart_data)
         return
 
+    # Докупка трафика/устройств — не подписка: у такой корзины нет period_days,
+    # и общая ветка ниже объявляла её «повреждённой» и удаляла.
+    if cart_mode in ADDON_CART_MODES:
+        from .addon_cart import resume_addon_cart_from_button
+
+        await resume_addon_cart_from_button(callback, db_user, db, cart_data)
+        return
+
     preserved_metadata_keys = {
         'saved_cart',
         'missing_amount',
@@ -2470,6 +2479,11 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 except Exception as conversion_error:
                     logger.error('Ошибка записи конверсии', conversion_error=conversion_error)
 
+            # Оверлей грейса, осевший в подписке (v4.10–4.11), — не её срок и не её
+            # серверы: вернуть до расчёта (страны по умолчанию берутся из подписки).
+            from app.services.grace_access_echo import undo_grace_overlay_echo
+
+            await undo_grace_overlay_echo(db, existing_subscription)
             existing_subscription.is_trial = False
             if was_trial_conversion:
                 # is_trial сбрасывается и при обычном продлении платной подписки —
@@ -3110,6 +3124,7 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
         # Принудительный resume: снимаем паузу + восстанавливаем статус ACTIVE
         from app.database.crud.subscription import resume_daily_subscription
 
+        was_limited = subscription.status == SubscriptionStatus.LIMITED.value
         subscription = await resume_daily_subscription(db, subscription)
         message = texts.t('DAILY_SUBSCRIPTION_RESUMED', '▶️ Подписка возобновлена!')
         # Восстанавливаем connected_squads из тарифа, если очищены деактивацией
@@ -3131,6 +3146,13 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
         # Синхронизируем с Remnawave - активируем пользователя
         try:
             from app.services.subscription_service import SubscriptionService
+            from app.services.traffic_reset_policy import lift_panel_traffic_limit, should_reset_traffic_on_daily_charge
+
+            # Возобновление после остановки системой списывает суточную оплату —
+            # обнуление счётчика решает та же политика, что и в ночном списании,
+            # а не жёсткая константа. Снятие своей паузы оплатой не является.
+            reset_traffic = is_inactive and should_reset_traffic_on_daily_charge(tariff)
+            reset_reason = 'суточное списание (возобновление)' if reset_traffic else None
 
             subscription_service = SubscriptionService()
             # В multi-tariff панельная идентичность живёт на подписке, а
@@ -3145,16 +3167,16 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
                 await subscription_service.update_remnawave_user(
                     db,
                     subscription,
-                    reset_traffic=False,
-                    reset_reason=None,
+                    reset_traffic=reset_traffic,
+                    reset_reason=reset_reason,
                     sync_squads=True,
                 )
             else:
                 await subscription_service.create_remnawave_user(
                     db,
                     subscription,
-                    reset_traffic=False,
-                    reset_reason=None,
+                    reset_traffic=reset_traffic,
+                    reset_reason=reset_reason,
                 )
                 # POST может игнорировать activeInternalSquads — отправляем PATCH
                 await db.refresh(db_user)
@@ -3165,6 +3187,8 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
                 )
                 if _panel_user_id and subscription.connected_squads:
                     try:
+                        # Досыл сквадов — часть того же события оплаты:
+                        # счётчик уже обнулён вызовом выше, второй раз не надо.
                         await subscription_service.update_remnawave_user(
                             db,
                             subscription,
@@ -3173,6 +3197,15 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
                         )
                     except Exception as patch_err:
                         logger.warning('Не удалось синхронизировать сквады после создания', error=patch_err)
+
+            if reset_traffic:
+                # Счётчик бота ведут по данным панели, но до ближайшего прохода
+                # мониторинга он показывал бы исчерпанный трафик.
+                subscription.traffic_used_gb = 0.0
+                await db.commit()
+                if was_limited:
+                    # PATCH сам по себе статус «трафик исчерпан» не снимает.
+                    await lift_panel_traffic_limit(db, subscription, service=subscription_service)
             logger.info(
                 '✅ Синхронизировано с Remnawave после возобновления суточной подписки', subscription_id=subscription.id
             )

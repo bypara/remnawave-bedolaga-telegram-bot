@@ -225,21 +225,28 @@ class ButtonStatsMiddleware(BaseMiddleware):
             logger.error('Ошибка логирования клика по кнопке', error=e, exc_info=True)
 
     def _log_command(self, event: Message) -> None:
-        """Логирует команды бота (/start, /menu, ...).
+        """Логирует каждое сообщение: команды, оплаты Stars и просто сообщения.
 
-        Обычные текстовые сообщения не пишутся вовсе (промокоды, переписка с
-        поддержкой). Payload команды тоже не сохраняется: в диплинках /start
-        бывают секретные токены (webauth_, GIFT_, coupon_) — фиксируется лишь
-        факт его наличия.
+        Решение владельца — «Активность» видит каждый шаг. Содержимое при этом
+        не сохраняется никогда: у обычного сообщения пишется только его вид
+        (текст, фото, документ…) — там промокоды и переписка с поддержкой;
+        у команды не сохраняется payload — в диплинках /start бывают секретные
+        токены (webauth_, GIFT_, coupon_), фиксируется лишь факт его наличия.
+        Успешная оплата Stars приходит сообщением без текста — тоже действие.
         """
         try:
+            if getattr(event, 'successful_payment', None) is not None:
+                self._log_payment(event)
+                return
             text = event.text
             if not text or not text.startswith('/'):
+                self._log_message(event)
                 return
 
             parts = text.split(maxsplit=1)
             command = parts[0].split('@', 1)[0][:100]  # '/start@my_bot arg' -> '/start'
             if len(command) < 2:
+                self._log_message(event)
                 return
             has_payload = len(parts) > 1
 
@@ -256,6 +263,33 @@ class ButtonStatsMiddleware(BaseMiddleware):
             )
         except Exception as e:
             logger.error('Ошибка логирования команды бота', error=e, exc_info=True)
+
+    def _log_message(self, event: Message) -> None:
+        """Сообщение боту: только вид (текст, фото, контакт…), без содержимого."""
+        kind = getattr(event, 'content_type', None) or ('text' if getattr(event, 'text', None) else 'other')
+        user_id = event.from_user.id if event.from_user else None
+        button_click_batch_writer.enqueue(
+            ButtonClickEvent(
+                button_id='message',
+                user_telegram_id=user_id,
+                callback_data=None,
+                button_type='message',
+                button_text=str(kind)[:255],
+            )
+        )
+
+    def _log_payment(self, event: Message) -> None:
+        """Оплата Stars: сумма и товар не пишутся, только факт."""
+        user_id = event.from_user.id if event.from_user else None
+        button_click_batch_writer.enqueue(
+            ButtonClickEvent(
+                button_id='successful_payment',
+                user_telegram_id=user_id,
+                callback_data=None,
+                button_type='payment',
+                button_text=None,
+            )
+        )
 
     def _determine_button_type(self, callback_data: str) -> str:
         """Определяет тип кнопки по callback_data.
