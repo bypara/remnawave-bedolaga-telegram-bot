@@ -1,5 +1,6 @@
 import structlog
 from aiogram import Bot, Dispatcher, types
+from aiogram.fsm.storage.base import DefaultKeyBuilder
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.storage.redis import RedisStorage
 
@@ -80,6 +81,7 @@ from app.middlewares.maintenance import MaintenanceMiddleware
 from app.middlewares.subscription_checker import SubscriptionStatusMiddleware
 from app.middlewares.throttling import ThrottlingMiddleware
 from app.middlewares.topup_prompt import TopupPromptTrackingMiddleware
+from app.runtime_roles import is_primary_process
 from app.services.maintenance_service import maintenance_service
 from app.utils.cache import cache
 from app.utils.message_patch import patch_message_methods
@@ -98,7 +100,8 @@ async def debug_callback_handler(callback: types.CallbackQuery):
     logger.info('Username', username=callback.from_user.username)
 
 
-async def setup_bot() -> tuple[Bot, Dispatcher]:
+async def setup_bot(*, bot: Bot | None = None) -> tuple[Bot, Dispatcher]:
+    primary = is_primary_process()
     try:
         await cache.connect()
         logger.info('Кеш инициализирован')
@@ -107,7 +110,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
 
     from app.bot_factory import create_bot
 
-    bot = create_bot()
+    bot = bot or create_bot()
 
     # Token-authoritative username so gift/referral/deep links never point at a stale bot.
     from app.utils.bot_identity import sync_bot_username
@@ -126,15 +129,21 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
             source = 'NALOGO_PROXY_URL' if settings.NALOGO_PROXY_URL else 'PROXY_URL (fallback)'
             logger.info('Nalogo proxy configured', proxy_url=mask_proxy_url(nalogo_proxy_url), source=source)
 
-    maintenance_service.set_bot(bot)
+    maintenance_service.set_bot(bot, start_background_tasks=primary)
     logger.info('Бот установлен в maintenance_service')
 
+    redis_client = None
     try:
         redis_client = create_redis()
         await redis_client.ping()
-        storage = RedisStorage(redis_client)
+        key_builder = DefaultKeyBuilder() if primary else DefaultKeyBuilder(prefix='fsm-interactive', with_bot_id=True)
+        storage = RedisStorage(redis_client, key_builder=key_builder)
         logger.info('Подключено к Redis для FSM storage')
     except Exception as e:
+        if not primary:
+            if redis_client is not None:
+                await redis_client.aclose()
+            raise RuntimeError('Интерактивному боту требуется Redis для изолированных состояний диалогов') from e
         logger.warning('Не удалось подключиться к Redis', error=e)
         logger.info('Используется MemoryStorage для FSM')
         storage = MemoryStorage()
@@ -202,47 +211,51 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     support.register_handlers(dp)
     server_status.register_handlers(dp)
     tickets.register_handlers(dp)
-    admin_main.register_handlers(dp)
-    admin_users.register_handlers(dp)
-    admin_subscriptions.register_handlers(dp)
-    admin_servers.register_handlers(dp)
-    admin_promocodes.register_handlers(dp)
-    admin_messages.register_handlers(dp)
-    admin_monitoring.register_handlers(dp)
-    admin_referrals.register_handlers(dp)
-    admin_referral_levels.register_handlers(dp)
-    admin_rules.register_handlers(dp)
-    admin_remnawave.register_handlers(dp)
-    admin_statistics.register_handlers(dp)
-    admin_polls.register_handlers(dp)
-    admin_promo_groups.register_handlers(dp)
-    admin_campaigns.register_handlers(dp)
-    admin_coupons.register_handlers(dp)
-    admin_contests.register_handlers(dp)
-    admin_daily_contests.register_handlers(dp)
-    admin_promo_offers.register_handlers(dp)
-    admin_maintenance.register_handlers(dp)
-    admin_user_messages.register_handlers(dp)
-    admin_updates.register_handlers(dp)
-    admin_backup.register_handlers(dp)
-    admin_system_logs.register_handlers(dp)
-    admin_welcome_text.register_welcome_text_handlers(dp)
-    admin_tickets.register_handlers(dp)
-    admin_reports.register_handlers(dp)
-    admin_bot_configuration.register_handlers(dp)
-    admin_pricing.register_handlers(dp)
-    admin_privacy_policy.register_handlers(dp)
-    admin_public_offer.register_handlers(dp)
-    admin_faq.register_handlers(dp)
-    admin_payments.register_handlers(dp)
-    admin_trials.register_handlers(dp)
-    admin_tariffs.register_handlers(dp)
-    admin_bulk_ban.register_bulk_ban_handlers(dp)
-    admin_blacklist.register_blacklist_handlers(dp)
-    admin_blocked_users.register_handlers(dp)
-    admin_required_channels.register_handlers(dp)
-    admin_quick_amounts.register_handlers(dp)
-    admin_overpay_certificate.register_handlers(dp)
+    if primary:
+        for register in (
+            admin_main.register_handlers,
+            admin_users.register_handlers,
+            admin_subscriptions.register_handlers,
+            admin_servers.register_handlers,
+            admin_promocodes.register_handlers,
+            admin_messages.register_handlers,
+            admin_monitoring.register_handlers,
+            admin_referrals.register_handlers,
+            admin_referral_levels.register_handlers,
+            admin_rules.register_handlers,
+            admin_remnawave.register_handlers,
+            admin_statistics.register_handlers,
+            admin_polls.register_handlers,
+            admin_promo_groups.register_handlers,
+            admin_campaigns.register_handlers,
+            admin_coupons.register_handlers,
+            admin_contests.register_handlers,
+            admin_daily_contests.register_handlers,
+            admin_promo_offers.register_handlers,
+            admin_maintenance.register_handlers,
+            admin_user_messages.register_handlers,
+            admin_updates.register_handlers,
+            admin_backup.register_handlers,
+            admin_system_logs.register_handlers,
+            admin_welcome_text.register_welcome_text_handlers,
+            admin_tickets.register_handlers,
+            admin_reports.register_handlers,
+            admin_bot_configuration.register_handlers,
+            admin_pricing.register_handlers,
+            admin_privacy_policy.register_handlers,
+            admin_public_offer.register_handlers,
+            admin_faq.register_handlers,
+            admin_payments.register_handlers,
+            admin_trials.register_handlers,
+            admin_tariffs.register_handlers,
+            admin_bulk_ban.register_bulk_ban_handlers,
+            admin_blacklist.register_blacklist_handlers,
+            admin_blocked_users.register_handlers,
+            admin_required_channels.register_handlers,
+            admin_quick_amounts.register_handlers,
+            admin_overpay_certificate.register_handlers,
+        ):
+            register(dp)
     register_channel_member_handlers(dp)
     register_gift_activation_handlers(dp)
     common.register_handlers(dp)
@@ -254,7 +267,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     logger.info('⚡ Зарегистрированы обработчики простой покупки')
     logger.info('⚡ Зарегистрированы обработчики простой подписки')
 
-    if settings.is_maintenance_monitoring_enabled():
+    if primary and settings.is_maintenance_monitoring_enabled():
         try:
             await maintenance_service.start_monitoring()
             logger.info('Мониторинг техработ запущен')
@@ -308,13 +321,14 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
         except Exception as e:
             logger.warning('Failed to load menu layout cache', error=e)
 
-    try:
-        from app.services.remnawave_retry_queue import remnawave_retry_queue
+    if primary:
+        try:
+            from app.services.remnawave_retry_queue import remnawave_retry_queue
 
-        await remnawave_retry_queue.start()
-        logger.info('RemnaWave retry queue запущен')
-    except Exception as e:
-        logger.error('Ошибка запуска RemnaWave retry queue', error=e)
+            await remnawave_retry_queue.start()
+            logger.info('RemnaWave retry queue запущен')
+        except Exception as e:
+            logger.error('Ошибка запуска RemnaWave retry queue', error=e)
 
     logger.info('Бот успешно настроен')
 

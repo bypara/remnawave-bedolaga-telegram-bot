@@ -84,6 +84,10 @@ logger = structlog.get_logger(__name__)
 class Settings(BaseSettings):
     BOT_TOKEN: str
     BOT_USERNAME: str | None = None
+    # Deployment-only roles: interactive processes never own recurring jobs.
+    BOT_PROCESS_ROLE: Literal['primary', 'interactive'] = 'primary'
+    BOT_PRIMARY_ID: int = 0
+    BOT_INTERACTIVE_ALLOWED_IDS: str = ''
     ADMIN_IDS: str = ''
     ADMIN_EMAILS: str = ''  # Comma-separated admin emails for email-only users
 

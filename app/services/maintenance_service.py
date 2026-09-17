@@ -34,9 +34,16 @@ class MaintenanceService:
         self._bot = None
         self._last_notification_sent = None
 
-    def set_bot(self, bot):
+    def set_bot(self, bot, *, start_background_tasks: bool = True):
+        from app.runtime_roles import is_primary_process
+
         self._bot = bot
-        if settings.is_maintenance_mode() and not self._status.is_active:
+        if (
+            is_primary_process()
+            and start_background_tasks
+            and settings.is_maintenance_mode()
+            and not self._status.is_active
+        ):
             asyncio.create_task(self.enable_maintenance(reason='Включено из системных настроек', auto=False))
         logger.info('Бот установлен для maintenance_service')
 
@@ -46,6 +53,14 @@ class MaintenanceService:
 
     def is_maintenance_active(self) -> bool:
         return self._status.is_active
+
+    async def refresh_passive_status(self) -> None:
+        """Mirror primary maintenance state without notifications or a monitor."""
+        self._status = MaintenanceStatus(is_active=False)
+        await self._load_status_from_cache()
+        if settings.is_maintenance_mode():
+            self._status.is_active = True
+            self._status.auto_enabled = False
 
     def get_maintenance_message(self) -> str:
         if self._status.auto_enabled:

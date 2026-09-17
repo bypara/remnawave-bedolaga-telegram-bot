@@ -75,6 +75,9 @@ async def get_main_menu_keyboard_async(
     Если MENU_LAYOUT_ENABLED=True, использует конфигурацию из БД.
     Иначе делегирует в синхронную версию.
     """
+    if settings.BOT_PROCESS_ROLE == 'interactive':
+        is_admin = False
+        is_moderator = False
     trial_already_used = False
     if user is not None:
         try:
@@ -660,6 +663,9 @@ def get_main_menu_keyboard(
     is_moderator: bool = False,
     custom_buttons: list[InlineKeyboardButton] | None = None,
 ) -> InlineKeyboardMarkup:
+    if settings.BOT_PROCESS_ROLE == 'interactive':
+        is_admin = False
+        is_moderator = False
     texts = get_texts(language)
 
     if settings.is_cabinet_mode():

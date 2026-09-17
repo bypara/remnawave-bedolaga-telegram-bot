@@ -1,0 +1,38 @@
+# Optional private test transport. Does NOT switch the main bot or enable migration.
+# Only one primary main.py process may run against the shared business database.
+services:
+  interactive-bot:
+    image: ${BOT_INTERACTIVE_IMAGE:?Specify the same tested image as the primary bot}
+    profiles: [interactive]
+    restart: unless-stopped
+    command: [python, -m, app.interactive_bot]
+    env_file:
+      - .env
+      - .env.new-bot
+    environment:
+      BOT_PROCESS_ROLE: interactive
+      BOT_PRIMARY_ID: '${BOT_PRIMARY_ID:?Specify the numeric ID of the active primary bot}'
+      BOT_INTERACTIVE_ALLOWED_IDS: '${BOT_INTERACTIVE_ALLOWED_IDS:?Specify test Telegram IDs}'
+      BOT_RUN_MODE: polling
+      DOCKER_ENV: 'true'
+      DATABASE_MODE: auto
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: '5432'
+      POSTGRES_DB: '${POSTGRES_DB:-remnawave_bot}'
+      POSTGRES_USER: '${POSTGRES_USER:-remnawave_user}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD:-secure_password_123}'
+      REDIS_URL: redis://redis:6379/0
+      WEB_API_HOST: '0.0.0.0'
+      WEB_API_PORT: '8080'
+      TZ: Europe/Moscow
+    volumes:
+      - ./locales:/app/locales:ro
+    networks:
+      - bot_network
+    # No host ports, cabinet API or external payment/RemnaWave webhooks.
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3

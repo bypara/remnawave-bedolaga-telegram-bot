@@ -17,6 +17,7 @@ from app.database.migrations import run_alembic_upgrade
 from app.database.models import PaymentMethod
 from app.localization.loader import ensure_locale_templates
 from app.logging_config import _resolve_log_level, setup_logging
+from app.runtime_roles import require_primary_process
 from app.services.backup_service import backup_service
 from app.services.ban_notification_service import ban_notification_service
 from app.services.broadcast_service import broadcast_service
@@ -61,6 +62,7 @@ class GracefulExit:
 
 
 async def main():
+    require_primary_process()
     file_formatter, console_formatter, telegram_notifier = setup_logging()
 
     log_handlers = []

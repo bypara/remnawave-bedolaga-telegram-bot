@@ -98,6 +98,9 @@ class BotConfigurationService:
     EXCLUDED_KEYS: set[str] = {
         'BOT_TOKEN',
         'LEGACY_BOT_TOKEN',
+        'BOT_PROCESS_ROLE',
+        'BOT_PRIMARY_ID',
+        'BOT_INTERACTIVE_ALLOWED_IDS',
         'ADMIN_IDS',
         'ADMIN_EMAILS',
         'CABINET_JWT_SECRET',
@@ -2377,6 +2380,10 @@ class BotConfigurationService:
             elif key.startswith('PRICE_TRAFFIC_') or key == 'TRAFFIC_PACKAGES_CONFIG':
                 refresh_traffic_prices()
             elif key in {'REMNAWAVE_AUTO_SYNC_ENABLED', 'REMNAWAVE_AUTO_SYNC_TIMES'}:
+                from app.runtime_roles import is_primary_process
+
+                if not is_primary_process():
+                    return
                 try:
                     from app.services.remnawave_sync_service import remnawave_sync_service
 
@@ -2397,6 +2404,10 @@ class BotConfigurationService:
                 # Изменения настроек бекапа из кабинета — рестартим scheduler-таску,
                 # чтобы новые BACKUP_TIME/INTERVAL вступили в силу немедленно
                 # (без ожидания следующего цикла или рестарта бота).
+                from app.runtime_roles import is_primary_process
+
+                if not is_primary_process():
+                    return
                 try:
                     import asyncio
 
