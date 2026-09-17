@@ -14,6 +14,7 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.bot_migration_config import render_migration_text
 from app.config import settings
 from app.database.crud.campaign import (
     get_campaign_by_id,
@@ -46,6 +47,7 @@ from app.middlewares.channel_checker import (
     get_pending_payload_from_redis,
 )
 from app.services.admin_notification_service import AdminNotificationService
+from app.services.bot_migration_service import MIGRATION_START_PREFIX, claim_migration_bonus, extract_migration_token
 from app.services.campaign_service import AdvertisingCampaignService
 from app.services.channel_subscription_service import channel_subscription_service
 from app.services.coupon_service import (
@@ -1439,8 +1441,18 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     start_parameter = None
 
     msg_start_arg = start_args[1] if len(start_args) > 1 else None
+    saved_migration_token = data.get('pending_migration_token')
+    migration_start_arg = msg_start_arg if extract_migration_token(msg_start_arg) else None
+    if not migration_start_arg and saved_migration_token:
+        candidate = f'{MIGRATION_START_PREFIX}{saved_migration_token}'
+        if extract_migration_token(candidate):
+            migration_start_arg = candidate
 
-    if pending_start_payload and msg_start_arg and pending_start_payload != msg_start_arg:
+    if migration_start_arg:
+        # Migration must not be replaced by first-touch campaign attribution.
+        # It has its own owner-bound ledger and does not rewrite referral/campaign data.
+        start_parameter = migration_start_arg
+    elif pending_start_payload and msg_start_arg and pending_start_payload != msg_start_arg:
         # Одновременно есть аргумент из сообщения и pending payload.
         # Payload был сохранён при блокировке каналом — это источник
         # первого касания. Если он является активной кампанией —
@@ -1488,6 +1500,42 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
         await _answer_registration_denial(message.answer, get_texts(language), access_decision)
         await state.clear()
         return
+
+    migration_token = extract_migration_token(start_parameter)
+    if migration_token:
+        try:
+            identity = await message.bot.me()
+            result = await claim_migration_bonus(
+                db,
+                migration_token,
+                message.from_user.id,
+                message.bot.id,
+                identity.username,
+            )
+        except Exception as error:
+            logger.error('Не удалось начислить бонус за переезд', user_id=message.from_user.id, error=str(error))
+            await message.answer('Не удалось начислить бонус. Попробуйте открыть ссылку ещё раз чуть позже.')
+            return
+        if result.status == 'credited':
+            await message.answer(
+                render_migration_text(settings.BOT_MIGRATION_BONUS_SUCCESS_MESSAGE, result.amount_kopeks),
+                parse_mode=None,
+            )
+        elif result.status == 'already_claimed':
+            await message.answer('Бонус за переезд уже начислен на ваш баланс.')
+        elif result.status == 'disabled':
+            await message.answer('Бонус за переезд сейчас отключён.')
+        else:
+            await message.answer('Эта ссылка бонуса недействительна или принадлежит другому аккаунту.')
+        await state.update_data(pending_migration_token=None)
+        data.pop('pending_migration_token', None)
+        if pending_start_payload == start_parameter:
+            pending_start_payload = None
+            data.pop('pending_start_payload', None)
+            await state.update_data(pending_start_payload=None)
+            # Do not let the channel gate replay a redeemed migration link.
+            await delete_pending_payload_from_redis(message.from_user.id)
+        start_parameter = None
     if (
         access_decision.reason
         in {

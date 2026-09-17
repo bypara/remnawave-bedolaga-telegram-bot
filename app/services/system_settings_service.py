@@ -8,6 +8,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.bot_migration_config import validate_migration_value
 from app.config import (
     ENV_OVERRIDE_KEYS,
     Settings,
@@ -54,6 +55,19 @@ class SettingDefinition:
 
     @property
     def display_name(self) -> str:
+        migration_names = {
+            'BOT_MIGRATION_ENABLED': 'Включить режим переезда',
+            'BOT_MIGRATION_URL': 'Ссылка нового бота',
+            'BOT_MIGRATION_MESSAGE': 'Текст заглушки переезда',
+            'BOT_MIGRATION_BUTTON_TEXT': 'Название кнопки перехода',
+            'BOT_MIGRATION_BONUS_ENABLED': 'Включить бонус за переезд',
+            'BOT_MIGRATION_BONUS_AMOUNT_RUBLES': 'Сумма бонуса за переезд, ₽',
+            'BOT_MIGRATION_BONUS_SUCCESS_MESSAGE': 'Текст после начисления бонуса',
+            'BOT_MIGRATION_NO_BONUS_MESSAGE': 'Текст для аккаунтов без бонуса',
+            'BOT_MIGRATION_NO_BONUS_BUTTON_TEXT': 'Кнопка перехода без бонуса',
+        }
+        if self.key in migration_names:
+            return migration_names[self.key]
         return _title_from_key(self.key)
 
 
@@ -194,6 +208,7 @@ class BotConfigurationService:
         'SERVER_STATUS': '📊 Статус серверов',
         'MONITORING': '📈 Мониторинг',
         'MAINTENANCE': '🔧 Обслуживание',
+        'BOT_MIGRATION': '🚚 Переезд бота',
         'BACKUP': '💾 Резервные копии',
         'VERSION': '🔄 Проверка версий',
         'WEB_API': '⚡ Web API',
@@ -273,6 +288,7 @@ class BotConfigurationService:
         'SERVER_STATUS': 'Отображение статуса серверов и external URL.',
         'MONITORING': 'Интервалы мониторинга и хранение логов.',
         'MAINTENANCE': 'Режим обслуживания, сообщения и интервалы.',
+        'BOT_MIGRATION': 'Заглушка старого бота: ссылка перехода, текст и кнопка. Администраторы сохраняют доступ.',
         'BACKUP': 'Резервное копирование и расписание.',
         'VERSION': 'Отслеживание обновлений репозитория.',
         'WEB_API': 'Web API, токены и права доступа.',
@@ -467,6 +483,7 @@ class BotConfigurationService:
     }
 
     CATEGORY_PREFIX_OVERRIDES: dict[str, str] = {
+        'BOT_MIGRATION_': 'BOT_MIGRATION',
         'SUPPORT_': 'SUPPORT',
         'ADMIN_NOTIFICATIONS': 'ADMIN_NOTIFICATIONS',
         'ADMIN_REPORTS': 'ADMIN_REPORTS',
@@ -701,6 +718,41 @@ class BotConfigurationService:
     }
 
     SETTING_HINTS: dict[str, dict[str, str]] = {
+        'BOT_MIGRATION_ENABLED': {
+            'description': 'Заменяет команды, сообщения и callback-кнопки пользователей заглушкой переезда.',
+            'warning': 'Сначала задайте ссылку. Не отключает фоновые списания, вебхуки и обработку завершённых платежей.',
+            'dependencies': 'BOT_MIGRATION_URL, BOT_MIGRATION_MESSAGE, BOT_MIGRATION_BUTTON_TEXT',
+        },
+        'BOT_MIGRATION_URL': {
+            'description': 'Ссылка нового бота, включая рекламный start-код при необходимости.',
+            'example': 'https://t.me/new_service_bot?start=migration',
+            'warning': 'При включённом бонусе start-код заменяется персональным кодом переезда.',
+        },
+        'BOT_MIGRATION_MESSAGE': {
+            'description': 'Текст заглушки без HTML/Markdown, до 3500 символов. {bonus} — сумма бонуса в рублях.',
+        },
+        'BOT_MIGRATION_BUTTON_TEXT': {
+            'description': 'Название кнопки перехода, до 64 символов. {bonus} — сумма бонуса в рублях.',
+        },
+        'BOT_MIGRATION_BONUS_ENABLED': {
+            'description': 'Однократно начисляет бонус существующему пользователю после запуска нового бота.',
+            'warning': 'Оба бота должны использовать одну БД и код с поддержкой переезда. Фоновые задачи — только в одном.',
+            'dependencies': 'BOT_MIGRATION_URL, BOT_MIGRATION_BONUS_AMOUNT_RUBLES',
+        },
+        'BOT_MIGRATION_BONUS_AMOUNT_RUBLES': {
+            'description': 'Сумма в рублях, до двух знаков после запятой. Изменение суммы не даёт повторный бонус.',
+            'example': '75.50',
+            'warning': 'Уже выданные персональные ссылки сохраняют обещанную сумму; новая сумма действует для новых ссылок.',
+        },
+        'BOT_MIGRATION_BONUS_SUCCESS_MESSAGE': {
+            'description': 'Обычный текст после начисления. {bonus} заменяется фактически начисленной суммой.',
+        },
+        'BOT_MIGRATION_NO_BONUS_MESSAGE': {
+            'description': 'Текст для уже получивших бонус и аккаунтов без права на бонус. До 3500 символов.',
+        },
+        'BOT_MIGRATION_NO_BONUS_BUTTON_TEXT': {
+            'description': 'Название кнопки без обещания бонуса для таких аккаунтов. До 64 символов.',
+        },
         'SUPPORT_ADMIN_TICKET_NOTIFICATIONS_ENABLED': {
             'description': 'Сообщать администраторам в Telegram о новых тикетах и ответах пользователей.',
             'format': 'Булево значение (да/нет).',
@@ -2137,9 +2189,9 @@ class BotConfigurationService:
             return int(raw_value)
 
         if python_type is float:
-            return float(raw_value)
+            return validate_migration_value(key, float(raw_value))
 
-        return raw_value
+        return validate_migration_value(key, raw_value)
 
     @classmethod
     def serialize_value(cls, key: str, value: Any) -> str | None:
@@ -2198,7 +2250,7 @@ class BotConfigurationService:
                 readable = ', '.join(f'{option.label} ({cls.format_value(option.value)})' for option in choices)
                 raise ValueError(f'Доступные значения: {readable}')
 
-        return parsed_value
+        return validate_migration_value(key, parsed_value)
 
     @classmethod
     async def set_value(
@@ -2225,6 +2277,7 @@ class BotConfigurationService:
         if cls.is_read_only(key) and not force:
             raise ReadOnlySettingError(f'Setting {key} is read-only')
 
+        value = cls._validate_migration_update(key, value)
         raw_value = cls.serialize_value(key, value)
         await upsert_system_setting(db, key, raw_value)
         if commit:
@@ -2261,6 +2314,7 @@ class BotConfigurationService:
         if cls.is_read_only(key) and not force:
             raise ReadOnlySettingError(f'Setting {key} is read-only')
 
+        cls._validate_migration_update(key, cls.get_original_value(key))
         await delete_system_setting(db, key)
         if commit:
             await db.commit()
@@ -2278,6 +2332,24 @@ class BotConfigurationService:
             from app.database.crud.tariff import load_period_prices_from_db
 
             await load_period_prices_from_db(db)
+
+    @classmethod
+    def _validate_migration_update(cls, key: str, value: Any) -> Any:
+        value = validate_migration_value(key, value)
+        if key == 'BOT_MIGRATION_ENABLED' and value and not settings.BOT_MIGRATION_URL:
+            raise ValueError('Перед включением режима переезда задайте ссылку нового бота.')
+        if (
+            key == 'BOT_MIGRATION_URL'
+            and not value
+            and (settings.BOT_MIGRATION_ENABLED or settings.BOT_MIGRATION_BONUS_ENABLED)
+        ):
+            raise ValueError('Сначала отключите режим переезда, затем удалите ссылку.')
+        if key == 'BOT_MIGRATION_BONUS_ENABLED' and value:
+            if not settings.BOT_MIGRATION_URL or settings.BOT_MIGRATION_BONUS_AMOUNT_RUBLES <= 0:
+                raise ValueError('Сначала задайте ссылку нового бота и положительную сумму бонуса.')
+        if key == 'BOT_MIGRATION_BONUS_AMOUNT_RUBLES' and value <= 0 and settings.BOT_MIGRATION_BONUS_ENABLED:
+            raise ValueError('Сначала отключите бонус за переезд, затем обнулите сумму.')
+        return value
 
     @classmethod
     def _apply_to_settings(cls, key: str, value: Any) -> None:

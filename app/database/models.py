@@ -2935,6 +2935,21 @@ class Transaction(Base):
         return self.amount_kopeks / 100
 
 
+class BotMigrationClaim(Base):
+    """One migration bonus per existing account; token is bound to its owner."""
+
+    __tablename__ = 'bot_migration_claims'
+    __table_args__ = (CheckConstraint('amount_kopeks > 0', name='ck_bot_migration_claim_positive'),)
+
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    token = Column(String(43), nullable=False, unique=True)
+    source_bot_id = Column(BigInteger, nullable=False)
+    target_bot_username = Column(String(32), nullable=False)
+    amount_kopeks = Column(Integer, nullable=False)
+    created_at = Column(AwareDateTime(), nullable=False, default=func.now())
+    claimed_at = Column(AwareDateTime(), nullable=True)
+
+
 class SubscriptionConversion(Base):
     __tablename__ = 'subscription_conversions'
     __table_args__ = (

@@ -69,6 +69,7 @@ from app.handlers.stars_payments import register_stars_handlers
 from app.handlers.subscription import register_gift_handlers
 from app.middlewares.auth import AuthMiddleware
 from app.middlewares.blacklist import BlacklistMiddleware
+from app.middlewares.bot_migration import BotMigrationMiddleware
 from app.middlewares.button_stats import ButtonStatsMiddleware
 from app.middlewares.chat_type_filter import ChatTypeFilterMiddleware
 from app.middlewares.context_binding import ContextVarsMiddleware
@@ -139,6 +140,11 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
         storage = MemoryStorage()
 
     dp = Dispatcher(storage=storage)
+
+    # Outer middleware also covers messages/callbacks without a matching handler.
+    migration_middleware = BotMigrationMiddleware()
+    dp.message.outer_middleware(migration_middleware)
+    dp.callback_query.outer_middleware(migration_middleware)
 
     dp.message.middleware(ContextVarsMiddleware())
     dp.callback_query.middleware(ContextVarsMiddleware())

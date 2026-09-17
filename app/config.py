@@ -9,7 +9,7 @@ from urllib.parse import quote as _url_quote, urlparse
 from zoneinfo import ZoneInfo
 
 import structlog
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -593,6 +593,44 @@ class Settings(BaseSettings):
     MAINTENANCE_MONITORING_ENABLED: bool = True
     MAINTENANCE_RETRY_ATTEMPTS: int = 1
     MAINTENANCE_MESSAGE: str = '🔧 Ведутся технические работы. Сервис временно недоступен. Попробуйте позже.'
+
+    BOT_MIGRATION_ENABLED: bool = False
+    BOT_MIGRATION_URL: str = ''
+    BOT_MIGRATION_MESSAGE: str = (
+        'Мы переехали в нового бота.\n\nНажмите кнопку ниже, чтобы продолжить пользоваться сервисом.'
+    )
+    BOT_MIGRATION_BUTTON_TEXT: str = 'Перейти в нового бота'
+    BOT_MIGRATION_BONUS_ENABLED: bool = False
+    BOT_MIGRATION_BONUS_AMOUNT_RUBLES: float = 0
+    BOT_MIGRATION_BONUS_SUCCESS_MESSAGE: str = 'Спасибо за переход! На ваш баланс начислено {bonus} ₽.'
+    BOT_MIGRATION_NO_BONUS_MESSAGE: str = 'Мы переехали в нового бота. Нажмите кнопку ниже, чтобы продолжить.'
+    BOT_MIGRATION_NO_BONUS_BUTTON_TEXT: str = 'Перейти в нового бота'
+
+    @field_validator(
+        'BOT_MIGRATION_URL',
+        'BOT_MIGRATION_MESSAGE',
+        'BOT_MIGRATION_BUTTON_TEXT',
+        'BOT_MIGRATION_BONUS_AMOUNT_RUBLES',
+        'BOT_MIGRATION_BONUS_SUCCESS_MESSAGE',
+        'BOT_MIGRATION_NO_BONUS_MESSAGE',
+        'BOT_MIGRATION_NO_BONUS_BUTTON_TEXT',
+        mode='before',
+    )
+    @classmethod
+    def validate_bot_migration_text(cls, value, info):
+        from app.bot_migration_config import validate_migration_value
+
+        return validate_migration_value(info.field_name, value)
+
+    @model_validator(mode='after')
+    def validate_bot_migration_target(self):
+        if self.BOT_MIGRATION_ENABLED and not self.BOT_MIGRATION_URL:
+            raise ValueError('Перед включением режима переезда задайте BOT_MIGRATION_URL.')
+        if self.BOT_MIGRATION_BONUS_ENABLED and (
+            not self.BOT_MIGRATION_URL or self.BOT_MIGRATION_BONUS_AMOUNT_RUBLES <= 0
+        ):
+            raise ValueError('Перед включением бонуса переезда задайте ссылку и положительную сумму.')
+        return self
 
     TELEGRAM_STARS_ENABLED: bool = True
     # ₽ per 1 ⭐. Matches Telegram's own cash-out rate (~0.95–1.0 ₽/⭐ as of

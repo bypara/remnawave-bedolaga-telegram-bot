@@ -46,7 +46,7 @@ def _check_upgrade(conn):
             },
         )
     script = ScriptDirectory.from_config(Config(str(ROOT / 'alembic.ini')))
-    revisions = list(reversed(list(script.iterate_revisions('head', '0126'))))
+    revisions = list(reversed(list(script.iterate_revisions('0131', '0126'))))
     assert [rev.revision for rev in revisions] == ['0127', '0128', '0129', '0130', '0131']
     with Operations.context(MigrationContext.configure(conn)):
         for revision in revisions:
