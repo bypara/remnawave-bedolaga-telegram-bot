@@ -20,6 +20,9 @@ logger = structlog.get_logger(__name__)
 
 
 class BotMigrationMiddleware(BaseMiddleware):
+    def __init__(self, *, relay_only: bool = False):
+        self.relay_only = relay_only
+
     async def __call__(
         self,
         handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
@@ -35,7 +38,7 @@ class BotMigrationMiddleware(BaseMiddleware):
         if (
             not user
             or user.is_bot
-            or settings.is_admin(user.id)
+            or (settings.is_admin(user.id) and not self.relay_only)
             or (chat and chat.type != ChatType.PRIVATE)
             or (isinstance(event, Message) and event.successful_payment)
         ):

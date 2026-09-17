@@ -1,0 +1,33 @@
+# Optional overlay. Not used by the normal deployment.
+# docker compose -f docker-compose.yml -f docker-compose.migration.yml --profile migration up -d --no-deps migration-bot
+services:
+  migration-bot:
+    image: ${BOT_MIGRATION_IMAGE:?Specify the same tested image as the main bot}
+    profiles: [migration]
+    restart: unless-stopped
+    command: [python, -m, app.migration_bot]
+    env_file:
+      - .env
+      - .env.migration
+    environment:
+      DOCKER_ENV: 'true'
+      DATABASE_MODE: 'auto'
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: '5432'
+      POSTGRES_DB: '${POSTGRES_DB:-remnawave_bot}'
+      POSTGRES_USER: '${POSTGRES_USER:-remnawave_user}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD:-secure_password_123}'
+      WEB_API_HOST: '0.0.0.0'
+      WEB_API_PORT: '8080'
+      TZ: Europe/Moscow
+    volumes:
+      - ./locales:/app/locales:ro
+    networks:
+      - bot_network
+    # No host ports; nginx/Caddy may proxy a SEPARATE route to migration-bot:8080.
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
