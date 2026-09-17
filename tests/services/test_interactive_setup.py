@@ -36,12 +36,13 @@ def support_minimal_redis_test_stub(monkeypatch):
         monkeypatch.setitem(sys.modules, typing_module.__name__, typing_module)
 
 
-@pytest.mark.parametrize('primary', [True, False])
-async def test_setup_starts_hidden_workers_and_admin_handlers_only_in_primary(monkeypatch, primary):
+@pytest.mark.parametrize('primary,admin_enabled', [(True, False), (False, False), (False, True)])
+async def test_setup_keeps_workers_primary_even_when_interactive_admin_enabled(monkeypatch, primary, admin_enabled):
     from app import bot as bot_module
     from app.services.remnawave_retry_queue import remnawave_retry_queue
 
     monkeypatch.setattr(settings, 'BOT_PROCESS_ROLE', 'primary' if primary else 'interactive')
+    monkeypatch.setattr(settings, 'BOT_INTERACTIVE_ADMIN_ENABLED', admin_enabled)
     monkeypatch.setattr(settings, 'MAIN_MENU_MODE', 'classic')
     monkeypatch.setattr(settings, 'MAINTENANCE_MODE', False)
     monkeypatch.setattr(type(settings), 'is_maintenance_monitoring_enabled', lambda _self: True)
@@ -61,7 +62,7 @@ async def test_setup_starts_hidden_workers_and_admin_handlers_only_in_primary(mo
         _, dp = await bot_module.setup_bot(bot=bot)
         assert bool(maintenance_start.await_count) is primary
         assert bool(retry_start.await_count) is primary
-        assert bool(admin_register.call_count) is primary
+        assert bool(admin_register.call_count) is (primary or admin_enabled)
         key = dp.storage.key_builder.build(StorageKey(bot_id=456, chat_id=42, user_id=42), 'state')
         if primary:
             assert key == 'fsm:42:42:state'
@@ -106,6 +107,24 @@ async def test_interactive_maintenance_bind_does_not_schedule_notifications(monk
     await asyncio.sleep(0)
     enable.assert_not_awaited()
     assert service._check_task is None
+
+
+async def test_interactive_admin_cannot_start_recurring_services(monkeypatch):
+    from app.services.backup_service import BackupService
+    from app.services.monitoring_service import MonitoringService
+
+    monkeypatch.setattr(settings, 'BOT_PROCESS_ROLE', 'interactive')
+    monkeypatch.setattr(settings, 'BOT_INTERACTIVE_ADMIN_ENABLED', True)
+    maintenance = MaintenanceService()
+    monitoring = MonitoringService()
+    backup = BackupService()
+    assert await maintenance.start_monitoring() is False
+    await monitoring.start_monitoring()
+    await backup.start_auto_backup()
+    assert maintenance._check_task is None
+    assert monitoring.is_running is False
+    assert monitoring._sla_task is None
+    assert backup._auto_backup_task is None
 
 
 async def test_passive_maintenance_follow_primary_and_manual_off(monkeypatch):
@@ -153,11 +172,13 @@ def test_main_checks_primary_role_before_any_startup_side_effect():
     assert main.body[0].value.func.id == 'require_primary_process'
 
 
-def test_interactive_main_menu_hides_admin_routes(monkeypatch):
+@pytest.mark.parametrize('enabled,is_admin', [(False, True), (True, True), (True, False)])
+def test_interactive_main_menu_admin_routes_require_flag_and_admin_identity(monkeypatch, enabled, is_admin):
     from app.keyboards.inline import get_main_menu_keyboard
 
     monkeypatch.setattr(settings, 'BOT_PROCESS_ROLE', 'interactive')
+    monkeypatch.setattr(settings, 'BOT_INTERACTIVE_ADMIN_ENABLED', enabled)
     monkeypatch.setattr(settings, 'MAIN_MENU_MODE', 'classic')
-    keyboard = get_main_menu_keyboard(is_admin=True)
+    keyboard = get_main_menu_keyboard(is_admin=is_admin)
     callbacks = [button.callback_data for row in keyboard.inline_keyboard for button in row]
-    assert 'admin_panel' not in callbacks
+    assert ('admin_panel' in callbacks) is (enabled and is_admin)

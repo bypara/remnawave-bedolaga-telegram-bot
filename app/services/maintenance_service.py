@@ -7,6 +7,7 @@ import structlog
 
 from app.config import settings
 from app.external.remnawave_api import RemnaWaveAPI, test_api_connection
+from app.runtime_roles import is_primary_process
 from app.utils.cache import cache
 from app.utils.timezone import format_local_datetime
 
@@ -230,6 +231,9 @@ class MaintenanceService:
         return await self.disable_maintenance()
 
     async def start_monitoring(self) -> bool:
+        if not is_primary_process():
+            logger.info('Мониторинг техработ доступен только primary-процессу')
+            return False
         try:
             if self._check_task and not self._check_task.done():
                 logger.warning('Мониторинг уже запущен')

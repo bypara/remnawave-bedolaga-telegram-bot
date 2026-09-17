@@ -137,6 +137,7 @@ from app.database.models import (
     server_squad_promo_groups,
     tariff_promo_groups,
 )
+from app.runtime_roles import is_primary_process
 
 
 logger = structlog.get_logger(__name__)
@@ -2038,6 +2039,9 @@ class BackupService:
             return False
 
     async def start_auto_backup(self):
+        if not is_primary_process():
+            logger.info('Автобекапы доступны только primary-процессу')
+            return
         # Лок обязателен: без него конкурентные вызовы (6 штук на холодном
         # старте) интерливятся на await отмены старой таски, каждый создаёт
         # свой цикл, а ссылку _auto_backup_task получает только последний —

@@ -23,6 +23,8 @@ def configured(monkeypatch):
         'BOT_PRIMARY_ID': 123,
         'BOT_USERNAME': 'newbot',
         'BOT_INTERACTIVE_ALLOWED_IDS': '42,43',
+        'BOT_INTERACTIVE_PUBLIC_ACCESS': False,
+        'BOT_INTERACTIVE_ADMIN_ENABLED': False,
         'BOT_RUN_MODE': 'polling',
         'DATABASE_URL': 'postgresql+asyncpg://user:pass@localhost/test_db',
         'BOT_MIGRATION_ENABLED': False,
@@ -64,6 +66,47 @@ def test_allowlist_must_be_explicit_and_valid(configured, monkeypatch, value):
     monkeypatch.setattr(settings, 'BOT_INTERACTIVE_ALLOWED_IDS', value)
     with pytest.raises(ValueError):
         interactive_allowed_ids()
+
+
+def test_public_access_requires_explicit_flag(configured, monkeypatch):
+    monkeypatch.setattr(settings, 'BOT_INTERACTIVE_PUBLIC_ACCESS', True)
+    monkeypatch.setattr(settings, 'BOT_INTERACTIVE_ALLOWED_IDS', '')
+    assert interactive.validate_interactive_config() is None
+
+
+async def test_public_access_allows_foreign_users_callbacks_and_precheckout(configured):
+    loader = SimpleNamespace(reload=AsyncMock())
+    access = interactive.InteractiveAccessMiddleware(None, loader)
+    handler = AsyncMock(return_value='normal')
+    user = message(99).from_user
+    events = [
+        Update(update_id=1, message=message(99, text='/start')),
+        Update(update_id=2, callback_query=CallbackQuery(id='q', from_user=user, chat_instance='c', data='menu')),
+        Update(
+            update_id=3,
+            pre_checkout_query=PreCheckoutQuery(
+                id='p', from_user=user, currency='XTR', total_amount=1, invoice_payload='test'
+            ),
+        ),
+    ]
+    for event in events:
+        assert await access(handler, event, {}) == 'normal'
+    assert handler.await_count == 3
+    assert loader.reload.await_count == 3
+    PreCheckoutQuery.answer.assert_not_awaited()
+
+
+async def test_public_mode_still_ignores_groups_and_monitoring(configured):
+    loader = SimpleNamespace(reload=AsyncMock())
+    access = interactive.InteractiveAccessMiddleware(None, loader)
+    handler = AsyncMock()
+    group = message(99, text='/start').model_copy(update={'chat': Chat(id=-42, type=ChatType.GROUP)})
+    await access(handler, Update(update_id=1, message=group), {})
+    callback = CallbackQuery(id='q', from_user=message().from_user, chat_instance='c', data='maintenance_monitoring')
+    await access(handler, Update(update_id=2, callback_query=callback), {})
+    handler.assert_not_awaited()
+    loader.reload.assert_not_awaited()
+    CallbackQuery.answer.assert_awaited_once()
 
 
 @pytest.mark.parametrize(
@@ -204,6 +247,8 @@ def test_deployment_roles_are_not_editable_in_shared_admin_settings():
         'BOT_PROCESS_ROLE',
         'BOT_PRIMARY_ID',
         'BOT_INTERACTIVE_ALLOWED_IDS',
+        'BOT_INTERACTIVE_PUBLIC_ACCESS',
+        'BOT_INTERACTIVE_ADMIN_ENABLED',
     } <= BotConfigurationService.EXCLUDED_KEYS
 
 
@@ -218,6 +263,24 @@ async def test_health_only_server_has_no_cabinet_payment_or_panel_routes(configu
         assert (await response.json())['business_workers'] is False
         for path in ('/api/cabinet/branding', '/platega-webhook', '/remnawave-webhook'):
             assert (await client.post(path, json={})).status == 404
+    finally:
+        await client.close()
+        await bot.session.close()
+        await dp.storage.close()
+
+
+async def test_public_admin_health_reports_actual_mode(configured, monkeypatch):
+    monkeypatch.setattr(settings, 'BOT_INTERACTIVE_PUBLIC_ACCESS', True)
+    monkeypatch.setattr(settings, 'BOT_INTERACTIVE_ADMIN_ENABLED', True)
+    bot = Bot(TEST_TOKEN)
+    dp = Dispatcher()
+    client = TestClient(TestServer(interactive.build_web_app(dp, bot, path=None, secret=None)))
+    try:
+        await client.start_server()
+        result = await (await client.get('/health')).json()
+        assert result['private_test'] is False
+        assert result['admin_enabled'] is True
+        assert result['business_workers'] is False
     finally:
         await client.close()
         await bot.session.close()

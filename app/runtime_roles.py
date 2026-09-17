@@ -12,7 +12,14 @@ def require_primary_process() -> None:
         raise RuntimeError('main.py доступен только primary-процессу. Используйте python -m app.interactive_bot.')
 
 
-def interactive_allowed_ids() -> frozenset[int]:
+def admin_handlers_enabled() -> bool:
+    return is_primary_process() or settings.BOT_INTERACTIVE_ADMIN_ENABLED
+
+
+def interactive_allowed_ids() -> frozenset[int] | None:
+    # Public access is explicit; an empty allowlist alone must still fail closed.
+    if settings.BOT_INTERACTIVE_PUBLIC_ACCESS:
+        return None
     parts = settings.BOT_INTERACTIVE_ALLOWED_IDS.split(',')
     try:
         ids = frozenset(int(part.strip()) for part in parts if part.strip())

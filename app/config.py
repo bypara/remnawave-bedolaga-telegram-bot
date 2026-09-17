@@ -88,6 +88,8 @@ class Settings(BaseSettings):
     BOT_PROCESS_ROLE: Literal['primary', 'interactive'] = 'primary'
     BOT_PRIMARY_ID: int = 0
     BOT_INTERACTIVE_ALLOWED_IDS: str = ''
+    BOT_INTERACTIVE_PUBLIC_ACCESS: bool = False
+    BOT_INTERACTIVE_ADMIN_ENABLED: bool = False
     ADMIN_IDS: str = ''
     ADMIN_EMAILS: str = ''  # Comma-separated admin emails for email-only users
 

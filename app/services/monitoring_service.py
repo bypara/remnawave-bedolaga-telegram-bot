@@ -53,6 +53,7 @@ from app.external.remnawave_api import (
     is_user_not_found_error,
 )
 from app.localization.texts import get_texts
+from app.runtime_roles import is_primary_process
 from app.services.grace_access_runtime import update_panel_user_grace_safe
 from app.services.notification_delivery_service import (
     NotificationType,
@@ -373,6 +374,9 @@ class MonitoringService:
         return False
 
     async def start_monitoring(self):
+        if not is_primary_process():
+            logger.info('Мониторинг подписок доступен только primary-процессу')
+            return
         if self.is_running:
             logger.warning('Мониторинг уже запущен')
             return

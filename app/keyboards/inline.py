@@ -10,6 +10,7 @@ from app.config import PERIOD_PRICES, settings
 from app.database.models import User
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
+from app.runtime_roles import admin_handlers_enabled
 from app.utils.miniapp_buttons import (
     MAIN_MENU_CUSTOM_EMOJI_IDS,
     build_miniapp_or_callback_button,
@@ -75,7 +76,7 @@ async def get_main_menu_keyboard_async(
     Если MENU_LAYOUT_ENABLED=True, использует конфигурацию из БД.
     Иначе делегирует в синхронную версию.
     """
-    if settings.BOT_PROCESS_ROLE == 'interactive':
+    if not admin_handlers_enabled():
         is_admin = False
         is_moderator = False
     trial_already_used = False
@@ -663,7 +664,7 @@ def get_main_menu_keyboard(
     is_moderator: bool = False,
     custom_buttons: list[InlineKeyboardButton] | None = None,
 ) -> InlineKeyboardMarkup:
-    if settings.BOT_PROCESS_ROLE == 'interactive':
+    if not admin_handlers_enabled():
         is_admin = False
         is_moderator = False
     texts = get_texts(language)

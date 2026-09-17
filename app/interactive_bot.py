@@ -1,4 +1,4 @@
-"""Private parallel Telegram transport; primary retains all business workers/API."""
+"""Parallel Telegram transport; primary retains all business workers/API."""
 
 import asyncio
 import logging
@@ -19,16 +19,17 @@ from app.bot_factory import create_bot
 from app.config import settings
 from app.database.database import engine
 from app.migration_bot import RelaySettingsLoader, wait_for_shutdown
-from app.runtime_roles import interactive_allowed_ids
+from app.runtime_roles import admin_handlers_enabled, interactive_allowed_ids
 from app.services.interactive_consumer_lease import InteractiveConsumerLease
 from app.utils.cache import cache
 
 
 logger = structlog.get_logger(__name__)
 PRIVATE_MESSAGE = 'Этот бот пока доступен только для тестирования. Продолжайте пользоваться основным ботом.'
+ALEMBIC_CONFIG_PATH = Path(__file__).resolve().parent.parent / 'alembic.ini'
 
 
-def validate_interactive_config() -> frozenset[int]:
+def validate_interactive_config() -> frozenset[int] | None:
     if settings.BOT_PROCESS_ROLE != 'interactive':
         raise ValueError('Для этого entrypoint требуется BOT_PROCESS_ROLE=interactive')
     if settings.BOT_PRIMARY_ID <= 0:
@@ -51,7 +52,7 @@ async def validate_interactive_identity(bot: Bot, expected_username: str) -> Non
     identity = await bot.me()
     if identity.id == settings.BOT_PRIMARY_ID or (identity.username or '').lower() != expected_username.lower():
         raise ValueError('Токен не соответствует ожидаемому имени отдельного интерактивного бота')
-    cfg = Config(str(Path(__file__).resolve().parent.parent / 'alembic.ini'))
+    cfg = Config(str(ALEMBIC_CONFIG_PATH))
     expected_revision = ScriptDirectory.from_config(cfg).get_current_head()
     async with engine.connect() as connection:
         revision = (await connection.execute(text('SELECT version_num FROM alembic_version'))).scalar_one()
@@ -75,7 +76,7 @@ class InteractiveSettingsLoader:
 
 
 class InteractiveAccessMiddleware(BaseMiddleware):
-    def __init__(self, allowed_ids: frozenset[int], loader: InteractiveSettingsLoader):
+    def __init__(self, allowed_ids: frozenset[int] | None, loader: InteractiveSettingsLoader):
         self.allowed_ids = allowed_ids
         self.loader = loader
         # Serial execution also keeps one update's shared settings consistent.
@@ -95,13 +96,22 @@ class InteractiveAccessMiddleware(BaseMiddleware):
         # A completed payment must not disappear if the operator changed the test
         # allowlist after issuing the invoice. Existing handlers are idempotent.
         completed_payment = bool(event.message and event.message.successful_payment)
-        if item.from_user.id not in self.allowed_ids and not completed_payment:
+        if self.allowed_ids is not None and item.from_user.id not in self.allowed_ids and not completed_payment:
             if event.pre_checkout_query:
                 await event.pre_checkout_query.answer(ok=False, error_message=PRIVATE_MESSAGE)
             elif event.callback_query:
                 await event.callback_query.answer(PRIVATE_MESSAGE, show_alert=True)
             elif event.message:
                 await event.message.answer(PRIVATE_MESSAGE, parse_mode=None)
+            return None
+        # Monitoring belongs to the primary even when admin handlers are enabled.
+        if event.callback_query and event.callback_query.data in {
+            'maintenance_monitoring',
+            'admin_mon_start',
+            'admin_mon_stop',
+            'admin_mon_force_check',
+        }:
+            await event.callback_query.answer('Фоновый мониторинг управляется только в основном боте.', show_alert=True)
             return None
         async with self.lock:
             await self.loader.reload()
@@ -117,7 +127,13 @@ def build_web_app(dp: Dispatcher, bot: Bot, *, path: str | None, secret: str | N
 
     async def health(request):
         return web.json_response(
-            {'status': 'ok', 'role': 'interactive', 'business_workers': False, 'private_test': True}
+            {
+                'status': 'ok',
+                'role': 'interactive',
+                'business_workers': False,
+                'private_test': not settings.BOT_INTERACTIVE_PUBLIC_ACCESS,
+                'admin_enabled': admin_handlers_enabled(),
+            }
         )
 
     app.router.add_get('/health', health)
@@ -150,13 +166,17 @@ async def main():
 
                 _, dp = await setup_bot(bot=bot)
                 dp.update.outer_middleware(InteractiveAccessMiddleware(allowed_ids, loader))
-                dp.callback_query.register(admin_notice, F.data == 'admin_panel')
+                if not admin_handlers_enabled():
+                    dp.callback_query.register(admin_notice, F.data == 'admin_panel')
                 app = build_web_app(dp, bot, path=path if mode == 'webhook' else None, secret=secret)
                 runner = web.AppRunner(app)
                 await runner.setup()
                 await web.TCPSite(runner, host, port).start()
                 logger.info(
-                    'Приватный интерактивный бот подготовлен, фоновые бизнес-задачи отсутствуют', transport=mode
+                    'Интерактивный бот подготовлен, фоновые бизнес-задачи отсутствуют',
+                    transport=mode,
+                    public_access=settings.BOT_INTERACTIVE_PUBLIC_ACCESS,
+                    admin_enabled=admin_handlers_enabled(),
                 )
                 allowed_updates = dp.resolve_used_update_types()
                 if mode == 'webhook':

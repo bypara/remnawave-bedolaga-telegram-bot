@@ -81,7 +81,7 @@ from app.middlewares.maintenance import MaintenanceMiddleware
 from app.middlewares.subscription_checker import SubscriptionStatusMiddleware
 from app.middlewares.throttling import ThrottlingMiddleware
 from app.middlewares.topup_prompt import TopupPromptTrackingMiddleware
-from app.runtime_roles import is_primary_process
+from app.runtime_roles import admin_handlers_enabled, is_primary_process
 from app.services.maintenance_service import maintenance_service
 from app.utils.cache import cache
 from app.utils.message_patch import patch_message_methods
@@ -211,7 +211,7 @@ async def setup_bot(*, bot: Bot | None = None) -> tuple[Bot, Dispatcher]:
     support.register_handlers(dp)
     server_status.register_handlers(dp)
     tickets.register_handlers(dp)
-    if primary:
+    if admin_handlers_enabled():
         for register in (
             admin_main.register_handlers,
             admin_users.register_handlers,

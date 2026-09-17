@@ -12,7 +12,9 @@ services:
     environment:
       BOT_PROCESS_ROLE: interactive
       BOT_PRIMARY_ID: '${BOT_PRIMARY_ID:?Specify the numeric ID of the active primary bot}'
-      BOT_INTERACTIVE_ALLOWED_IDS: '${BOT_INTERACTIVE_ALLOWED_IDS:?Specify test Telegram IDs}'
+      BOT_INTERACTIVE_ALLOWED_IDS: '${BOT_INTERACTIVE_ALLOWED_IDS:-}'
+      BOT_INTERACTIVE_PUBLIC_ACCESS: '${BOT_INTERACTIVE_PUBLIC_ACCESS:-false}'
+      BOT_INTERACTIVE_ADMIN_ENABLED: '${BOT_INTERACTIVE_ADMIN_ENABLED:-false}'
       BOT_RUN_MODE: polling
       DOCKER_ENV: 'true'
       DATABASE_MODE: auto

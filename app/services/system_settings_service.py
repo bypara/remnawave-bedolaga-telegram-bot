@@ -101,6 +101,8 @@ class BotConfigurationService:
         'BOT_PROCESS_ROLE',
         'BOT_PRIMARY_ID',
         'BOT_INTERACTIVE_ALLOWED_IDS',
+        'BOT_INTERACTIVE_PUBLIC_ACCESS',
+        'BOT_INTERACTIVE_ADMIN_ENABLED',
         'ADMIN_IDS',
         'ADMIN_EMAILS',
         'CABINET_JWT_SECRET',
