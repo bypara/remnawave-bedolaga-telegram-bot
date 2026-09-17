@@ -3798,6 +3798,8 @@ class BroadcastHistory(Base):
     email_html_content = Column(Text, nullable=True)
 
     admin = relationship('User', back_populates='broadcasts')
+    telegram_sender = Column(String(20), nullable=False, default='current', server_default='current')
+    add_migration_button = Column(Boolean, nullable=False, default=False, server_default='false')
 
 
 class Poll(Base):

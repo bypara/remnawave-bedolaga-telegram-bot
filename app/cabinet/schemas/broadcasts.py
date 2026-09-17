@@ -121,6 +121,8 @@ class BroadcastCreateRequest(BaseModel):
     """Request to create a broadcast."""
 
     target: str
+    telegram_sender: Literal['current', 'legacy'] = 'current'
+    add_migration_button: bool = False
     message_text: str = Field(..., min_length=1, max_length=4000)
     selected_buttons: list[str] = Field(default_factory=lambda: ['home'])
     custom_buttons: list[CustomBroadcastButton] = Field(default_factory=list, max_length=10)
@@ -135,6 +137,8 @@ class BroadcastResponse(BaseModel):
     """Broadcast response."""
 
     id: int
+    telegram_sender: str = 'current'
+    add_migration_button: bool = False
     target_type: str
     message_text: str | None = None
     has_media: bool
@@ -215,6 +219,8 @@ class CombinedBroadcastCreateRequest(BaseModel):
     """Request to create a combined (telegram/email/both) broadcast."""
 
     channel: BroadcastChannel
+    telegram_sender: Literal['current', 'legacy'] = 'current'
+    add_migration_button: bool = False
     target: str
 
     # Telegram-specific fields

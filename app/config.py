@@ -652,6 +652,8 @@ class Settings(BaseSettings):
     TELEGRAM_OIDC_ENABLED: bool = False
     TELEGRAM_OIDC_CLIENT_ID: str = ''
     TELEGRAM_OIDC_CLIENT_SECRET: str = ''
+    # Outbound-only sender for cabinet broadcasts. Never starts a consumer/workers.
+    LEGACY_BOT_TOKEN: str = ''
 
     TRIBUTE_ENABLED: bool = False
     TRIBUTE_API_KEY: str | None = None

@@ -5,9 +5,11 @@ import hmac
 import mimetypes
 import re
 import time
+from typing import Annotated, Literal
 
 import structlog
 from aiogram.types import BufferedInputFile
+from aiogram.utils.token import TokenValidationError
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
 from pydantic import BaseModel
 
@@ -115,18 +117,21 @@ _FILE_ID_RE = re.compile(TELEGRAM_FILE_ID_PATTERN)
 _MEDIA_TOKEN_TTL_SECONDS = 24 * 60 * 60
 
 
-def _media_signature(file_id: str, exp: int) -> str:
+def _media_signature(file_id: str, exp: int, telegram_sender: str = 'current') -> str:
     secret = (settings.get_cabinet_jwt_secret() or '').encode()
-    return hmac.new(secret, f'{file_id}.{exp}'.encode(), hashlib.sha256).hexdigest()
+    payload = f'{file_id}.{exp}'
+    if telegram_sender != 'current':
+        payload = f'{telegram_sender}.{payload}'
+    return hmac.new(secret, payload.encode(), hashlib.sha256).hexdigest()
 
 
-def make_media_token(file_id: str) -> str:
+def make_media_token(file_id: str, telegram_sender: str = 'current') -> str:
     """Signed, expiring token authorizing download of `file_id`."""
     exp = int(time.time()) + _MEDIA_TOKEN_TTL_SECONDS
-    return f'{exp}.{_media_signature(file_id, exp)}'
+    return f'{exp}.{_media_signature(file_id, exp, telegram_sender)}'
 
 
-def _verify_media_token(file_id: str, token: str) -> bool:
+def _verify_media_token(file_id: str, token: str, telegram_sender: str = 'current') -> bool:
     exp_str, _, sig = (token or '').partition('.')
     if not sig:
         return False
@@ -136,7 +141,7 @@ def _verify_media_token(file_id: str, token: str) -> bool:
         return False
     if exp < int(time.time()):
         return False
-    return hmac.compare_digest(_media_signature(file_id, exp), sig)
+    return hmac.compare_digest(_media_signature(file_id, exp, telegram_sender), sig)
 
 
 class MediaUploadResponse(BaseModel):
@@ -164,11 +169,12 @@ def _resolve_target_chat_id() -> int:
     )
 
 
-def _build_media_url(request: Request, file_id: str) -> str:
+def _build_media_url(request: Request, file_id: str, telegram_sender: str = 'current') -> str:
     """Build a signed, expiring URL for downloading media."""
     base = str(request.url_for('cabinet_download_media', file_id=file_id))
     sep = '&' if '?' in base else '?'
-    return f'{base}{sep}token={make_media_token(file_id)}'
+    suffix = '&telegram_sender=legacy' if telegram_sender == 'legacy' else ''
+    return f'{base}{sep}token={make_media_token(file_id, telegram_sender)}{suffix}'
 
 
 @router.post('/upload', response_model=MediaUploadResponse, status_code=status.HTTP_201_CREATED)
@@ -177,6 +183,7 @@ async def upload_media(
     user: User = Depends(get_current_cabinet_user),
     file: UploadFile = File(...),
     media_type: str = Form('photo', description='File type: photo, video, or document'),
+    telegram_sender: Annotated[Literal['current', 'legacy'], Query()] = 'current',
 ):
     """
     Upload media file for use in ticket messages.
@@ -226,7 +233,27 @@ async def upload_media(
     target_chat_id = _resolve_target_chat_id()
     upload = BufferedInputFile(file_bytes, filename=file.filename or 'upload')
 
-    bot = create_bot()
+    if telegram_sender == 'legacy':
+        from aiogram.exceptions import TelegramAPIError
+
+        from app.database.database import AsyncSessionLocal
+        from app.services.broadcast_sender import get_broadcast_sender_token
+        from app.services.broadcast_service import broadcast_service
+        from app.services.permission_service import PermissionService
+
+        async with AsyncSessionLocal() as session:
+            allowed, _ = await PermissionService.check_permission(session, user, 'broadcasts:send')
+        if not allowed:
+            raise HTTPException(status_code=403, detail='Недостаточно прав для загрузки от старого бота')
+        try:
+            await broadcast_service.validate_options('legacy', False)
+            bot = create_bot(token=get_broadcast_sender_token('legacy'))
+        except (ValueError, TokenValidationError) as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        except TelegramAPIError as error:
+            raise HTTPException(status_code=503, detail='Не удалось проверить старого бота') from error
+    else:
+        bot = create_bot()
 
     try:
         # Send with disable_notification to avoid pinging admins — this is just staging
@@ -258,7 +285,7 @@ async def upload_media(
         except Exception:
             pass  # Best-effort cleanup — file_id is already captured
 
-        media_url = _build_media_url(request, media.file_id)
+        media_url = _build_media_url(request, media.file_id, telegram_sender)
 
         logger.info(
             'User uploaded',
@@ -289,6 +316,7 @@ async def upload_media(
 async def download_media(
     file_id: str,
     token: str = Query('', description='Signed access token from the ticket response'),
+    telegram_sender: Annotated[Literal['current', 'legacy'], Query()] = 'current',
 ) -> Response:
     """
     Download media file by file_id.
@@ -297,13 +325,21 @@ async def download_media(
     # Validate the id shape, then require a valid, unexpired signed token. The
     # token is minted only inside an authenticated, owner-scoped ticket response,
     # so a leaked raw file_id is not downloadable on its own and the URL expires.
-    if not _FILE_ID_RE.match(file_id) or not _verify_media_token(file_id, token):
+    if not _FILE_ID_RE.match(file_id) or not _verify_media_token(file_id, token, telegram_sender):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='Media file not found',
         )
 
-    bot = create_bot()
+    if telegram_sender == 'legacy':
+        from app.services.broadcast_sender import get_broadcast_sender_token
+
+        try:
+            bot = create_bot(token=get_broadcast_sender_token('legacy'))
+        except (ValueError, TokenValidationError) as error:
+            raise HTTPException(status_code=404, detail='Media file not found') from error
+    else:
+        bot = create_bot()
 
     try:
         file = await bot.get_file(file_id)

@@ -97,6 +97,7 @@ class BotConfigurationService:
     # secrets are intentionally NOT here: operators configure those via the UI.
     EXCLUDED_KEYS: set[str] = {
         'BOT_TOKEN',
+        'LEGACY_BOT_TOKEN',
         'ADMIN_IDS',
         'ADMIN_EMAILS',
         'CABINET_JWT_SECRET',

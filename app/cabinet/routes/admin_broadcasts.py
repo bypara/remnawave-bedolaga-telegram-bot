@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 
 import structlog
+from aiogram.exceptions import TelegramAPIError
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -127,6 +128,8 @@ def _serialize_broadcast(broadcast: BroadcastHistory) -> BroadcastResponse:
 
     return BroadcastResponse(
         id=broadcast.id,
+        telegram_sender=getattr(broadcast, 'telegram_sender', None) or 'current',
+        add_migration_button=bool(getattr(broadcast, 'add_migration_button', False)),
         target_type=broadcast.target_type,
         message_text=broadcast.message_text,
         has_media=broadcast.has_media,
@@ -399,6 +402,38 @@ async def preview_broadcast(
     return BroadcastPreviewResponse(target=request.target, count=count)
 
 
+async def _validate_delivery_options(sender: str, add_migration_button: bool, media_file_id: str | None = None) -> None:
+    try:
+        await broadcast_service.validate_options(sender, add_migration_button, media_file_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except TelegramAPIError as error:
+        raise HTTPException(status_code=503, detail='Не удалось проверить отправителя через Telegram') from error
+
+
+@router.get('/delivery-options')
+async def get_delivery_options(admin: User = Depends(require_permission('broadcasts:read'))) -> dict:
+    from app.bot_migration_config import migration_bonus_kopeks, render_migration_text
+    from app.config import settings
+    from app.services.bot_migration_service import migration_target_username
+
+    target = migration_target_username()
+    amount = (
+        migration_bonus_kopeks(settings.BOT_MIGRATION_BONUS_AMOUNT_RUBLES)
+        if settings.BOT_MIGRATION_BONUS_ENABLED
+        else 0
+    )
+    return {
+        'legacy_available': bool(settings.LEGACY_BOT_TOKEN),
+        'migration_button_available': bool(target),
+        'current_is_target': bool(target and (settings.BOT_USERNAME or '').lower() == target),
+        'migration_url': settings.BOT_MIGRATION_URL if target else '',
+        'migration_button_text': render_migration_text(settings.BOT_MIGRATION_BUTTON_TEXT, amount),
+        'bonus_enabled': settings.BOT_MIGRATION_BONUS_ENABLED and amount > 0,
+        'bonus_amount_rubles': amount / 100,
+    }
+
+
 @router.post('', response_model=BroadcastResponse, status_code=status.HTTP_201_CREATED)
 async def create_broadcast(
     request: BroadcastCreateRequest,
@@ -435,9 +470,15 @@ async def create_broadcast(
     if media_payload:
         _ensure_media_caption_fits(media_payload.caption or message_text)
 
+    await _validate_delivery_options(
+        request.telegram_sender, request.add_migration_button, media_payload.file_id if media_payload else None
+    )
+
     # Create broadcast record
     broadcast = BroadcastHistory(
         target_type=request.target,
+        telegram_sender=request.telegram_sender,
+        add_migration_button=request.add_migration_button,
         message_text=message_text,
         has_media=media_payload is not None,
         media_type=media_payload.type if media_payload else None,
@@ -467,6 +508,8 @@ async def create_broadcast(
     # Create broadcast config
     config = BroadcastConfig(
         target=request.target,
+        telegram_sender=request.telegram_sender,
+        add_migration_button=request.add_migration_button,
         message_text=message_text,
         selected_buttons=request.selected_buttons,
         media=media_config,
@@ -610,6 +653,8 @@ async def create_combined_broadcast(
 
     admin_name = admin.username or f'Admin #{admin.id}'
 
+    if request.channel == 'email' and (request.telegram_sender != 'current' or request.add_migration_button):
+        raise HTTPException(status_code=400, detail='Отправитель бота и кнопка перехода доступны только для Telegram')
     # Validate based on channel
     if request.channel in ('telegram', 'both'):
         # Validate telegram target
@@ -660,6 +705,11 @@ async def create_combined_broadcast(
 
     media_payload = request.media
 
+    if request.channel in ('telegram', 'both'):
+        await _validate_delivery_options(
+            request.telegram_sender, request.add_migration_button, media_payload.file_id if media_payload else None
+        )
+
     # Create broadcast record
     broadcast = BroadcastHistory(
         target_type=request.target,
@@ -676,6 +726,8 @@ async def create_combined_broadcast(
         admin_name=admin_name,
         category=request.category,
         channel=request.channel,
+        telegram_sender=request.telegram_sender,
+        add_migration_button=request.add_migration_button,
         email_subject=request.email_subject.strip() if request.email_subject else None,
         email_html_content=request.email_html_content.strip() if request.email_html_content else None,
     )
@@ -697,6 +749,8 @@ async def create_combined_broadcast(
         # Create telegram broadcast config
         telegram_config = BroadcastConfig(
             target=request.target,
+            telegram_sender=request.telegram_sender,
+            add_migration_button=request.add_migration_button,
             message_text=request.message_text.strip(),
             selected_buttons=request.selected_buttons,
             media=media_config,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import functools
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -16,7 +16,8 @@ from aiogram.exceptions import (
     TelegramRetryAfter,
     TelegramServerError,
 )
-from aiogram.types import InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.utils.token import TokenValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import InterfaceError, SQLAlchemyError
 
@@ -112,6 +113,9 @@ class BroadcastConfig:
     # Персональная клавиатура на получателя (у промопредложений в callback_data зашит
     # id его оффера). Если задана — вытесняет selected_buttons/custom_buttons.
     keyboard_factory: Callable[[int], InlineKeyboardMarkup | None] | None = None
+    telegram_sender: str = 'current'
+    add_migration_button: bool = False
+    sender_bot: Bot | None = None
 
 
 @dataclass
@@ -151,6 +155,72 @@ class BroadcastService:
 
     def set_bot(self, bot: Bot) -> None:
         self._bot = bot
+
+    def _resolve_sender(self, sender: str) -> tuple[Bot, bool]:
+        from app.bot_factory import create_bot
+        from app.services.broadcast_sender import get_broadcast_sender_token
+
+        if sender == 'current' and self._bot is not None:
+            return self._bot, False
+        token = get_broadcast_sender_token(sender)
+        if self._bot is not None and self._bot.token == token:
+            return self._bot, False
+        try:
+            return create_bot(token=token), True
+        except (ValueError, TokenValidationError) as error:
+            raise ValueError('Некорректный токен отправителя рассылки') from error
+
+    async def validate_options(self, sender: str, add_migration_button: bool, media_file_id: str | None = None) -> None:
+        if sender == 'current' and not add_migration_button:
+            return
+        from app.bot_migration_config import validate_migration_value
+        from app.config import settings
+        from app.services.bot_migration_service import migration_target_username
+
+        bot, owned = self._resolve_sender(sender)
+        try:
+            if sender == 'legacy' or add_migration_button:
+                identity = await bot.me()
+                target = migration_target_username()
+                if target and (identity.username or '').lower() == target:
+                    raise ValueError(
+                        'Нельзя отправлять рассылку старого бота или кнопку переезда от целевого нового бота'
+                    )
+            if sender == 'legacy' and media_file_id:
+                await bot.get_file(media_file_id)
+            if add_migration_button:
+                if not migration_target_username():
+                    raise ValueError('Сначала задайте ссылку на нового бота в настройках переезда')
+                validate_migration_value('BOT_MIGRATION_BUTTON_TEXT', settings.BOT_MIGRATION_BUTTON_TEXT)
+                validate_migration_value(
+                    'BOT_MIGRATION_NO_BONUS_BUTTON_TEXT', settings.BOT_MIGRATION_NO_BONUS_BUTTON_TEXT
+                )
+        finally:
+            if owned:
+                await bot.session.close()
+
+    async def _recipient_keyboard(self, telegram_id: int, config: BroadcastConfig, keyboard):
+        if not config.add_migration_button:
+            return keyboard
+        from app.bot_migration_config import render_migration_text
+        from app.config import settings
+        from app.services.bot_migration_service import issue_migration_link, migration_target_username
+
+        bot = config.sender_bot or self._bot
+        if bot is None:
+            raise ValueError('Отправитель рассылки не инициализирован')
+        target = migration_target_username()
+        identity = await bot.me()
+        if not target or (identity.username or '').lower() == target:
+            raise ValueError('Некорректная ссылка перехода: целевой бот должен отличаться от отправителя')
+        async with AsyncSessionLocal() as session:
+            link = await issue_migration_link(session, telegram_id, bot.id)
+        label = settings.BOT_MIGRATION_BUTTON_TEXT
+        if settings.BOT_MIGRATION_BONUS_ENABLED and link.amount_kopeks == 0:
+            label = settings.BOT_MIGRATION_NO_BONUS_BUTTON_TEXT
+        rows = [list(row) for row in keyboard.inline_keyboard] if keyboard else []
+        rows.append([InlineKeyboardButton(text=render_migration_text(label, link.amount_kopeks), url=link.url)])
+        return InlineKeyboardMarkup(inline_keyboard=rows)
 
     def is_running(self, broadcast_id: int) -> bool:
         task_entry = self._tasks.get(broadcast_id)
@@ -194,8 +264,12 @@ class BroadcastService:
         sent_count = 0
         failed_count = 0
         blocked_count = 0
+        sender_bot = None
+        owned_sender = False
 
         try:
+            sender_bot, owned_sender = self._resolve_sender(config.telegram_sender)
+            config = replace(config, sender_bot=sender_bot)
             if cancel_event.is_set():
                 await self._mark_cancelled(broadcast_id, sent_count, failed_count, blocked_count)
                 return
@@ -285,6 +359,9 @@ class BroadcastService:
         except Exception as exc:
             logger.exception('Критическая ошибка при выполнении рассылки', broadcast_id=broadcast_id, exc=exc)
             await self._mark_failed(broadcast_id, sent_count, failed_count, blocked_count)
+        finally:
+            if owned_sender and sender_bot is not None:
+                await sender_bot.session.close()
 
     async def _fetch_recipients(self, target: str, category: str = 'system') -> list[int]:
         """Загружает получателей и возвращает список telegram_id (скаляры, не ORM-объекты).
@@ -353,10 +430,12 @@ class BroadcastService:
                     return 'failed'
 
                 try:
+                    recipient_keyboard = config.keyboard_factory(telegram_id) if config.keyboard_factory else keyboard
+                    recipient_keyboard = await self._recipient_keyboard(telegram_id, config, recipient_keyboard)
                     await self._deliver_message(
                         telegram_id,
                         config,
-                        config.keyboard_factory(telegram_id) if config.keyboard_factory else keyboard,
+                        recipient_keyboard,
                     )
                     return 'sent'
 
@@ -484,15 +563,16 @@ class BroadcastService:
         НЕ ловит исключения — TelegramRetryAfter, TelegramForbiddenError и др.
         обрабатываются в вызывающем коде (_send_batched).
         """
-        if not self._bot:
+        bot = config.sender_bot or self._bot
+        if not bot:
             raise RuntimeError('Телеграм-бот не инициализирован')
 
         if config.media and config.media.type in VALID_MEDIA_TYPES:
             caption = config.media.caption or config.message_text
             media_methods = {
-                'photo': ('photo', self._bot.send_photo),
-                'video': ('video', self._bot.send_video),
-                'document': ('document', self._bot.send_document),
+                'photo': ('photo', bot.send_photo),
+                'video': ('video', bot.send_video),
+                'document': ('document', bot.send_document),
             }
             kwarg_name, send_method = media_methods[config.media.type]
             await send_method(
@@ -510,8 +590,8 @@ class BroadcastService:
         from app.config import settings
         from app.utils.rich_notify import try_send_rich_notification
 
-        if await try_send_rich_notification(
-            self._bot,
+        if config.telegram_sender != 'legacy' and await try_send_rich_notification(
+            bot,
             telegram_id,
             config.message_text,
             keyboard=keyboard,
@@ -519,7 +599,7 @@ class BroadcastService:
         ):
             return
 
-        await self._bot.send_message(
+        await bot.send_message(
             chat_id=telegram_id,
             text=config.message_text,
             parse_mode='HTML',
