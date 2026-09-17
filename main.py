@@ -10,46 +10,9 @@ import structlog
 
 sys.path.append(str(Path(__file__).parent))
 
-from app.bot import setup_bot
 from app.config import settings
-from app.database.database import sync_postgres_sequences
-from app.database.migrations import run_alembic_upgrade
-from app.database.models import PaymentMethod
-from app.localization.loader import ensure_locale_templates
-from app.logging_config import _resolve_log_level, setup_logging
 from app.runtime_roles import require_primary_process
-from app.services.backup_service import backup_service
-from app.services.ban_notification_service import ban_notification_service
-from app.services.broadcast_service import broadcast_service
-from app.services.contest_rotation_service import contest_rotation_service
-from app.services.daily_subscription_service import daily_subscription_service
-from app.services.grace_access_runtime import grace_access_runtime
-from app.services.log_rotation_service import log_rotation_service
-from app.services.maintenance_service import maintenance_service
-from app.services.monitoring_service import monitoring_service
-from app.services.nalogo_queue_service import nalogo_queue_service
-from app.services.payment_service import PaymentService
-from app.services.payment_verification_service import (
-    PENDING_MAX_AGE,
-    SUPPORTED_MANUAL_CHECK_METHODS,
-    auto_payment_verification_service,
-    get_enabled_auto_methods,
-    method_display_name,
-)
-from app.services.reachability.service import reachability_service
-from app.services.referral_contest_service import referral_contest_service
-from app.services.remnawave_sync_service import remnawave_sync_service
-from app.services.reporting_service import reporting_service
-from app.services.riopay_service import riopay_service
-from app.services.system_settings_service import bot_configuration_service
-from app.services.traffic_monitoring_service import traffic_monitoring_scheduler
-from app.services.version_service import version_service
-from app.services.web_api_token_service import ensure_default_web_api_token
-from app.utils.log_handlers import ExcludePaymentFilter, LevelFilterHandler
-from app.utils.payment_logger import configure_payment_logger
-from app.utils.startup_timeline import StartupTimeline
-from app.webapi.server import WebAPIServer
-from app.webserver.unified_app import create_unified_app
+from app.settings_bootstrap import preload_database_settings
 
 
 class GracefulExit:
@@ -63,6 +26,47 @@ class GracefulExit:
 
 async def main():
     require_primary_process()
+    await preload_database_settings()
+
+    from app.bot import setup_bot
+    from app.database.database import sync_postgres_sequences
+    from app.database.migrations import run_alembic_upgrade
+    from app.database.models import PaymentMethod
+    from app.localization.loader import ensure_locale_templates
+    from app.logging_config import _resolve_log_level, setup_logging
+    from app.services.backup_service import backup_service
+    from app.services.ban_notification_service import ban_notification_service
+    from app.services.broadcast_service import broadcast_service
+    from app.services.contest_rotation_service import contest_rotation_service
+    from app.services.daily_subscription_service import daily_subscription_service
+    from app.services.grace_access_runtime import grace_access_runtime
+    from app.services.log_rotation_service import log_rotation_service
+    from app.services.maintenance_service import maintenance_service
+    from app.services.monitoring_service import monitoring_service
+    from app.services.nalogo_queue_service import nalogo_queue_service
+    from app.services.payment_service import PaymentService
+    from app.services.payment_verification_service import (
+        PENDING_MAX_AGE,
+        SUPPORTED_MANUAL_CHECK_METHODS,
+        auto_payment_verification_service,
+        get_enabled_auto_methods,
+        method_display_name,
+    )
+    from app.services.reachability.service import reachability_service
+    from app.services.referral_contest_service import referral_contest_service
+    from app.services.remnawave_sync_service import remnawave_sync_service
+    from app.services.reporting_service import reporting_service
+    from app.services.riopay_service import riopay_service
+    from app.services.system_settings_service import bot_configuration_service
+    from app.services.traffic_monitoring_service import traffic_monitoring_scheduler
+    from app.services.version_service import version_service
+    from app.services.web_api_token_service import ensure_default_web_api_token
+    from app.utils.log_handlers import ExcludePaymentFilter, LevelFilterHandler
+    from app.utils.payment_logger import configure_payment_logger
+    from app.utils.startup_timeline import StartupTimeline
+    from app.webapi.server import WebAPIServer
+    from app.webserver.unified_app import create_unified_app
+
     file_formatter, console_formatter, telegram_notifier = setup_logging()
 
     log_handlers = []
