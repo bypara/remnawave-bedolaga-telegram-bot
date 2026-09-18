@@ -1,0 +1,8 @@
+# Explicit primary image for the completed cutover. Never run a second main.py.
+services:
+  bot:
+    image: ${BOT_PRIMARY_IMAGE:?Specify the tested primary image}
+    environment:
+      BOT_PROCESS_ROLE: primary
+    volumes:
+      - ./censet_vpn_banner.png:/app/censet_vpn_banner.png:ro
