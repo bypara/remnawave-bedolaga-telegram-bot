@@ -3,6 +3,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 from aiogram import Bot
+from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.methods import SendMessage
 from aiogram.types import Chat, Message, User
 
 from app.config import settings
@@ -46,7 +49,11 @@ def flow(monkeypatch):
     state = SimpleNamespace(get_data=AsyncMock(return_value={}), update_data=AsyncMock(), set_data=AsyncMock())
     claim = AsyncMock(return_value=MigrationBonusResult('credited', 7550))
     monkeypatch.setattr(start, 'claim_migration_bonus', claim)
-    monkeypatch.setattr(settings, 'BOT_MIGRATION_BONUS_SUCCESS_MESSAGE', 'Вам начислено {bonus} ₽ <без HTML>')
+    monkeypatch.setattr(
+        settings,
+        'BOT_MIGRATION_BONUS_SUCCESS_MESSAGE',
+        '<tg-emoji emoji-id="5265039291058235695">🟢</tg-emoji> Вам начислено <b>{bonus} ₽</b>',
+    )
     return event, db, state, claim, answer, token, campaign
 
 
@@ -55,8 +62,35 @@ async def test_start_credits_then_continues_without_campaign_or_referral_attribu
     with pytest.raises(StopAfterMigration):
         await start.cmd_start(event, state, db)
     claim.assert_awaited_once_with(db, token, 42, 654321, 'new_service_bot')
-    answer.assert_awaited_once_with('Вам начислено 75.5 ₽ <без HTML>', parse_mode=None)
+    answer.assert_awaited_once_with(
+        '<tg-emoji emoji-id="5265039291058235695">🟢</tg-emoji> Вам начислено <b>75.5 ₽</b>',
+        parse_mode=ParseMode.HTML,
+    )
     campaign.assert_not_awaited()
+
+
+async def test_invalid_bonus_html_retries_delivery_without_crediting_twice(flow):
+    event, db, state, claim, answer, token, campaign = flow
+    answer.side_effect = [
+        TelegramBadRequest(method=SendMessage(chat_id=42, text='test'), message="can't parse entities"),
+        None,
+    ]
+    with pytest.raises(StopAfterMigration):
+        await start.cmd_start(event, state, db)
+    claim.assert_awaited_once()
+    assert answer.await_count == 2
+    assert answer.await_args_list[1].args == ('🟢 Вам начислено 75.5 ₽',)
+    assert answer.await_args_list[1].kwargs == {'parse_mode': None}
+    state.update_data.assert_any_await(pending_migration_token=None)
+
+
+async def test_unrelated_bonus_delivery_failure_is_not_retried(flow):
+    event, db, state, claim, answer, token, campaign = flow
+    answer.side_effect = TelegramBadRequest(method=SendMessage(chat_id=42, text='test'), message='chat not found')
+    with pytest.raises(TelegramBadRequest, match='chat not found'):
+        await start.cmd_start(event, state, db)
+    claim.assert_awaited_once()
+    answer.assert_awaited_once()
 
 
 async def test_first_touch_campaign_cannot_hide_migration(flow):

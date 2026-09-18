@@ -91,6 +91,7 @@ from app.states import RegistrationStates
 from app.utils.custom_emoji_buttons import decorate_gift_html
 from app.utils.gift_links import InvalidGiftTokenError, parse_gift_claim_input
 from app.utils.long_messages import answer_long_text, edit_long_text, send_long_text
+from app.utils.migration_messages import send_migration_message
 from app.utils.miniapp_buttons import strip_leading_emoji
 from app.utils.rich_menu import try_answer_rich_main_menu, try_send_rich_main_menu
 from app.utils.user_utils import generate_unique_referral_code
@@ -1517,9 +1518,9 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             await message.answer('Не удалось начислить бонус. Попробуйте открыть ссылку ещё раз чуть позже.')
             return
         if result.status == 'credited':
-            await message.answer(
+            await send_migration_message(
+                message.answer,
                 render_migration_text(settings.BOT_MIGRATION_BONUS_SUCCESS_MESSAGE, result.amount_kopeks),
-                parse_mode=None,
             )
         elif result.status == 'already_claimed':
             await message.answer('Бонус за переезд уже начислен на ваш баланс.')
