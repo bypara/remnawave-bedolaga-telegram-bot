@@ -8,6 +8,7 @@ import time
 from typing import Annotated, Literal
 
 import structlog
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import BufferedInputFile
 from aiogram.utils.token import TokenValidationError
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
@@ -115,6 +116,13 @@ _FILE_ID_RE = re.compile(TELEGRAM_FILE_ID_PATTERN)
 # <img src>, which can't carry the Authorization header, so a short-lived signed
 # URL is the right primitive.)
 _MEDIA_TOKEN_TTL_SECONDS = 24 * 60 * 60
+
+
+def _is_unavailable_file_id(error: TelegramBadRequest) -> bool:
+    return any(
+        marker in error.message.lower()
+        for marker in ('wrong file_id', 'wrong file identifier', 'file is temporarily unavailable')
+    )
 
 
 def _media_signature(file_id: str, exp: int, telegram_sender: str = 'current') -> str:
@@ -341,15 +349,31 @@ async def download_media(
     else:
         bot = create_bot()
 
+    legacy_bot = None
     try:
-        file = await bot.get_file(file_id)
+        try:
+            file = await bot.get_file(file_id)
+        except TelegramBadRequest as error:
+            # Pre-migration ticket URLs are signed as "current", but their file
+            # IDs belong to the old bot. Only retry that specific getFile failure,
+            # after the file-bound signed token has already been verified above.
+            if (
+                telegram_sender != 'current'
+                or not _is_unavailable_file_id(error)
+                or not settings.LEGACY_BOT_TOKEN
+                or settings.LEGACY_BOT_TOKEN == settings.BOT_TOKEN
+            ):
+                raise
+            legacy_bot = create_bot(token=settings.LEGACY_BOT_TOKEN)
+            file = await legacy_bot.get_file(file_id)
+            logger.debug('Downloaded pre-migration media through legacy bot')
         if not file.file_path:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail='Media file not found',
             )
 
-        buffer = await bot.download_file(file.file_path)
+        buffer = await (legacy_bot or bot).download_file(file.file_path)
 
         if hasattr(buffer, 'seek'):
             buffer.seek(0)
@@ -363,10 +387,17 @@ async def download_media(
     except HTTPException:
         raise
     except Exception as error:
+        if isinstance(error, TelegramBadRequest) and _is_unavailable_file_id(error):
+            logger.debug('Media file unavailable')
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Media file not found') from error
         logger.error('Failed to download media', file_id=file_id, error=error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to download media',
         ) from error
     finally:
-        await bot.session.close()
+        try:
+            if legacy_bot is not None:
+                await legacy_bot.session.close()
+        finally:
+            await bot.session.close()
