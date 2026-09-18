@@ -1,11 +1,12 @@
 """Intercept even unmatched messages and historical callbacks during migration."""
 
 from collections.abc import Awaitable, Callable
+from html.parser import HTMLParser
 from typing import Any
 
 import structlog
 from aiogram import BaseMiddleware
-from aiogram.enums import ChatType
+from aiogram.enums import ChatType, ParseMode
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, TelegramObject
 
@@ -17,6 +18,30 @@ from app.utils.telegram_delivery import is_user_unreachable
 
 
 logger = structlog.get_logger(__name__)
+
+
+class _PlainMigrationText(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(data)
+
+
+async def _send_migration_notice(send: Callable[..., Awaitable[Any]], text: str, markup: Any) -> None:
+    try:
+        await send(text, reply_markup=markup, parse_mode=ParseMode.HTML)
+    except TelegramBadRequest as error:
+        # Retry only a rejected entity/HTML parse, never an unrelated delivery failure.
+        if "can't parse entities" not in str(error).lower():
+            raise
+        logger.warning('Некорректный HTML в сообщении переезда, отправляем обычный текст')
+        parser = _PlainMigrationText()
+        parser.feed(text)
+        parser.close()
+        plain_text = ''.join(parser.parts).strip() or text
+        await send(plain_text, reply_markup=markup, parse_mode=None)
 
 
 class BotMigrationMiddleware(BaseMiddleware):
@@ -95,12 +120,14 @@ class BotMigrationMiddleware(BaseMiddleware):
                 if url
                 else None
             )
-            # Plain text: admin-provided text cannot break Telegram HTML parsing.
             if isinstance(event, Message):
-                await event.answer(text, reply_markup=markup, parse_mode=None)
+                await _send_migration_notice(event.answer, text, markup)
             else:
                 # Send to the callback author, not an arbitrary/inline message chat.
-                await bot.send_message(user.id, text, reply_markup=markup, parse_mode=None)
+                async def send_notice(text: str, **kwargs: Any) -> Any:
+                    return await bot.send_message(user.id, text, **kwargs)
+
+                await _send_migration_notice(send_notice, text, markup)
         except TelegramForbiddenError as error:
             logger.debug('Заглушка переезда не доставлена', user_id=user.id, error=str(error))
         except TelegramBadRequest as error:

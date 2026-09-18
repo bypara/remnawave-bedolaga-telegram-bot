@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from aiogram import Bot, Dispatcher
-from aiogram.enums import ChatType
+from aiogram.enums import ChatType, ParseMode
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import CallbackQuery, Chat, Message, PreCheckoutQuery, SuccessfulPayment, Update, User
 
@@ -25,7 +25,7 @@ def message(**kwargs):
 def migration(monkeypatch):
     monkeypatch.setattr(settings, 'BOT_MIGRATION_ENABLED', True)
     monkeypatch.setattr(settings, 'BOT_MIGRATION_URL', 'https://t.me/new_service_bot?start=migration')
-    monkeypatch.setattr(settings, 'BOT_MIGRATION_MESSAGE', 'Переезд <без HTML> & бонусов')
+    monkeypatch.setattr(settings, 'BOT_MIGRATION_MESSAGE', '<b>Переезд</b> &amp; бонусы')
     monkeypatch.setattr(settings, 'BOT_MIGRATION_BUTTON_TEXT', 'Перейти')
     monkeypatch.setattr(settings, 'BOT_MIGRATION_BONUS_ENABLED', False)
     monkeypatch.setattr(
@@ -41,17 +41,55 @@ def migration(monkeypatch):
     return replies, answers, sends
 
 
-async def test_message_replaced_with_plain_text_and_url_button(migration):
+async def test_message_replaced_with_html_and_url_button(migration):
     handler = AsyncMock()
     await BotMigrationMiddleware()(handler, message(), {})
     handler.assert_not_awaited()
     replies, _, _ = migration
     replies.assert_awaited_once()
     assert replies.call_args.args == (settings.BOT_MIGRATION_MESSAGE,)
-    assert replies.call_args.kwargs['parse_mode'] is None
+    assert replies.call_args.kwargs['parse_mode'] == ParseMode.HTML
     button = replies.call_args.kwargs['reply_markup'].inline_keyboard[0][0]
     assert button.text == 'Перейти'
     assert button.url == settings.BOT_MIGRATION_URL
+
+
+@pytest.mark.parametrize('callback', [False, True])
+async def test_invalid_html_falls_back_without_losing_button(monkeypatch, migration, callback):
+    text = '<b>Переезд &amp; бонус</b> <tg-emoji emoji-id="123">✈️</tg-emoji><bad>!</bad>'
+    monkeypatch.setattr(settings, 'BOT_MIGRATION_MESSAGE', text)
+    replies, _, sends = migration
+    sender = sends if callback else replies
+    sender.side_effect = [TelegramBadRequest(method=None, message="can't parse entities: Unsupported start tag"), None]
+    event = message()
+    if callback:
+        event = CallbackQuery(id='html', from_user=event.from_user, chat_instance='chat', data='old').as_(event.bot)
+    await BotMigrationMiddleware()(AsyncMock(), event, {})
+    first, second = sender.await_args_list
+    assert first.args[-1] == text
+    assert first.kwargs['parse_mode'] == ParseMode.HTML
+    assert second.args[-1] == 'Переезд & бонус ✈️!'
+    assert second.kwargs['parse_mode'] is None
+    assert second.kwargs['reply_markup'] is first.kwargs['reply_markup']
+    assert second.kwargs['reply_markup'].inline_keyboard[0][0].url == settings.BOT_MIGRATION_URL
+
+
+@pytest.mark.parametrize('error', ['chat not found', 'BUTTON_URL_INVALID', 'message is too long'])
+async def test_unrelated_bad_request_is_not_retried(migration, error):
+    replies = migration[0]
+    replies.side_effect = TelegramBadRequest(method=None, message=error)
+    handler = AsyncMock()
+    await BotMigrationMiddleware()(handler, message(), {})
+    replies.assert_awaited_once()
+    handler.assert_not_awaited()
+
+
+async def test_custom_emoji_html_is_preserved(monkeypatch, migration):
+    text = '<tg-emoji emoji-id="5841718330779504200">✈️</tg-emoji> <b>Переехали</b>'
+    monkeypatch.setattr(settings, 'BOT_MIGRATION_MESSAGE', text)
+    await BotMigrationMiddleware()(AsyncMock(), message(), {})
+    assert migration[0].call_args.args == (text,)
+    assert migration[0].call_args.kwargs['parse_mode'] == ParseMode.HTML
 
 
 @pytest.mark.parametrize('with_message', [True, False])
@@ -209,7 +247,8 @@ async def test_target_bot_saves_bonus_separately_from_campaign_for_channel_gate(
 
 
 @pytest.mark.parametrize('amount', [7550, 0])
-async def test_personal_link_renders_actual_promised_amount(monkeypatch, migration, amount):
+@pytest.mark.parametrize('invalid_html', [False, True])
+async def test_personal_link_renders_actual_promised_amount(monkeypatch, migration, amount, invalid_html):
     from types import SimpleNamespace
 
     from app.services.bot_migration_service import MigrationLink
@@ -224,11 +263,15 @@ async def test_personal_link_renders_actual_promised_amount(monkeypatch, migrati
     url = 'https://t.me/new_service_bot?start=move_' + 'a' * 43 if amount else settings.BOT_MIGRATION_URL
     issue = AsyncMock(return_value=MigrationLink(url, amount))
     monkeypatch.setattr('app.middlewares.bot_migration.issue_migration_link', issue)
+    if invalid_html:
+        migration[0].side_effect = [TelegramBadRequest(method=None, message="can't parse entities"), None]
     handler = AsyncMock()
     await BotMigrationMiddleware()(handler, message(), {})
     issue.assert_awaited_once_with(db, 42, 123456)
     handler.assert_not_awaited()
     replies = migration[0]
+    assert replies.await_count == (2 if invalid_html else 1)
+    assert replies.await_args_list[0].kwargs['parse_mode'] == ParseMode.HTML
     expected = 'Переход: 75.5 ₽' if amount else settings.BOT_MIGRATION_NO_BONUS_MESSAGE
     assert replies.call_args.args[0] == expected
     button = replies.call_args.kwargs['reply_markup'].inline_keyboard[0][0]

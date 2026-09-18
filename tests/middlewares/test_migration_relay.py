@@ -101,7 +101,7 @@ async def test_unknown_messages_and_callbacks_are_stubbed_including_admin(config
     try:
         await dp.feed_update(configured, Update(update_id=1, message=message(text='/unknown')))
         Message.answer.assert_awaited_once_with(
-            'Мы переехали', reply_markup=Message.answer.call_args.kwargs['reply_markup'], parse_mode=None
+            'Мы переехали', reply_markup=Message.answer.call_args.kwargs['reply_markup'], parse_mode='HTML'
         )
         callback = CallbackQuery(id='old', from_user=message().from_user, chat_instance='chat', data='obsolete')
         await dp.feed_update(configured, Update(update_id=2, callback_query=callback))
