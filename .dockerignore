@@ -16,7 +16,7 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
-.venv/
+.venv*/
 .cabinet-work/
 .codex-preview/
 tests/
@@ -24,7 +24,7 @@ tests/
 .ruff_cache/
 
 # Environment files
-.env
+.env*
 .env.local
 .env.*.local
 

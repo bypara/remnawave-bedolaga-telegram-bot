@@ -888,18 +888,19 @@ def get_profile_keyboard(
     if hasattr(texts, 'BALANCE_BUTTON') and safe_balance > 0:
         balance_text = texts.BALANCE_BUTTON.format(balance=texts.format_price(safe_balance))
 
-    keyboard: list[list[InlineKeyboardButton]] = [
-        [
-            InlineKeyboardButton(
-                text=strip_leading_emoji(
-                    texts.t('PROFILE_WEB_CABINET_BUTTON', '🌐 Веб-кабинет')
-                ),
-                url='https://app.huntcdn.com/',
-                icon_custom_emoji_id='5447410659077661506',
-            )
-        ],
-        [InlineKeyboardButton(text=balance_text, callback_data='menu_balance')],
-    ]
+    keyboard: list[list[InlineKeyboardButton]] = []
+    cabinet_url = settings._normalized_cabinet_url() or settings.get_main_menu_miniapp_url()
+    if cabinet_url:
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=strip_leading_emoji(texts.t('PROFILE_WEB_CABINET_BUTTON', '🌐 Веб-кабинет')),
+                    url=cabinet_url.rstrip('/') + '/',
+                    icon_custom_emoji_id='5447410659077661506',
+                )
+            ]
+        )
+    keyboard.append([InlineKeyboardButton(text=balance_text, callback_data='menu_balance')])
 
     bonus_row = [InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data='menu_promocode')]
     if settings.is_referral_program_enabled():
@@ -955,9 +956,7 @@ def get_info_menu_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=strip_leading_emoji(
-                        texts.t('MENU_PRIVACY_POLICY', '🛡️ Политика конфиденциальности')
-                    ),
+                    text=strip_leading_emoji(texts.t('MENU_PRIVACY_POLICY', '🛡️ Политика конфиденциальности')),
                     url=privacy_policy_url,
                     icon_custom_emoji_id='5251203410396458957',
                 )

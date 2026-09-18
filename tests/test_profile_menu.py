@@ -6,25 +6,18 @@ from app.keyboards.inline import get_main_menu_keyboard, get_profile_keyboard
 
 def _callbacks(markup) -> list[str]:
     return [
-        button.callback_data
-        for row in markup.inline_keyboard
-        for button in row
-        if button.callback_data is not None
+        button.callback_data for row in markup.inline_keyboard for button in row if button.callback_data is not None
     ]
 
 
 def _button_by_callback(markup, callback_data: str):
-    return next(
-        button
-        for row in markup.inline_keyboard
-        for button in row
-        if button.callback_data == callback_data
-    )
+    return next(button for row in markup.inline_keyboard for button in row if button.callback_data == callback_data)
 
 
 def test_personal_actions_are_grouped_under_profile(monkeypatch):
     monkeypatch.setattr(settings, 'REFERRAL_PROGRAM_ENABLED', True)
     monkeypatch.setattr(settings, 'LANGUAGE_SELECTION_ENABLED', True)
+    monkeypatch.setattr(settings, 'CABINET_URL', 'https://web.censet.net')
 
     main_callbacks = _callbacks(get_main_menu_keyboard(language='ru'))
 
@@ -37,7 +30,7 @@ def test_personal_actions_are_grouped_under_profile(monkeypatch):
     profile = get_profile_keyboard(language='ru', balance_kopeks=12_300)
     cabinet_button = profile.inline_keyboard[0][0]
     assert cabinet_button.text == 'Веб-кабинет'
-    assert cabinet_button.url == 'https://app.huntcdn.com/'
+    assert cabinet_button.url == 'https://web.censet.net/'
     assert cabinet_button.icon_custom_emoji_id == '5447410659077661506'
     assert _callbacks(profile) == [
         'menu_balance',
@@ -47,6 +40,15 @@ def test_personal_actions_are_grouped_under_profile(monkeypatch):
         'back_to_menu',
     ]
     assert profile.inline_keyboard[2][1].text == '🤝 Реф. система'
+
+
+def test_profile_cabinet_link_tracks_settings_and_hides_when_unconfigured(monkeypatch):
+    monkeypatch.setattr(settings, 'CABINET_URL', 'https://custom.example/cabinet/')
+    assert get_profile_keyboard().inline_keyboard[0][0].url == 'https://custom.example/cabinet/'
+    monkeypatch.setattr(settings, 'CABINET_URL', settings._CABINET_URL_DEFAULT)
+    monkeypatch.setattr(settings, 'MINIAPP_CUSTOM_URL', '')
+    monkeypatch.setattr(settings, 'MINIAPP_PURCHASE_URL', '')
+    assert get_profile_keyboard().inline_keyboard[0][0].callback_data == 'menu_balance'
 
 
 def test_profile_hides_optional_actions_when_disabled(monkeypatch):
