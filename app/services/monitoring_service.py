@@ -55,6 +55,7 @@ from app.external.remnawave_api import (
 from app.localization.texts import get_texts
 from app.runtime_roles import is_primary_process
 from app.services.grace_access_runtime import update_panel_user_grace_safe
+from app.services.legacy_notification_service import send_notification_through_legacy_bot
 from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
@@ -263,8 +264,9 @@ class MonitoringService:
             return None
 
         # Skip blocked/deleted users to save Telegram rate limits
-        if user and user.status in (UserStatus.BLOCKED.value, UserStatus.DELETED.value):
-            logger.debug('Пропуск уведомления: пользователь недоступен', user_id=user.id, status=user.status)
+        user_status = getattr(user, 'status', None)
+        if user and user_status in (UserStatus.BLOCKED.value, UserStatus.DELETED.value):
+            logger.debug('Пропуск уведомления: пользователь недоступен', user_id=user.id, status=user_status)
             return None
 
         # Rich-путь идёт первым, чтобы уведомления мониторинга выглядели так же, как
@@ -324,6 +326,14 @@ class MonitoringService:
                 )
                 return None
             except TelegramBadRequest as exc:
+                if self._can_fallback_to_legacy(exc) and user:
+                    legacy_result = await send_notification_through_legacy_bot(
+                        telegram_id=chat_id,
+                        text=text,
+                    )
+                    if legacy_result is not None:
+                        return legacy_result
+                    raise
                 logger.warning(
                     'Не удалось отправить сообщение с логотипом, отправляем текстовое сообщение',
                     chat_id=chat_id,
@@ -347,6 +357,27 @@ class MonitoringService:
                 timeout=settings.MONITORING_NOTIFICATION_SEND_TIMEOUT,
             )
             return None
+        except TelegramBadRequest as exc:
+            if self._can_fallback_to_legacy(exc) and user:
+                legacy_result = await send_notification_through_legacy_bot(
+                    telegram_id=chat_id,
+                    text=text,
+                )
+                if legacy_result is not None:
+                    return legacy_result
+            raise
+
+    @staticmethod
+    def _can_fallback_to_legacy(error: TelegramBadRequest) -> bool:
+        message = str(error).lower()
+        return any(
+            marker in message
+            for marker in (
+                'chat not found',
+                "bot can't initiate conversation",
+                "can't initiate conversation",
+            )
+        )
 
     @staticmethod
     def _is_unreachable_error(error: TelegramBadRequest) -> bool:
@@ -2043,6 +2074,7 @@ class MonitoringService:
                 text=message,
                 parse_mode='HTML',
                 reply_markup=keyboard,
+                user=user,
             )
             return True
 
@@ -2163,6 +2195,7 @@ class MonitoringService:
                 text=message,
                 parse_mode='HTML',
                 reply_markup=keyboard,
+                user=user,
             )
             return True
 
@@ -2417,6 +2450,7 @@ class MonitoringService:
                 text=message,
                 parse_mode='HTML',
                 reply_markup=keyboard,
+                user=user,
             )
             return True
 
@@ -2533,6 +2567,7 @@ class MonitoringService:
                 text=message,
                 parse_mode='HTML',
                 reply_markup=keyboard,
+                user=user,
             )
             return True
 
@@ -2572,6 +2607,7 @@ class MonitoringService:
                 chat_id=user.telegram_id,
                 text=message,
                 parse_mode='HTML',
+                user=user,
             )
         except (TelegramForbiddenError, TelegramBadRequest) as exc:
             if not await self._handle_unreachable_user(user, exc, 'уведомление об успешном автоплатеже'):
@@ -2645,6 +2681,7 @@ class MonitoringService:
                 text=message,
                 parse_mode='HTML',
                 reply_markup=keyboard,
+                user=user,
             )
 
         except (TelegramForbiddenError, TelegramBadRequest) as exc:

@@ -21,9 +21,9 @@ class _PlainMigrationText(HTMLParser):
         self.parts.append(data)
 
 
-async def send_migration_message(send: Callable[..., Awaitable[Any]], text: str, **kwargs: Any) -> None:
+async def send_migration_message(send: Callable[..., Awaitable[Any]], text: str, **kwargs: Any) -> Any:
     try:
-        await send(text, **kwargs, parse_mode=ParseMode.HTML)
+        return await send(text, **kwargs, parse_mode=ParseMode.HTML)
     except TelegramBadRequest as error:
         # Retry only a rejected entity/HTML parse, never an unrelated delivery failure.
         if "can't parse entities" not in str(error).lower():
@@ -33,4 +33,4 @@ async def send_migration_message(send: Callable[..., Awaitable[Any]], text: str,
         parser.feed(text)
         parser.close()
         plain_text = ''.join(parser.parts).strip() or text
-        await send(plain_text, **kwargs, parse_mode=None)
+        return await send(plain_text, **kwargs, parse_mode=None)

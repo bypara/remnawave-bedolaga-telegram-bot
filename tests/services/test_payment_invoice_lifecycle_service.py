@@ -9,6 +9,8 @@ from app.services.payment_invoice_lifecycle_service import (
     _extract_payment_urls,
     _is_paid,
     _is_pending,
+    _is_terminal_unpaid,
+    _needs_terminal_cleanup,
     _send_expired,
     _send_warning,
     delete_paid_invoice_messages,
@@ -27,19 +29,38 @@ def test_extract_payment_urls_ignores_callback_buttons():
 
 
 @pytest.mark.parametrize(
-    ('status', 'is_paid', 'expected_paid', 'expected_pending'),
+    ('status', 'is_paid', 'expected_paid', 'expected_pending', 'expected_terminal'),
     [
-        ('pending', False, False, True),
-        ('check', False, False, True),
-        ('success', True, True, False),
-        ('expired', False, False, False),
+        ('pending', False, False, True, False),
+        ('check', False, False, True, False),
+        ('success', True, True, False, False),
+        ('expired', False, False, False, True),
+        ('declined', False, False, False, True),
+        ('failed', False, False, False, True),
     ],
 )
-def test_payment_state_classification(status, is_paid, expected_paid, expected_pending):
+def test_payment_state_classification(status, is_paid, expected_paid, expected_pending, expected_terminal):
     payment = SimpleNamespace(status=status, is_paid=is_paid)
 
     assert _is_paid(payment) is expected_paid
     assert _is_pending(payment) is expected_pending
+    assert _is_terminal_unpaid(payment) is expected_terminal
+
+
+def test_old_closed_terminal_invoice_is_reopened_for_cleanup():
+    payment = SimpleNamespace(status='declined', is_paid=False, is_pending=False)
+
+    assert _needs_terminal_cleanup(
+        payment,
+        {'closed_at': '2026-09-19T18:11:00+00:00', 'invoice_message_id': 135},
+    )
+    assert not _needs_terminal_cleanup(
+        payment, {'closed_at': 'now', 'invoice_message_id': 135, 'expired_notified_at': 'now'}
+    )
+    assert not _needs_terminal_cleanup(
+        SimpleNamespace(status='success', is_paid=True, is_pending=False),
+        {'closed_at': 'now', 'invoice_message_id': 135},
+    )
 
 
 @pytest.mark.asyncio

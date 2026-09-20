@@ -117,6 +117,20 @@ def _is_pending(payment: Any) -> bool:
     return str(getattr(payment, 'status', '') or '').strip().lower() in _PENDING_STATUSES
 
 
+def _is_terminal_unpaid(payment: Any) -> bool:
+    return not _is_paid(payment) and not _is_pending(payment)
+
+
+def _needs_terminal_cleanup(payment: Any, lifecycle: dict[str, Any]) -> bool:
+    """Recognize rows closed by the old buggy branch but never cleaned up."""
+    return bool(
+        lifecycle.get('closed_at')
+        and lifecycle.get('invoice_message_id')
+        and not lifecycle.get('expired_notified_at')
+        and _is_terminal_unpaid(payment)
+    )
+
+
 async def _find_payment_by_urls(db: AsyncSession, urls: set[str]) -> tuple[PaymentModelSpec, Any] | None:
     candidates = []
     for spec in PAYMENT_MODEL_SPECS:
@@ -137,9 +151,7 @@ async def _find_payment_by_urls(db: AsyncSession, urls: set[str]) -> tuple[Payme
 
     matches = union_all(*candidates).subquery()
     result = await db.execute(
-        select(matches.c.provider, matches.c.payment_id)
-        .order_by(matches.c.created_at.desc())
-        .limit(1)
+        select(matches.c.provider, matches.c.payment_id).order_by(matches.c.created_at.desc()).limit(1)
     )
     match = result.first()
     if match is None:
@@ -364,7 +376,11 @@ async def process_due_payment_invoices(bot: Bot) -> None:
             for payment in result.scalars().all():
                 metadata = dict(payment.metadata_json or {})
                 lifecycle = dict(metadata.get(LIFECYCLE_METADATA_KEY) or {})
-                if not lifecycle or lifecycle.get('expired_notified_at') or lifecycle.get('closed_at'):
+                if (
+                    not lifecycle
+                    or lifecycle.get('expired_notified_at')
+                    or (lifecycle.get('closed_at') and not _needs_terminal_cleanup(payment, lifecycle))
+                ):
                     continue
 
                 user = await db.get(User, payment.user_id)
@@ -382,9 +398,11 @@ async def process_due_payment_invoices(bot: Bot) -> None:
                         await _send_expired(bot, db, payment, user, lifecycle)
                     elif _is_pending(payment) and not lifecycle.get('warned_at'):
                         await _send_warning(bot, db, payment, user, lifecycle)
-                    elif not _is_pending(payment):
-                        lifecycle['closed_at'] = now.isoformat()
-                        await _store_lifecycle(db, payment, lifecycle)
+                    elif _is_terminal_unpaid(payment):
+                        # The payment URL is already unusable.  Merely setting
+                        # closed_at left the Telegram invoice on screen forever,
+                        # because the worker then skipped it at expires_at.
+                        await _send_expired(bot, db, payment, user, lifecycle)
                 except (TelegramBadRequest, TelegramForbiddenError) as error:
                     logger.info(
                         'Payment invoice notification could not be delivered',
