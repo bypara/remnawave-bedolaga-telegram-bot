@@ -46,10 +46,17 @@ async def send_notification_through_legacy_bot(*, telegram_id: int, text: str) -
         migration_text = render_migration_text(settings.BOT_MIGRATION_MESSAGE, migration.amount_kopeks)
         button_text = render_migration_text(settings.BOT_MIGRATION_BUTTON_TEXT, migration.amount_kopeks)
         keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=button_text, url=migration.url)]])
+
+        async def send_legacy_message(message_text: str, **send_kwargs: Any) -> Any:
+            return await legacy_bot.send_message(
+                chat_id=telegram_id,
+                text=message_text,
+                **send_kwargs,
+            )
+
         result = await send_migration_message(
-            legacy_bot.send_message,
+            send_legacy_message,
             f'{text.rstrip()}\n\n{migration_text}',
-            chat_id=telegram_id,
             reply_markup=keyboard,
         )
         logger.info('Уведомление доставлено через старого бота с кнопкой переезда', telegram_id=telegram_id)

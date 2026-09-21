@@ -22,7 +22,11 @@ class _DbContext:
 def _legacy_bot():
     bot = MagicMock()
     bot.id = 123456
-    bot.send_message = AsyncMock(return_value=SimpleNamespace(message_id=77))
+
+    async def send_message(chat_id, text, **_kwargs):
+        return SimpleNamespace(message_id=77, chat_id=chat_id, text=text)
+
+    bot.send_message = AsyncMock(side_effect=send_message)
     bot.session.close = AsyncMock()
     return bot
 
@@ -52,9 +56,10 @@ async def test_legacy_delivery_adds_personal_migration_button(monkeypatch, migra
     )
 
     assert result.message_id == 77
+    assert result.chat_id == 42
     call = legacy.send_message.await_args
     assert call.kwargs['chat_id'] == 42
-    assert call.args[0] == '<b>Подписка скоро закончится</b>\n\n<b>Мы переехали</b>'
+    assert call.kwargs['text'] == '<b>Подписка скоро закончится</b>\n\n<b>Мы переехали</b>'
     button = call.kwargs['reply_markup'].inline_keyboard[0][0]
     assert button.text == 'Перейти и получить 50 ₽'
     assert button.url.endswith('?start=move_token')
