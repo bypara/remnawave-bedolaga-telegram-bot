@@ -55,7 +55,7 @@ from app.external.remnawave_api import (
 from app.localization.texts import get_texts
 from app.runtime_roles import is_primary_process
 from app.services.grace_access_runtime import update_panel_user_grace_safe
-from app.services.legacy_notification_service import send_notification_through_legacy_bot
+from app.services.legacy_notification_service import can_fallback_to_legacy, send_notification_through_legacy_bot
 from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
@@ -326,7 +326,7 @@ class MonitoringService:
                 )
                 return None
             except TelegramBadRequest as exc:
-                if self._can_fallback_to_legacy(exc) and user:
+                if can_fallback_to_legacy(exc) and user:
                     legacy_result = await send_notification_through_legacy_bot(
                         telegram_id=chat_id,
                         text=text,
@@ -358,7 +358,7 @@ class MonitoringService:
             )
             return None
         except TelegramBadRequest as exc:
-            if self._can_fallback_to_legacy(exc) and user:
+            if can_fallback_to_legacy(exc) and user:
                 legacy_result = await send_notification_through_legacy_bot(
                     telegram_id=chat_id,
                     text=text,
@@ -366,18 +366,6 @@ class MonitoringService:
                 if legacy_result is not None:
                     return legacy_result
             raise
-
-    @staticmethod
-    def _can_fallback_to_legacy(error: TelegramBadRequest) -> bool:
-        message = str(error).lower()
-        return any(
-            marker in message
-            for marker in (
-                'chat not found',
-                "bot can't initiate conversation",
-                "can't initiate conversation",
-            )
-        )
 
     @staticmethod
     def _is_unreachable_error(error: TelegramBadRequest) -> bool:

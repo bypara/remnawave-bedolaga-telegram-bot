@@ -9,6 +9,8 @@ from app.config import settings
 from app.services import legacy_notification_service
 from app.services.bot_migration_service import MigrationLink
 from app.services.monitoring_service import MonitoringService
+from app.services.notification_delivery_service import NotificationDeliveryService
+from app.services.notification_types import NotificationType
 
 
 class _DbContext:
@@ -96,4 +98,48 @@ async def test_explicit_new_bot_block_is_not_bypassed(monkeypatch, migration_set
 
     with pytest.raises(TelegramForbiddenError):
         await service._send_message_with_logo(42, 'Текст', user=SimpleNamespace(status='active'))
+    legacy_send.assert_not_awaited()
+
+
+async def test_delivery_service_falls_back_when_new_bot_has_no_chat(monkeypatch, migration_settings):
+    primary = MagicMock()
+    primary.send_message = AsyncMock(
+        side_effect=TelegramBadRequest(method=SendMessage(chat_id=42, text='x'), message='chat not found')
+    )
+    legacy_send = AsyncMock(return_value=SimpleNamespace(message_id=77))
+    monkeypatch.setattr('app.utils.rich_notify.try_send_rich_notification', AsyncMock(return_value=False))
+    monkeypatch.setattr('app.services.notification_delivery_service.send_notification_through_legacy_bot', legacy_send)
+
+    result = await NotificationDeliveryService()._send_telegram_notification(
+        SimpleNamespace(telegram_id=42),
+        NotificationType.SUBSCRIPTION_EXPIRED,
+        {},
+        primary,
+        '<b>Подписка истекла</b>',
+        None,
+    )
+
+    assert result is True
+    legacy_send.assert_awaited_once_with(telegram_id=42, text='<b>Подписка истекла</b>')
+
+
+async def test_delivery_service_does_not_bypass_explicit_new_bot_block(monkeypatch, migration_settings):
+    primary = MagicMock()
+    primary.send_message = AsyncMock(
+        side_effect=TelegramForbiddenError(method=SendMessage(chat_id=42, text='x'), message='bot was blocked')
+    )
+    legacy_send = AsyncMock()
+    monkeypatch.setattr('app.utils.rich_notify.try_send_rich_notification', AsyncMock(return_value=False))
+    monkeypatch.setattr('app.services.notification_delivery_service.send_notification_through_legacy_bot', legacy_send)
+
+    result = await NotificationDeliveryService()._send_telegram_notification(
+        SimpleNamespace(telegram_id=42),
+        NotificationType.SUBSCRIPTION_EXPIRED,
+        {},
+        primary,
+        '<b>Подписка истекла</b>',
+        None,
+    )
+
+    assert result is False
     legacy_send.assert_not_awaited()

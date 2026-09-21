@@ -17,6 +17,23 @@ from app.utils.migration_messages import send_migration_message
 logger = structlog.get_logger(__name__)
 
 
+def can_fallback_to_legacy(error: Exception) -> bool:
+    """Return whether Telegram rejected delivery because the chat is unknown.
+
+    Explicit bot blocks deliberately do not match: migration notifications must
+    not bypass a user's decision to block the replacement bot.
+    """
+    message = str(error).lower()
+    return any(
+        marker in message
+        for marker in (
+            'chat not found',
+            "bot can't initiate conversation",
+            "can't initiate conversation",
+        )
+    )
+
+
 async def send_notification_through_legacy_bot(*, telegram_id: int, text: str) -> Any | None:
     """Deliver a notification through the old bot with one migration CTA.
 

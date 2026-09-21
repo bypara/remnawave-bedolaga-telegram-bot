@@ -1556,7 +1556,7 @@
   Функции: нет
 - `app/services/legacy_notification_service.py` — Python-модуль
   Классы: нет
-  Функции: `send_notification_through_legacy_bot` — Deliver a notification through the old bot with one migration CTA.
+  Функции: `can_fallback_to_legacy` — Return whether Telegram rejected delivery because the chat is unknown., `send_notification_through_legacy_bot` — Deliver a notification through the old bot with one migration CTA.
 - `app/services/legal_consent_service.py` — Python-модуль
   Классы: `LegalConsentRequirement`, `UserLegalConsentStatus` (1 методов)
   Функции: `get_requirement` — Текущий набор документов, обязательный для пользователей кабинета., `missing_documents` — Какие из обязательных документов пользователь не отметил., `get_accepted_documents` — Какие документы пользователь уже принимал хотя бы один раз., `get_user_status` — Вернуть обязательные, принятые и недостающие документы пользователя., `require_user_consent` — Серверный гейт платных действий и триала — UI обойти нельзя., `accept_user_consent` — Зафиксировать явное согласие со всеми актуальными документами., `record_consent` — Записать факт согласия. Сбой записи не должен ронять регистрацию.
@@ -1580,7 +1580,7 @@
   Классы: нет
   Функции: нет
 - `app/services/monitoring_service.py` — Python-модуль
-  Классы: `AutopayFailState` (2 методов), `MonitoringService` (50 методов)
+  Классы: `AutopayFailState` (2 методов), `MonitoringService` (49 методов)
   Функции: `resolve_autopay_period_candidate` — Return ``candidate`` only if it is a valid renewal period for ``tariff``., `decide_autopay_fail_notification` — Decide whether/what to send on a failed-autopay tick., `apply_autopay_fail_notification` — Mutate state to record that a notification with `reason` was just sent.
 - `app/services/mulenpay_service.py` — Python-модуль
   Классы: `MulenPayService` (10 методов)
@@ -4391,7 +4391,7 @@
   Функции: `migration_settings`, `fake_bot`, `config`, `test_legacy_sender_never_silently_falls_back_to_current`, `test_legacy_token_is_server_only_and_masked`, `test_sender_is_explicit_and_current_instance_is_not_replaced`, `test_same_token_borrows_existing_sender`, `test_malformed_sender_token_returns_safe_validation_error`, `test_api_rejects_unconfigured_legacy_without_creating_broadcast`, `test_migration_button_allowed_while_stub_mode_off`, `test_target_bot_cannot_send_old_bot_broadcast_or_move_to_itself`, `test_missing_target_rejected_and_owned_session_closed`, `test_ordinary_broadcast_preflight_does_not_call_telegram_or_close_main`, `test_cancelled_run_closes_only_owned_sender`, `test_personal_buttons_are_owner_specific_and_do_not_mutate_shared_keyboard`, `test_optional_button_off_never_issues_links`, `test_legacy_text_uses_captured_bot_not_main_or_rich_logo`, `test_media_sent_by_selected_bot`, `test_requests_default_to_existing_behavior_and_validate_sender`, `test_media_token_cannot_be_reused_with_different_sender`
 - `tests/services/test_legacy_notification_fallback.py` — Python-модуль
   Классы: нет
-  Функции: `migration_settings`, `test_legacy_delivery_adds_personal_migration_button`, `test_monitoring_falls_back_only_when_new_bot_has_no_chat`, `test_explicit_new_bot_block_is_not_bypassed`
+  Функции: `migration_settings`, `test_legacy_delivery_adds_personal_migration_button`, `test_monitoring_falls_back_only_when_new_bot_has_no_chat`, `test_explicit_new_bot_block_is_not_bypassed`, `test_delivery_service_falls_back_when_new_bot_has_no_chat`, `test_delivery_service_does_not_bypass_explicit_new_bot_block`
 - `tests/services/test_legal_consent.py` — Python-модуль
   Классы: нет
   Функции: `test_both_documents_required_by_default`, `test_setting_disables_the_gate`, `test_prechecked_flag_is_reported`, `test_document_hidden_from_web_is_not_required` — Документ только для бота нельзя прочитать в кабинете — галочки по нему нет., `test_empty_document_is_not_required`, `test_no_documents_at_all_disables_the_gate` — Иначе установка без юр. документов заблокировала бы регистрацию всем., `test_broken_document_read_does_not_block_login`, `test_missing_documents_reports_unchecked_boxes`, `test_record_consent_writes_a_row_per_document`, `test_record_consent_with_no_documents_is_a_noop`, `test_existing_user_status_reports_only_missing_documents`, `test_onboarding_acceptance_records_only_missing_documents`, `test_onboarding_cannot_accept_only_part_of_required_documents`, `test_paid_action_gate_reuses_trial_or_onboarding_consent`, `test_gate_rejects_missing_consent`, `test_gate_passes_with_full_consent`, `test_gate_allows_telegram_auth_to_defer_consent` — Telegram first establishes a session; the blocking onboarding records consent next., `test_gate_is_transparent_when_disabled` — Выключенная настройка не должна ломать регистрацию без чекбоксов.

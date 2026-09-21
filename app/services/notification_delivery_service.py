@@ -14,6 +14,7 @@ from aiogram import Bot
 
 from app.config import settings
 from app.database.models import User, UserStatus
+from app.services.legacy_notification_service import can_fallback_to_legacy, send_notification_through_legacy_bot
 from app.services.notification_types import (
     MARKETING_NOTIFICATION_TYPES,
     NotificationType,
@@ -302,6 +303,13 @@ class NotificationDeliveryService:
                 return False
 
             except TelegramBadRequest as e:
+                if can_fallback_to_legacy(e):
+                    legacy_result = await send_notification_through_legacy_bot(
+                        telegram_id=user.telegram_id,
+                        text=message,
+                    )
+                    if legacy_result is not None:
+                        return True
                 logger.warning(
                     'Ошибка отправки Telegram уведомления пользователю',
                     telegram_id=user.telegram_id,
