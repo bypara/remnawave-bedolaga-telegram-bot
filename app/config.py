@@ -1155,6 +1155,26 @@ class Settings(BaseSettings):
     TABPAY_SBP_ENABLED: bool = False
     TABPAY_SBP_DISPLAY_NAME: str = 'СБП (TabPay)'
 
+    # Anore (api.anore.cc, hosted payment form: СБП / ЮMoney / crypto)
+    ANORE_ENABLED: bool = False
+    # Bearer API key: an_test_* for sandbox or an_live_* for production.
+    ANORE_API_KEY: str | None = None
+    # Cashbox SECRET used to verify Anore-Signature over the raw webhook body.
+    ANORE_WEBHOOK_SECRET: str | None = None
+    # Required only for account-level keys. Shop-bound keys may leave it empty.
+    ANORE_SHOP_ID: int | None = None
+    ANORE_BASE_URL: str = 'https://api.anore.cc/v1'
+    ANORE_DISPLAY_NAME: str = 'Anore'
+    ANORE_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    ANORE_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    ANORE_WEBHOOK_PATH: str = '/anore-webhook'
+    # Public callback URL sent with every payment. If empty, the cashbox-level
+    # callback configured in Anore is used.
+    ANORE_CALLBACK_URL: str | None = None
+    # Optional comma-separated provider methods: sbp,yoomoney,crypto.
+    # Empty means every method enabled for the cashbox.
+    ANORE_METHODS: str | None = None
+
     # ParityPay (api.paritypay.net, v2)
     PARITYPAY_ENABLED: bool = False
     PARITYPAY_SHOP_ID: str | None = None  # X-ShopId — UUID кассы
@@ -3314,6 +3334,22 @@ class Settings(BaseSettings):
 
     def get_tabpay_sbp_display_name_html(self) -> str:
         return html.escape(self.get_tabpay_sbp_display_name())
+
+    def is_anore_configured(self) -> bool:
+        """Whether credentials exist, independently from the enable switch."""
+        return bool(self.ANORE_API_KEY and self.ANORE_WEBHOOK_SECRET)
+
+    def is_anore_enabled(self) -> bool:
+        # Both values are mandatory: accepting unsigned callbacks would allow
+        # arbitrary balance crediting.
+        return bool(self.ANORE_ENABLED and self.ANORE_API_KEY and self.ANORE_WEBHOOK_SECRET)
+
+    def get_anore_display_name(self) -> str:
+        name = (self.ANORE_DISPLAY_NAME or '').strip()
+        return name or 'Anore'
+
+    def get_anore_display_name_html(self) -> str:
+        return html.escape(self.get_anore_display_name())
 
     def is_paritypay_configured(self) -> bool:
         """Есть ли учётные данные провайдера — без учёта флага включения."""

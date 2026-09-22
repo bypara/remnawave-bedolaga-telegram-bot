@@ -293,6 +293,13 @@ def _get_method_defaults() -> dict:
                 {'id': 'sbp', 'name': 'СБП'},
             ],
         },
+        'anore': {
+            'default_display_name': settings.get_anore_display_name(),
+            'is_configured': settings.is_anore_enabled(),
+            'default_min': settings.ANORE_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.ANORE_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': None,
+        },
     }
 
 
@@ -356,6 +363,7 @@ DEFAULT_METHOD_ORDER = [
     'lava',
     'cispay',
     'tabpay',
+    'anore',
     'paritypay',
 ]
 

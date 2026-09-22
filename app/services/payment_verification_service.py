@@ -18,6 +18,7 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import (
+    AnorePayment,
     AntilopayPayment,
     AuraPayPayment,
     CisPayPayment,
@@ -93,6 +94,7 @@ SUPPORTED_MANUAL_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.AURAPAY,
         PaymentMethod.CISPAY,
         PaymentMethod.TABPAY,
+        PaymentMethod.ANORE,
         PaymentMethod.PARITYPAY,
         # ETOPLATEZHI / ANTILOPAY / JUPITER / DONUT / LAVA — webhook-driven,
         # без API-метода синхронизации БД, manual check не реализован.
@@ -122,6 +124,7 @@ SUPPORTED_AUTO_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.AURAPAY,
         PaymentMethod.CISPAY,
         PaymentMethod.TABPAY,
+        PaymentMethod.ANORE,
         PaymentMethod.PARITYPAY,
     }
 )
@@ -174,6 +177,8 @@ def method_display_name(method: PaymentMethod) -> str:
         return settings.get_cispay_display_name()
     if method == PaymentMethod.TABPAY:
         return settings.get_tabpay_display_name()
+    if method == PaymentMethod.ANORE:
+        return settings.get_anore_display_name()
     if method == PaymentMethod.PARITYPAY:
         return settings.get_paritypay_display_name()
     if method == PaymentMethod.TELEGRAM_STARS:
@@ -228,6 +233,8 @@ def _method_is_enabled(method: PaymentMethod) -> bool:
         return settings.is_cispay_enabled()
     if method == PaymentMethod.TABPAY:
         return settings.is_tabpay_enabled()
+    if method == PaymentMethod.ANORE:
+        return settings.is_anore_enabled()
     if method == PaymentMethod.PARITYPAY:
         return settings.is_paritypay_enabled()
     return False
@@ -556,6 +563,14 @@ def _is_tabpay_pending(payment: TabPayPayment) -> bool:
     from app.services.payment.tabpay import TABPAY_PENDING_STATUSES
 
     return (payment.status or '').lower() in TABPAY_PENDING_STATUSES
+
+
+def _is_anore_pending(payment: AnorePayment) -> bool:
+    if payment.is_paid:
+        return False
+    from app.services.payment.anore import ANORE_PENDING_STATUSES
+
+    return (payment.status or '').lower() in ANORE_PENDING_STATUSES
 
 
 def _parse_cryptobot_amount_kopeks(payment: CryptoBotPayment) -> int:
@@ -1187,6 +1202,32 @@ async def _fetch_tabpay_payments(db: AsyncSession, cutoff: datetime) -> list[Pen
     return records
 
 
+async def _fetch_anore_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
+    stmt = (
+        select(AnorePayment)
+        .options(selectinload(AnorePayment.user))
+        .where(AnorePayment.created_at >= cutoff)
+        .order_by(desc(AnorePayment.created_at))
+    )
+    result = await db.execute(stmt)
+    records: list[PendingPayment] = []
+    for payment in result.scalars().all():
+        if not _is_anore_pending(payment):
+            continue
+        record = _build_record(
+            PaymentMethod.ANORE,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=payment.expires_at,
+        )
+        if record:
+            records.append(record)
+    return records
+
+
 async def _fetch_cispay_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
     stmt = (
         select(CisPayPayment)
@@ -1272,6 +1313,7 @@ async def list_recent_pending_payments(
         await _fetch_lava_payments(db, cutoff),
         await _fetch_cispay_payments(db, cutoff),
         await _fetch_tabpay_payments(db, cutoff),
+        await _fetch_anore_payments(db, cutoff),
         await _fetch_paritypay_payments(db, cutoff),
         await _fetch_stars_transactions(db, cutoff),
     )
@@ -1621,6 +1663,21 @@ async def get_payment_record(
             expires_at=getattr(payment, 'expires_at', None),
         )
 
+    if method == PaymentMethod.ANORE:
+        payment = await db.get(AnorePayment, local_payment_id)
+        if not payment:
+            return None
+        await db.refresh(payment, attribute_names=['user'])
+        return _build_record(
+            method,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=payment.expires_at,
+        )
+
     if method == PaymentMethod.CISPAY:
         payment = await db.get(CisPayPayment, local_payment_id)
         if not payment:
@@ -1740,6 +1797,13 @@ async def run_manual_check(
             tabpay_payment = await db.get(TabPayPayment, local_payment_id)
             if tabpay_payment:
                 result = await payment_service.check_tabpay_payment_status(db, tabpay_payment.order_id)
+                payment = result.get('payment') if result else None
+            else:
+                payment = None
+        elif method == PaymentMethod.ANORE:
+            anore_payment = await db.get(AnorePayment, local_payment_id)
+            if anore_payment:
+                result = await payment_service.check_anore_payment_status(db, anore_payment.order_id)
                 payment = result.get('payment') if result else None
             else:
                 payment = None

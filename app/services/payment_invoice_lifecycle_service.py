@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import (
+    AnorePayment,
     AntilopayPayment,
     AuraPayPayment,
     CisPayPayment,
@@ -78,6 +79,7 @@ PAYMENT_MODEL_SPECS: tuple[PaymentModelSpec, ...] = (
     PaymentModelSpec('donut', DonutPayment),
     PaymentModelSpec('lava', LavaPayment),
     PaymentModelSpec('cispay', CisPayPayment),
+    PaymentModelSpec('anore', AnorePayment),
 )
 
 _PAID_STATUSES = {'paid', 'paid_over', 'success', 'succeeded', 'completed', 'confirmed'}

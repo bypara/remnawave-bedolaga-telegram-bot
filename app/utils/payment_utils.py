@@ -385,6 +385,18 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             }
         )
 
+    if settings.is_anore_enabled():
+        anore_name = settings.get_anore_display_name()
+        methods.append(
+            {
+                'id': 'anore',
+                'name': anore_name,
+                'icon': '💳',
+                'description': f'через {anore_name}',
+                'callback': 'topup_anore',
+            }
+        )
+
     if settings.is_paritypay_sbp_enabled():
         sbp_name = settings.get_paritypay_sbp_display_name()
         methods.append(
@@ -669,6 +681,8 @@ def is_payment_method_available(method_id: str) -> bool:
         return settings.is_tabpay_sbp_enabled()
     if method_id == 'tabpay_card':
         return settings.is_tabpay_card_enabled()
+    if method_id == 'anore':
+        return settings.is_anore_enabled()
     if method_id == 'paritypay':
         return settings.is_paritypay_enabled()
     if method_id == 'paritypay_sbp':

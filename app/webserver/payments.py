@@ -1881,6 +1881,79 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    # Anore webhook (api.anore.cc)
+    if settings.is_anore_configured():
+
+        @router.get(settings.ANORE_WEBHOOK_PATH)
+        async def anore_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'anore_webhook',
+                    'enabled': settings.is_anore_enabled(),
+                }
+            )
+
+        @router.post(settings.ANORE_WEBHOOK_PATH)
+        async def anore_webhook(request: Request) -> JSONResponse:
+            raw_body = await request.body()
+
+            from app.services.anore_service import anore_service
+
+            if not anore_service.verify_webhook_signature(raw_body, request.headers.get('Anore-Signature')):
+                logger.warning('Anore webhook: invalid signature')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('Anore webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            if not isinstance(payload, dict):
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            header_event = (request.headers.get('Anore-Event') or '').strip().lower()
+            payload_event = str(payload.get('event') or '').strip().lower()
+            if not header_event or header_event != payload_event:
+                logger.warning('Anore webhook: event header does not match body')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            delivery_id = (request.headers.get('Anore-Delivery-Id') or '').strip()
+            if not delivery_id:
+                logger.warning('Anore webhook: missing delivery ID')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # Payout events are valid for the same cashbox URL but do not
+            # affect user balances in this application.
+            if payload_event.startswith('payout.'):
+                return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+            if payload_event not in {'payment.succeeded', 'payment.expired'}:
+                return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+            payload['_delivery_id'] = delivery_id
+
+            async def _process_anore_bg() -> None:
+                try:
+                    success = await _process_payment_service_callback(
+                        payment_service,
+                        payload,
+                        'process_anore_callback',
+                    )
+                    if not success:
+                        logger.error(
+                            'Anore webhook processing failed',
+                            order_id=payload.get('orderId'),
+                            payment_id=payload.get('id'),
+                        )
+                except Exception as error:
+                    logger.exception('Anore webhook processing error', error=error)
+
+            _spawn_webhook_bg(_process_anore_bg())
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
     # TabPay webhook (tabpay.org)
     if settings.is_tabpay_configured():
 
@@ -2029,6 +2102,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     'lava_enabled': settings.is_lava_enabled(),
                     'cispay_enabled': settings.is_cispay_enabled(),
                     'tabpay_enabled': settings.is_tabpay_enabled(),
+                    'anore_enabled': settings.is_anore_enabled(),
                     'paritypay_enabled': settings.is_paritypay_enabled(),
                 }
             )

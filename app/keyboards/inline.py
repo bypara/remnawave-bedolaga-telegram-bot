@@ -2438,6 +2438,18 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         )
         has_direct_payment_methods = True
 
+    if settings.is_anore_enabled():
+        anore_name = settings.get_anore_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_ANORE', f'💳 {anore_name}'),
+                    callback_data=_build_callback('anore'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
     if settings.is_paritypay_card_enabled():
         paritypay_card_name = settings.get_paritypay_card_display_name()
         keyboard.append(

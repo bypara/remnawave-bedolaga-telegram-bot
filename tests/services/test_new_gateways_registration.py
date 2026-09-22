@@ -49,6 +49,12 @@ CREDENTIALS = {
 }
 
 
+def _enable_anore(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, 'ANORE_ENABLED', True, raising=False)
+    monkeypatch.setattr(settings, 'ANORE_API_KEY', 'an_live_key', raising=False)
+    monkeypatch.setattr(settings, 'ANORE_WEBHOOK_SECRET', 'cashbox-secret', raising=False)
+
+
 def _enable(monkeypatch: pytest.MonkeyPatch, prefix: str, *, card: bool = False, sbp: bool = False) -> None:
     for key, value in CREDENTIALS[prefix].items():
         monkeypatch.setattr(settings, key, value, raising=False)
@@ -252,3 +258,41 @@ def test_enabled_in_verification_when_configured(
 
     _disable(monkeypatch, prefix)
     assert member not in pvs.get_enabled_auto_methods()
+
+
+def test_anore_registered_without_fake_sub_methods(monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_anore(monkeypatch)
+
+    methods = {item['id']: item for item in get_available_payment_methods()}
+    assert methods['anore']['callback'] == 'topup_anore'
+    assert is_payment_method_available('anore') is True
+    assert PaymentMethod.ANORE.value in REAL_PAYMENT_METHODS
+    assert 'anore' in DEFAULT_METHOD_ORDER
+    assert _get_method_defaults()['anore']['available_sub_options'] in (None, [])
+
+
+@pytest.mark.anyio('asyncio')
+async def test_anore_guest_payment_routes_without_payment_option(monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_anore(monkeypatch)
+    service = PaymentService.__new__(PaymentService)  # type: ignore[call-arg]
+    service.bot = None
+    creator = AsyncMock(
+        return_value={'payment_url': 'https://pay.anore.cc/x', 'order_id': 'an1_x', 'local_payment_id': 7}
+    )
+    monkeypatch.setattr(service, 'create_anore_payment', creator)
+
+    async def noop_patch(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    result = await service.create_guest_payment(
+        db=noop_patch,
+        amount_kopeks=125000,
+        payment_method='anore',
+        description='Покупка',
+        purchase_token='tok-1',
+        return_url='https://web.example/result',
+    )
+
+    assert result == {'payment_url': 'https://pay.anore.cc/x', 'payment_id': 'an1_x', 'provider': 'anore'}
+    creator.assert_awaited_once()
+    assert 'payment_method_type' not in creator.await_args.kwargs

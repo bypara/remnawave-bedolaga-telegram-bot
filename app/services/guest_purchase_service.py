@@ -2039,6 +2039,7 @@ async def _find_succeeded_provider_payment(
     from sqlalchemy.types import JSON as SA_JSON
 
     from app.database.models import (
+        AnorePayment,
         CloudPaymentsPayment,
         CryptoBotPayment,
         FreekassaPayment,
@@ -2126,6 +2127,10 @@ async def _find_succeeded_provider_payment(
         model = SeverPayPayment
         payment_id_attr = 'order_id'
         extra_conditions = [SeverPayPayment.status == 'success', SeverPayPayment.is_paid.is_(True)]
+    elif base_method == 'anore':
+        model = AnorePayment
+        payment_id_attr = 'anore_payment_id'
+        extra_conditions = [AnorePayment.status == 'success', AnorePayment.is_paid.is_(True)]
 
     if model is None:
         return None

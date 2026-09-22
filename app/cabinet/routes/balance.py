@@ -1085,6 +1085,36 @@ async def create_topup(
                     detail='Failed to create TabPay payment',
                 )
 
+        elif request.payment_method == 'anore':
+            if not settings.is_anore_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='Anore payment method is unavailable',
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_anore_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                ),
+                email=getattr(user, 'email', None),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                return_url=cabinet_success_url,
+                fail_url=cabinet_failed_url,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail='Failed to create Anore payment',
+                )
+
         elif request.payment_method == 'paritypay':
             if not settings.is_paritypay_enabled():
                 raise HTTPException(
@@ -1345,6 +1375,18 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
         }
         return mapping.get(status, ('❓', 'Неизвестно'))
 
+    if record.method == PaymentMethod.ANORE:
+        mapping = {
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'new': ('⏳', 'Ожидает оплаты'),
+            'creation_unknown': ('⌛', 'Проверяется'),
+            'success': ('✅', 'Оплачено'),
+            'expired': ('⌛', 'Истёк'),
+            'error': ('❌', 'Ошибка'),
+            'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
+        }
+        return mapping.get(status, ('❓', 'Неизвестно'))
+
     return '❓', 'Неизвестно'
 
 
@@ -1382,6 +1424,8 @@ def _is_checkable(record: PendingPayment) -> bool:
     if record.method == PaymentMethod.TABPAY:
         # PENDING держится 20 минут после начала оплаты, поэтому проверяем и его.
         return status in {'pending', 'processing'}
+    if record.method == PaymentMethod.ANORE:
+        return status in {'pending', 'new', 'creation_unknown'}
     if record.method == PaymentMethod.PARITYPAY:
         return status == 'pending'
     return False

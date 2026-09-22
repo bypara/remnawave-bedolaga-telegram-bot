@@ -1830,6 +1830,7 @@ class AdminNotificationService:
             'kassa_ai': f'💳 {settings.get_kassa_ai_display_name()}',
             'cispay': f'💳 {settings.get_cispay_display_name()}',
             'tabpay': f'💳 {settings.get_tabpay_display_name()}',
+            'anore': f'💳 {settings.get_anore_display_name()}',
             'paritypay': f'💳 {settings.get_paritypay_display_name()}',
             'manual': '🛠️ Вручную (админ)',
             'balance': '💰 С баланса',

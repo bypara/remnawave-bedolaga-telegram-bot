@@ -15,6 +15,7 @@ from app.database.models import (
     AdminRole,
     AdvertisingCampaign,
     AdvertisingCampaignRegistration,
+    AnorePayment,
     BroadcastHistory,
     ButtonClickLog,
     CabinetRefreshToken,
@@ -78,6 +79,7 @@ _OAUTH_FIELDS: tuple[str, ...] = tuple(OAUTH_PROVIDER_COLUMNS.values())
 
 # Все платёжные таблицы с колонкой user_id
 _PAYMENT_MODELS: tuple[type, ...] = (
+    AnorePayment,
     CloudPaymentsPayment,
     CryptoBotPayment,
     FreekassaPayment,

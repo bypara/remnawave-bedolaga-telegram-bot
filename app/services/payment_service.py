@@ -30,6 +30,7 @@ from app.services.payment import (
     WataPaymentMixin,
     YooKassaPaymentMixin,
 )
+from app.services.payment.anore import AnorePaymentMixin
 from app.services.payment.antilopay import AntilopayPaymentMixin
 from app.services.payment.aurapay import AuraPayPaymentMixin
 from app.services.payment.cispay import CisPayPaymentMixin
@@ -736,6 +737,41 @@ async def link_tabpay_payment_to_transaction(*args, **kwargs):
     return await tabpay_crud.link_tabpay_payment_to_transaction(*args, **kwargs)
 
 
+async def create_anore_payment(*args, **kwargs):
+    anore_crud = import_module('app.database.crud.anore')
+    return await anore_crud.create_anore_payment(*args, **kwargs)
+
+
+async def get_anore_payment_by_order_id(*args, **kwargs):
+    anore_crud = import_module('app.database.crud.anore')
+    return await anore_crud.get_anore_payment_by_order_id(*args, **kwargs)
+
+
+async def get_anore_payment_by_invoice_id(*args, **kwargs):
+    anore_crud = import_module('app.database.crud.anore')
+    return await anore_crud.get_anore_payment_by_invoice_id(*args, **kwargs)
+
+
+async def get_anore_payment_by_id(*args, **kwargs):
+    anore_crud = import_module('app.database.crud.anore')
+    return await anore_crud.get_anore_payment_by_id(*args, **kwargs)
+
+
+async def get_anore_payment_by_id_for_update(*args, **kwargs):
+    anore_crud = import_module('app.database.crud.anore')
+    return await anore_crud.get_anore_payment_by_id_for_update(*args, **kwargs)
+
+
+async def update_anore_payment_status(*args, **kwargs):
+    anore_crud = import_module('app.database.crud.anore')
+    return await anore_crud.update_anore_payment_status(*args, **kwargs)
+
+
+async def link_anore_payment_to_transaction(*args, **kwargs):
+    anore_crud = import_module('app.database.crud.anore')
+    return await anore_crud.link_anore_payment_to_transaction(*args, **kwargs)
+
+
 async def create_paritypay_payment(*args, **kwargs):
     paritypay_crud = import_module('app.database.crud.paritypay')
     return await paritypay_crud.create_paritypay_payment(*args, **kwargs)
@@ -827,6 +863,7 @@ class PaymentService(
     LavaPaymentMixin,
     CisPayPaymentMixin,
     TabPayPaymentMixin,
+    AnorePaymentMixin,
     ParityPayPaymentMixin,
 ):
     """Основной интерфейс платежей, делегирующий работу специализированным mixin-ам."""
@@ -1505,6 +1542,28 @@ class PaymentService(
                     'payment_url': result.get('payment_url'),
                     'payment_id': result.get('order_id'),
                     'provider': 'tabpay',
+                }
+            return None
+
+        # --- Anore -----------------------------------------------------------
+        if _base == 'anore':
+            if not settings.is_anore_enabled():
+                logger.warning('Anore is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_anore_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'anore')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'anore',
                 }
             return None
 

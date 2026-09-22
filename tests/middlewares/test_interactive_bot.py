@@ -145,7 +145,7 @@ async def test_wrong_username_rejected_before_database(configured, monkeypatch):
     connect.assert_not_called()
 
 
-@pytest.mark.parametrize('revision,valid', [('0133', True), ('0132', False)])
+@pytest.mark.parametrize('revision,valid', [('0134', True), ('0133', False)])
 async def test_schema_checked_read_only_never_migrated(configured, monkeypatch, revision, valid):
     bot = SimpleNamespace(id=456, me=AsyncMock(return_value=SimpleNamespace(id=456, username='NEWBOT')))
     connection = AsyncMock()

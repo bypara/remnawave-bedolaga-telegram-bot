@@ -24,10 +24,12 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+import app.database.crud.anore as anore_crud
 import app.database.crud.paritypay as paritypay_crud
 import app.database.crud.tabpay as tabpay_crud
 import app.database.crud.transaction as transaction_crud
 import app.database.crud.user as user_crud
+import app.services.payment.anore as anore_mixin
 import app.services.payment.common as payment_common
 import app.services.payment.paritypay as paritypay_mixin
 import app.services.payment.tabpay as tabpay_mixin
@@ -42,6 +44,7 @@ def anyio_backend() -> str:
 
 
 GATEWAYS = [
+    pytest.param(anore_mixin, anore_crud, 'anore', PaymentMethod.ANORE, id='anore'),
     pytest.param(tabpay_mixin, tabpay_crud, 'tabpay', PaymentMethod.TABPAY, id='tabpay'),
     pytest.param(paritypay_mixin, paritypay_crud, 'paritypay', PaymentMethod.PARITYPAY, id='paritypay'),
 ]
@@ -90,6 +93,7 @@ class FakePayment:
         self.created_at = datetime(2026, 1, 1, tzinfo=UTC)
         self.metadata_json = metadata if metadata is not None else {}
         self.transaction_id = None
+        self.anore_payment_id = None
 
 
 class FakeTransaction:
@@ -309,6 +313,19 @@ async def test_tabpay_sandbox_payment_never_credits(monkeypatch: pytest.MonkeyPa
     payment.is_test = True
 
     assert await _finalize(_service(), 'tabpay', FakeSession(), payment) is True
+
+    assert wired['user'].balance_kopeks == 0
+    assert wired['transactions'] == []
+
+
+@pytest.mark.anyio('asyncio')
+async def test_anore_test_payment_never_credits(monkeypatch: pytest.MonkeyPatch, wired: dict) -> None:
+    """Ключ an_test_* подтверждает сценарий, но не двигает реальный баланс."""
+    _link_patch(monkeypatch, anore_crud, 'anore', wired)
+    payment = FakePayment('anore')
+    payment.is_test = True
+
+    assert await _finalize(_service(), 'anore', FakeSession(), payment) is True
 
     assert wired['user'].balance_kopeks == 0
     assert wired['transactions'] == []
