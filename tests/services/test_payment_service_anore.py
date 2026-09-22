@@ -132,6 +132,26 @@ async def test_create_payment_persists_before_api_and_returns_url(monkeypatch: p
 
 
 @pytest.mark.anyio
+async def test_selected_anore_method_is_forwarded_to_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    payment = FakePayment()
+    stub = StubAnoreService()
+    monkeypatch.setattr(anore_mixin, 'anore_service', stub)
+    monkeypatch.setattr(anore_crud, 'create_anore_payment', AsyncMock(return_value=payment))
+    monkeypatch.setattr(anore_crud, 'get_anore_payment_by_id_for_update', AsyncMock(return_value=payment))
+    monkeypatch.setattr(payment_service_module, 'get_user_by_id', _user)
+
+    result = await _service().create_anore_payment(
+        DummySession(),
+        user_id=77,
+        amount_kopeks=125000,
+        payment_method_type='card',
+    )
+
+    assert result is not None
+    assert stub.create_calls[0]['methods'] == 'yoomoney'
+
+
+@pytest.mark.anyio
 async def test_fast_webhook_success_is_not_overwritten_by_create_response(monkeypatch: pytest.MonkeyPatch) -> None:
     stale = FakePayment()
     finalized = FakePayment()

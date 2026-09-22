@@ -26,6 +26,7 @@ ANORE_STATUS_MAP: dict[str, tuple[str, bool]] = {
 ANORE_PENDING_STATUSES = frozenset({'pending', 'new', 'creation_unknown'})
 ANORE_FINAL_STATUSES = frozenset({'amount_mismatch'})
 ANORE_ALLOWED_METHODS = frozenset({'sbp', 'yoomoney', 'crypto'})
+ANORE_METHOD_ALIASES = {'card': 'yoomoney'}
 
 
 def _amount_to_kopeks(value: Any) -> int | None:
@@ -49,6 +50,15 @@ def _configured_methods() -> str | None:
     return ','.join(dict.fromkeys(valid)) or None
 
 
+def _requested_method(method: str | None) -> str | None:
+    """Normalize a UI payment option to the method name expected by Anore."""
+    if not method:
+        return None
+    normalized = method.strip().lower()
+    normalized = ANORE_METHOD_ALIASES.get(normalized, normalized)
+    return normalized if normalized in ANORE_ALLOWED_METHODS else None
+
+
 class AnorePaymentMixin:
     """Create, verify, reconcile and finalize Anore payments."""
 
@@ -63,6 +73,7 @@ class AnorePaymentMixin:
         language: str = 'ru',
         return_url: str | None = None,
         fail_url: str | None = None,
+        payment_method_type: str | None = None,
     ) -> dict[str, Any] | None:
         if not settings.is_anore_enabled():
             logger.error('Anore не настроен')
@@ -95,13 +106,21 @@ class AnorePaymentMixin:
             metadata_json=metadata,
         )
 
+        requested_method = _requested_method(payment_method_type)
+        if payment_method_type and requested_method is None:
+            logger.warning('Anore: ignored unsupported requested payment method', method=payment_method_type)
+            local_payment.status = 'error'
+            local_payment.callback_payload = {'creation_error': 'unsupported_method'}
+            await db.commit()
+            return None
+
         try:
             api_result = await anore_service.create_payment(
                 amount_kopeks=amount_kopeks,
                 description=description,
                 order_id=order_id,
                 email=email,
-                methods=_configured_methods(),
+                methods=requested_method or _configured_methods(),
                 success_url=return_url,
                 fail_url=fail_url or return_url,
                 callback_url=settings.ANORE_CALLBACK_URL,

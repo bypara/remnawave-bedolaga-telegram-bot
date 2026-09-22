@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import User
 from app.keyboards.inline import get_back_keyboard
-from app.keyboards.topup_amounts import get_topup_amount_keyboard
+from app.keyboards.topup_amounts import get_topup_amount_keyboard, get_topup_amount_limits
 from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
@@ -21,6 +21,21 @@ from .payment_ui import build_payment_created_text, build_payment_keyboard, buil
 
 
 logger = structlog.get_logger(__name__)
+
+ANORE_METHODS = {'anore', 'anore_sbp', 'anore_card'}
+ANORE_SERVICE_METHODS = {'anore_sbp': 'sbp', 'anore_card': 'yoomoney'}
+
+
+def _service_method_type(payment_method: str) -> str | None:
+    return ANORE_SERVICE_METHODS.get(payment_method)
+
+
+def _display_name_for_method(payment_method: str) -> str:
+    if payment_method == 'anore_sbp':
+        return 'СБП'
+    if payment_method == 'anore_card':
+        return 'Карта'
+    return settings.get_anore_display_name()
 
 
 def _check_topup_restriction(db_user: User, texts) -> InlineKeyboardMarkup | None:
@@ -42,6 +57,7 @@ async def _create_anore_payment_and_respond(
     db: AsyncSession,
     amount_kopeks: int,
     edit_message: bool = False,
+    payment_method: str = 'anore',
 ):
     """
     Common logic for creating Anore payment and sending response.
@@ -64,6 +80,7 @@ async def _create_anore_payment_and_respond(
         description=description,
         email=getattr(db_user, 'email', None),
         language=db_user.language,
+        payment_method_type=_service_method_type(payment_method),
     )
 
     if not result:
@@ -85,7 +102,7 @@ async def _create_anore_payment_and_respond(
         return
 
     payment_url = result.get('payment_url')
-    display_name = settings.get_anore_display_name()
+    display_name = _display_name_for_method(payment_method)
 
     keyboard = build_payment_keyboard(db_user.language, payment_url, amount_kopeks)
     response_text = build_payment_created_text(
@@ -135,9 +152,11 @@ async def process_anore_payment_amount(
         await state.clear()
         return
 
-    # Validate amount
-    min_amount = settings.ANORE_MIN_AMOUNT_KOPEKS
-    max_amount = settings.ANORE_MAX_AMOUNT_KOPEKS
+    # Validate amount using the same cabinet overrides as other methods.
+    payment_method = (await state.get_data()).get('payment_method', 'anore')
+    if payment_method not in ANORE_METHODS:
+        return
+    min_amount, max_amount = await get_topup_amount_limits(payment_method, db)
 
     if amount_kopeks < min_amount:
         await message.answer(
@@ -169,6 +188,7 @@ async def process_anore_payment_amount(
         db=db,
         amount_kopeks=amount_kopeks,
         edit_message=False,
+        payment_method=payment_method,
     )
 
 
@@ -179,9 +199,16 @@ async def start_anore_topup(
     db: AsyncSession,
     state: FSMContext,
 ):
-    """
-    Start Anore top-up process - ask for amount.
-    """
+    await _start_anore_topup_impl(callback, db_user, state, 'anore')
+
+
+async def _start_anore_topup_impl(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    payment_method: str,
+):
+    """Start Anore top-up for the selected hosted-form method."""
     texts = get_texts(db_user.language)
 
     restriction_kb = _check_topup_restriction(db_user, texts)
@@ -195,22 +222,43 @@ async def start_anore_topup(
         return
 
     await state.set_state(BalanceStates.waiting_for_amount)
-    await state.update_data(payment_method='anore')
+    await state.update_data(payment_method=payment_method)
 
-    display_name = settings.get_anore_display_name()
+    display_name = _display_name_for_method(payment_method)
 
-    keyboard = await get_topup_amount_keyboard('anore', db_user.language)
+    keyboard = await get_topup_amount_keyboard(payment_method, db_user.language)
+    min_amount_kopeks, max_amount_kopeks = await get_topup_amount_limits(payment_method)
 
     await callback.message.edit_text(
         build_topup_prompt(
             db_user.language,
             display_name,
-            settings.ANORE_MIN_AMOUNT_KOPEKS,
-            settings.ANORE_MAX_AMOUNT_KOPEKS,
+            min_amount_kopeks,
+            max_amount_kopeks,
         ),
         parse_mode='HTML',
         reply_markup=keyboard,
     )
+
+
+@error_handler
+async def start_anore_sbp_topup(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    await _start_anore_topup_impl(callback, db_user, state, 'anore_sbp')
+
+
+@error_handler
+async def start_anore_card_topup(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    await _start_anore_topup_impl(callback, db_user, state, 'anore_card')
 
 
 @error_handler
@@ -224,7 +272,8 @@ async def process_anore_custom_amount(
     Process custom amount input for Anore payment.
     """
     data = await state.get_data()
-    if data.get('payment_method') != 'anore':
+    payment_method = data.get('payment_method', 'anore')
+    if payment_method not in ANORE_METHODS:
         return
 
     texts = get_texts(db_user.language)
@@ -250,5 +299,3 @@ async def process_anore_custom_amount(
         amount_kopeks=amount_kopeks,
         state=state,
     )
-
-

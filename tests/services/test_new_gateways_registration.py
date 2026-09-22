@@ -260,7 +260,7 @@ def test_enabled_in_verification_when_configured(
     assert member not in pvs.get_enabled_auto_methods()
 
 
-def test_anore_registered_without_fake_sub_methods(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_anore_registered_with_provider_sub_methods(monkeypatch: pytest.MonkeyPatch) -> None:
     _enable_anore(monkeypatch)
 
     methods = {item['id']: item for item in get_available_payment_methods()}
@@ -268,7 +268,10 @@ def test_anore_registered_without_fake_sub_methods(monkeypatch: pytest.MonkeyPat
     assert is_payment_method_available('anore') is True
     assert PaymentMethod.ANORE.value in REAL_PAYMENT_METHODS
     assert 'anore' in DEFAULT_METHOD_ORDER
-    assert _get_method_defaults()['anore']['available_sub_options'] in (None, [])
+    assert _get_method_defaults()['anore']['available_sub_options'] == [
+        {'id': 'sbp', 'name': 'СБП'},
+        {'id': 'yoomoney', 'name': 'Карта'},
+    ]
 
 
 @pytest.mark.anyio('asyncio')

@@ -1551,13 +1551,17 @@ class PaymentService(
                 logger.warning('Anore is not enabled, cannot create guest payment')
                 return None
 
-            result = await self.create_anore_payment(
-                db=db,
-                user_id=None,
-                amount_kopeks=amount_kopeks,
-                description=description,
-                return_url=return_url,
-            )
+            anore_kwargs: dict[str, Any] = {
+                'db': db,
+                'user_id': None,
+                'amount_kopeks': amount_kopeks,
+                'description': description,
+                'return_url': return_url,
+            }
+            if _option:
+                anore_kwargs['payment_method_type'] = _option
+
+            result = await self.create_anore_payment(**anore_kwargs)
             if result:
                 await _patch_guest_metadata(result['local_payment_id'], 'anore')
                 return {
