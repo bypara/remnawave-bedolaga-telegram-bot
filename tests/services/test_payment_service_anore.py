@@ -127,6 +127,7 @@ async def test_create_payment_persists_before_api_and_returns_url(monkeypatch: p
     assert payment.anore_payment_id == 'provider-id'
     assert payment.status == 'pending'
     assert create.await_args.kwargs['amount_kopeks'] == 125000
+    assert stub.create_calls[0]['email'] == 'buyer@example.com'
     assert stub.create_calls[0]['methods'] == 'sbp,crypto'
     assert stub.create_calls[0]['callback_url'] == 'https://hooks.example/anore-webhook'
 
@@ -144,11 +145,12 @@ async def test_selected_anore_method_is_forwarded_to_provider(monkeypatch: pytes
         DummySession(),
         user_id=77,
         amount_kopeks=125000,
-        payment_method_type='card',
+        payment_method_type='sbp',
     )
 
     assert result is not None
-    assert stub.create_calls[0]['methods'] == 'yoomoney'
+    assert stub.create_calls[0]['methods'] == 'sbp'
+    assert stub.create_calls[0]['email'] == '123456@telegram.local'
 
 
 @pytest.mark.anyio

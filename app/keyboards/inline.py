@@ -41,9 +41,9 @@ PAYMENT_METHOD_CUSTOM_EMOJI_IDS: dict[str, str] = {
     'lava_card': '5244521450601194816',
     'lava_sbp': '5244802057994514325',
     'lava': '5247106557056920291',
+    'cispay_card': '5265198913517791287',
     'cispay_sbp': '5265074015868822600',
     'anore_sbp': '5265074015868822600',
-    'anore_card': '5265198913517791287',
     'support': '5341715473882955310',
 }
 
@@ -1748,10 +1748,12 @@ def _order_payment_method_rows(
 ) -> list[list[InlineKeyboardButton]]:
     """Keep the preferred checkout methods first and auxiliary methods last."""
     preferred_order = {
-        'cispay_sbp': 0,
-        'lava_card': 1,
-        'lava_sbp': 2,
-        'platega_m2': 3,
+        'anore_sbp': 0,
+        'cispay_card': 1,
+        'cispay_sbp': 2,
+        'lava_card': 3,
+        'lava_sbp': 4,
+        'platega_m2': 5,
     }
 
     indexed_rows = list(enumerate(keyboard))
@@ -2371,8 +2373,9 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         cispay_card_name = settings.get_cispay_card_display_name()
         keyboard.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('PAYMENT_CISPAY_CARD', f'💳 {cispay_card_name}'),
+                _payment_method_button(
+                    texts.t('PAYMENT_CISPAY_CARD', f'💳 {cispay_card_name}'),
+                    'cispay_card',
                     callback_data=_build_callback('cispay_card'),
                 )
             ]
@@ -2441,54 +2444,16 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         has_direct_payment_methods = True
 
     if settings.is_anore_enabled():
-        # Anore accepts ``sbp`` and ``yoomoney`` (the latter is the hosted
-        # bank-card route).  Respect an explicit ANORE_METHODS allow-list;
-        # when it is empty Anore enables all methods by default.
-        configured_anore_methods = {
-            item.strip().lower()
-            for item in (settings.ANORE_METHODS or '').split(',')
-            if item.strip()
-        }
-        show_anore_sbp = not configured_anore_methods or 'sbp' in configured_anore_methods
-        show_anore_card = not configured_anore_methods or 'yoomoney' in configured_anore_methods
-
-        if show_anore_sbp:
-            keyboard.append(
-                [
-                    _payment_method_button(
-                        texts.t('PAYMENT_ANORE_SBP', 'СБП'),
-                        'anore_sbp',
-                        callback_data=_build_callback('anore_sbp'),
-                    )
-                ]
-            )
-            has_direct_payment_methods = True
-        if show_anore_card:
-            keyboard.append(
-                [
-                    _payment_method_button(
-                        texts.t('PAYMENT_ANORE_CARD', 'Карта'),
-                        'anore_card',
-                        callback_data=_build_callback('anore_card'),
-                    )
-                ]
-            )
-            has_direct_payment_methods = True
-
-        # Keep a generic Anore entry for configurations that intentionally
-        # expose only another method (for example crypto).
-        if not show_anore_sbp and not show_anore_card:
-            anore_name = settings.get_anore_display_name()
-            keyboard.append(
-                [
-                    _payment_method_button(
-                        texts.t('PAYMENT_ANORE', f'💳 {anore_name}'),
-                        'anore',
-                        callback_data=_build_callback('anore'),
-                    )
-                ]
-            )
-            has_direct_payment_methods = True
+        keyboard.append(
+            [
+                _payment_method_button(
+                    texts.t('PAYMENT_ANORE_SBP', 'СБП'),
+                    'anore_sbp',
+                    callback_data=_build_callback('anore_sbp'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
 
     if settings.is_paritypay_card_enabled():
         paritypay_card_name = settings.get_paritypay_card_display_name()

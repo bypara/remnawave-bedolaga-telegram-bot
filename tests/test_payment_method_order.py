@@ -15,12 +15,16 @@ def test_preferred_payment_methods_are_ordered_for_regular_topup():
         _row('topup_lava_card'),
         _row('topup_lava_sbp'),
         _row('topup_cispay_sbp'),
+        _row('topup_cispay_card'),
+        _row('topup_anore_sbp'),
         _row('topup_support'),
     ]
 
     ordered = _order_payment_method_rows(rows)
 
     assert [row[0].callback_data for row in ordered] == [
+        'topup_anore_sbp',
+        'topup_cispay_card',
         'topup_cispay_sbp',
         'topup_lava_card',
         'topup_lava_sbp',
@@ -38,12 +42,16 @@ def test_preferred_payment_methods_are_ordered_for_prefilled_amount():
         _row('topup_amount|lava_card|10000'),
         _row('topup_amount|lava_sbp|10000'),
         _row('topup_amount|cispay_sbp|10000'),
+        _row('topup_amount|cispay_card|10000'),
+        _row('topup_amount|anore_sbp|10000'),
         _row('topup_amount|support|10000'),
     ]
 
     ordered = _order_payment_method_rows(rows)
 
     assert [row[0].callback_data for row in ordered] == [
+        'topup_amount|anore_sbp|10000',
+        'topup_amount|cispay_card|10000',
         'topup_amount|cispay_sbp|10000',
         'topup_amount|lava_card|10000',
         'topup_amount|lava_sbp|10000',
@@ -53,10 +61,11 @@ def test_preferred_payment_methods_are_ordered_for_prefilled_amount():
     ]
 
 
-def test_cispay_sbp_uses_requested_custom_emoji():
+def test_anore_sbp_and_cispay_card_use_requested_custom_emoji():
     from app.keyboards.inline import PAYMENT_METHOD_CUSTOM_EMOJI_IDS
 
-    assert PAYMENT_METHOD_CUSTOM_EMOJI_IDS['cispay_sbp'] == '5265074015868822600'
+    assert PAYMENT_METHOD_CUSTOM_EMOJI_IDS['anore_sbp'] == '5265074015868822600'
+    assert PAYMENT_METHOD_CUSTOM_EMOJI_IDS['cispay_card'] == '5265198913517791287'
 
 
 def test_platega_sbp_is_always_marked_as_backup(monkeypatch):

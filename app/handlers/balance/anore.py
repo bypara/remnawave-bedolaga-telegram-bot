@@ -22,8 +22,8 @@ from .payment_ui import build_payment_created_text, build_payment_keyboard, buil
 
 logger = structlog.get_logger(__name__)
 
-ANORE_METHODS = {'anore', 'anore_sbp', 'anore_card'}
-ANORE_SERVICE_METHODS = {'anore_sbp': 'sbp', 'anore_card': 'yoomoney'}
+ANORE_METHODS = {'anore', 'anore_sbp'}
+ANORE_SERVICE_METHODS = {'anore_sbp': 'sbp'}
 
 
 def _service_method_type(payment_method: str) -> str | None:
@@ -33,8 +33,6 @@ def _service_method_type(payment_method: str) -> str | None:
 def _display_name_for_method(payment_method: str) -> str:
     if payment_method == 'anore_sbp':
         return 'СБП'
-    if payment_method == 'anore_card':
-        return 'Карта'
     return settings.get_anore_display_name()
 
 
@@ -249,16 +247,6 @@ async def start_anore_sbp_topup(
     state: FSMContext,
 ):
     await _start_anore_topup_impl(callback, db_user, state, 'anore_sbp')
-
-
-@error_handler
-async def start_anore_card_topup(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    state: FSMContext,
-):
-    await _start_anore_topup_impl(callback, db_user, state, 'anore_card')
 
 
 @error_handler

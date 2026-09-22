@@ -298,13 +298,7 @@ def _get_method_defaults() -> dict:
             'is_configured': settings.is_anore_enabled(),
             'default_min': settings.ANORE_MIN_AMOUNT_KOPEKS,
             'default_max': settings.ANORE_MAX_AMOUNT_KOPEKS,
-            # Anore calls its card route ``yoomoney`` in the API.  Keep the
-            # user-facing label as ``Карта`` while exposing the provider's
-            # real method id to the cabinet/landing flow.
-            'available_sub_options': [
-                {'id': 'sbp', 'name': 'СБП'},
-                {'id': 'yoomoney', 'name': 'Карта'},
-            ],
+            'available_sub_options': None,
         },
     }
 

@@ -899,8 +899,9 @@ async def create_landing_purchase(
     # A non-gift landing purchase would create or revive the recipient after
     # payment. Enforce the current policy before creating any payment record;
     # fulfillment repeats the check immediately before mutating User.
+    existing_user = None
     if not body.is_gift:
-        _, decision = await evaluate_guest_purchase_registration(
+        existing_user, decision = await evaluate_guest_purchase_registration(
             db,
             channel=RegistrationChannel.LANDING_PURCHASE,
             contact_type=body.contact_type,
@@ -952,6 +953,8 @@ async def create_landing_purchase(
         description=f'{tariff.name} — {body.period_days}d',
         purchase_token=purchase.token,
         return_url=return_url,
+        payer_email=(body.contact_value if body.contact_type == 'email' else getattr(existing_user, 'email', None)),
+        payer_telegram_id=getattr(existing_user, 'telegram_id', None),
     )
 
     if payment_result is None:

@@ -260,7 +260,7 @@ def test_enabled_in_verification_when_configured(
     assert member not in pvs.get_enabled_auto_methods()
 
 
-def test_anore_registered_with_provider_sub_methods(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_anore_registered_without_fake_sub_methods(monkeypatch: pytest.MonkeyPatch) -> None:
     _enable_anore(monkeypatch)
 
     methods = {item['id']: item for item in get_available_payment_methods()}
@@ -268,10 +268,7 @@ def test_anore_registered_with_provider_sub_methods(monkeypatch: pytest.MonkeyPa
     assert is_payment_method_available('anore') is True
     assert PaymentMethod.ANORE.value in REAL_PAYMENT_METHODS
     assert 'anore' in DEFAULT_METHOD_ORDER
-    assert _get_method_defaults()['anore']['available_sub_options'] == [
-        {'id': 'sbp', 'name': 'СБП'},
-        {'id': 'yoomoney', 'name': 'Карта'},
-    ]
+    assert _get_method_defaults()['anore']['available_sub_options'] in (None, [])
 
 
 @pytest.mark.anyio('asyncio')
@@ -294,8 +291,10 @@ async def test_anore_guest_payment_routes_without_payment_option(monkeypatch: py
         description='Покупка',
         purchase_token='tok-1',
         return_url='https://web.example/result',
+        payer_telegram_id=123456,
     )
 
     assert result == {'payment_url': 'https://pay.anore.cc/x', 'payment_id': 'an1_x', 'provider': 'anore'}
     creator.assert_awaited_once()
     assert 'payment_method_type' not in creator.await_args.kwargs
+    assert creator.await_args.kwargs['email'] == '123456@telegram.local'

@@ -37,7 +37,6 @@ METHOD_CONFIG_IDS = {
     'tabpay_card': 'tabpay',
     'tabpay_sbp': 'tabpay',
     'anore_sbp': 'anore',
-    'anore_card': 'anore',
     'paritypay_card': 'paritypay',
     'paritypay_sbp': 'paritypay',
     'overpay_fps': 'overpay',

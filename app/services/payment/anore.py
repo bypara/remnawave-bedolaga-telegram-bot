@@ -26,7 +26,6 @@ ANORE_STATUS_MAP: dict[str, tuple[str, bool]] = {
 ANORE_PENDING_STATUSES = frozenset({'pending', 'new', 'creation_unknown'})
 ANORE_FINAL_STATUSES = frozenset({'amount_mismatch'})
 ANORE_ALLOWED_METHODS = frozenset({'sbp', 'yoomoney', 'crypto'})
-ANORE_METHOD_ALIASES = {'card': 'yoomoney'}
 
 
 def _amount_to_kopeks(value: Any) -> int | None:
@@ -55,8 +54,18 @@ def _requested_method(method: str | None) -> str | None:
     if not method:
         return None
     normalized = method.strip().lower()
-    normalized = ANORE_METHOD_ALIASES.get(normalized, normalized)
     return normalized if normalized in ANORE_ALLOWED_METHODS else None
+
+
+def _payer_email(email: str | None, user: Any) -> str | None:
+    """Use the real email when known, otherwise Anore's Telegram-ID alias."""
+    real_email = (email or getattr(user, 'email', None) or '').strip()
+    if real_email:
+        return real_email
+    telegram_id = getattr(user, 'telegram_id', None)
+    if telegram_id is not None:
+        return f'{telegram_id}@telegram.local'
+    return None
 
 
 class AnorePaymentMixin:
@@ -84,6 +93,7 @@ class AnorePaymentMixin:
 
         payment_module = import_module('app.services.payment_service')
         user = await payment_module.get_user_by_id(db, user_id) if user_id is not None else None
+        payer_email = _payer_email(email, user)
         owner = getattr(user, 'telegram_id', None) or user_id or 'guest'
         order_id = f'an{owner}_{uuid.uuid4().hex[:10]}'[:64]
         metadata = {
@@ -119,7 +129,7 @@ class AnorePaymentMixin:
                 amount_kopeks=amount_kopeks,
                 description=description,
                 order_id=order_id,
-                email=email,
+                email=payer_email,
                 methods=requested_method or _configured_methods(),
                 success_url=return_url,
                 fail_url=fail_url or return_url,

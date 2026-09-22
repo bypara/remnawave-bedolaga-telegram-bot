@@ -1102,7 +1102,6 @@ async def create_topup(
                 ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
-                payment_method_type=request.payment_option or None,
                 return_url=cabinet_success_url,
                 fail_url=cabinet_failed_url,
             )

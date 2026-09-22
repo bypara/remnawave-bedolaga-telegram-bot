@@ -927,6 +927,8 @@ class PaymentService(
         description: str,
         purchase_token: str,
         return_url: str,
+        payer_email: str | None = None,
+        payer_telegram_id: int | None = None,
     ) -> dict[str, Any] | None:
         """Create a payment for a guest (unauthenticated) landing-page purchase.
 
@@ -1551,17 +1553,17 @@ class PaymentService(
                 logger.warning('Anore is not enabled, cannot create guest payment')
                 return None
 
-            anore_kwargs: dict[str, Any] = {
-                'db': db,
-                'user_id': None,
-                'amount_kopeks': amount_kopeks,
-                'description': description,
-                'return_url': return_url,
-            }
-            if _option:
-                anore_kwargs['payment_method_type'] = _option
-
-            result = await self.create_anore_payment(**anore_kwargs)
+            anore_email = payer_email
+            if not anore_email and payer_telegram_id is not None:
+                anore_email = f'{payer_telegram_id}@telegram.local'
+            result = await self.create_anore_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                email=anore_email,
+                return_url=return_url,
+            )
             if result:
                 await _patch_guest_metadata(result['local_payment_id'], 'anore')
                 return {
