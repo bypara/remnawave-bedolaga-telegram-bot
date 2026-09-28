@@ -133,6 +133,13 @@ def _needs_terminal_cleanup(payment: Any, lifecycle: dict[str, Any]) -> bool:
     )
 
 
+def _is_permanent_delivery_error(error: TelegramBadRequest | TelegramForbiddenError) -> bool:
+    if isinstance(error, TelegramForbiddenError):
+        return True
+    message = str(error).lower()
+    return 'chat not found' in message or 'user not found' in message
+
+
 async def _find_payment_by_urls(db: AsyncSession, urls: set[str]) -> tuple[PaymentModelSpec, Any] | None:
     candidates = []
     for spec in PAYMENT_MODEL_SPECS:
@@ -378,9 +385,12 @@ async def process_due_payment_invoices(bot: Bot) -> None:
             for payment in result.scalars().all():
                 metadata = dict(payment.metadata_json or {})
                 lifecycle = dict(metadata.get(LIFECYCLE_METADATA_KEY) or {})
+                # A blocked chat stops new notifications, but a later paid
+                # invoice may still be closed without sending a message.
                 if (
                     not lifecycle
                     or lifecycle.get('expired_notified_at')
+                    or (lifecycle.get('delivery_unavailable_at') and not _is_paid(payment))
                     or (lifecycle.get('closed_at') and not _needs_terminal_cleanup(payment, lifecycle))
                 ):
                     continue
@@ -406,11 +416,15 @@ async def process_due_payment_invoices(bot: Bot) -> None:
                         # because the worker then skipped it at expires_at.
                         await _send_expired(bot, db, payment, user, lifecycle)
                 except (TelegramBadRequest, TelegramForbiddenError) as error:
+                    if _is_permanent_delivery_error(error):
+                        lifecycle['delivery_unavailable_at'] = datetime.now(UTC).isoformat()
+                        lifecycle['delivery_unavailable_reason'] = type(error).__name__
+                        await _store_lifecycle(db, payment, lifecycle)
                     logger.info(
                         'Payment invoice notification could not be delivered',
                         provider=spec.provider,
                         payment_id=payment.id,
-                        error=error,
+                        error=str(error),
                     )
                 except Exception as error:
                     logger.exception(
@@ -420,3 +434,6 @@ async def process_due_payment_invoices(bot: Bot) -> None:
                         error=error,
                     )
                     await db.rollback()
+                    # Rollback expires ORM rows already loaded for this provider.
+                    # The next pass will reload them without triggering lazy IO.
+                    break

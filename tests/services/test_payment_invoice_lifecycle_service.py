@@ -2,13 +2,17 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.methods import SendMessage
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+import app.services.payment_invoice_lifecycle_service as lifecycle_service
 from app.services.payment_invoice_lifecycle_service import (
     LIFECYCLE_METADATA_KEY,
     _extract_payment_urls,
     _is_paid,
     _is_pending,
+    _is_permanent_delivery_error,
     _is_terminal_unpaid,
     _needs_terminal_cleanup,
     _send_expired,
@@ -121,3 +125,70 @@ async def test_successful_payment_deletes_invoice_and_warning_immediately():
 
     deleted_ids = [call.kwargs['message_id'] for call in bot.delete_message.await_args_list]
     assert deleted_ids == [11, 22]
+
+
+@pytest.mark.parametrize(
+    ('error', 'permanent'),
+    [
+        (TelegramForbiddenError(SendMessage(chat_id=100, text='test'), 'bot was blocked by the user'), True),
+        (TelegramBadRequest(SendMessage(chat_id=100, text='test'), 'chat not found'), True),
+        (TelegramBadRequest(SendMessage(chat_id=100, text='test'), "can't parse entities"), False),
+    ],
+)
+def test_only_permanent_chat_errors_stop_invoice_notifications(error, permanent):
+    assert _is_permanent_delivery_error(error) is permanent
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    'delivery_error',
+    [
+        TelegramForbiddenError(SendMessage(chat_id=100, text='test'), 'bot was blocked by the user'),
+        TelegramBadRequest(SendMessage(chat_id=100, text='test'), 'chat not found'),
+    ],
+)
+async def test_unavailable_chat_is_recorded_and_not_retried(monkeypatch, delivery_error):
+    payment = SimpleNamespace(
+        id=13,
+        user_id=397,
+        status='expired',
+        is_paid=False,
+        expires_at=lifecycle_service.datetime.now(lifecycle_service.UTC),
+        amount_kopeks=1000,
+        metadata_json={LIFECYCLE_METADATA_KEY: {'chat_id': 100, 'invoice_message_id': 11}},
+    )
+    user = SimpleNamespace(telegram_id=100, language='ru')
+    db = SimpleNamespace(
+        execute=AsyncMock(return_value=SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [payment]))),
+        get=AsyncMock(return_value=user),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+
+    class SessionContext:
+        async def __aenter__(self):
+            return db
+
+        async def __aexit__(self, *_args):
+            return None
+
+    monkeypatch.setattr(lifecycle_service, 'AsyncSessionLocal', SessionContext)
+    monkeypatch.setattr(
+        lifecycle_service,
+        'PAYMENT_MODEL_SPECS',
+        (lifecycle_service.PaymentModelSpec('anore', lifecycle_service.AnorePayment),),
+    )
+    bot = SimpleNamespace(
+        delete_message=AsyncMock(),
+        send_message=AsyncMock(side_effect=delivery_error),
+    )
+
+    await lifecycle_service.process_due_payment_invoices(bot)
+    await lifecycle_service.process_due_payment_invoices(bot)
+
+    bot.send_message.assert_awaited_once()
+    db.commit.assert_awaited_once()
+    db.rollback.assert_not_awaited()
+    assert payment.metadata_json[LIFECYCLE_METADATA_KEY]['delivery_unavailable_at']
+    assert payment.metadata_json[LIFECYCLE_METADATA_KEY]['delivery_unavailable_reason'] == type(delivery_error).__name__
+    assert 'expired_notified_at' not in payment.metadata_json[LIFECYCLE_METADATA_KEY]
