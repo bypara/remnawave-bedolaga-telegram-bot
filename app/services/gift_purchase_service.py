@@ -24,7 +24,7 @@ from app.database.models import (
     TransactionType,
     User,
 )
-from app.services.guest_purchase_service import create_purchase
+from app.services.guest_purchase_service import create_purchase, notify_paid_gift_purchase
 from app.services.pricing_engine import RenewalPricing, pricing_engine
 
 
@@ -516,7 +516,10 @@ async def purchase_gift_from_balance(
             )
         raise
 
-    # 8. Emit deferred side-effects after commit
+    # 8. Report the sale now; claiming the gift is a separate event.
+    await notify_paid_gift_purchase(purchase, fresh_quote.tariff_name)
+
+    # 9. Emit deferred side-effects after commit
     await emit_transaction_side_effects(
         db,
         transaction,

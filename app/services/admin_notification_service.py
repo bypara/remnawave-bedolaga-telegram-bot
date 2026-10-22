@@ -35,6 +35,7 @@ from app.database.models import (
 )
 from app.utils.formatters import format_username_link
 from app.utils.message_patch import caption_exceeds_telegram_limit
+from app.utils.purchase_source import get_purchase_source, get_purchase_source_label
 from app.utils.rich_admin import classic_admin_html_to_rich, try_send_rich_admin_message
 from app.utils.timezone import format_local_datetime
 
@@ -63,7 +64,7 @@ def _redact_telegram_secrets(text: str) -> str:
 class NotificationCategory(StrEnum):
     """Категории уведомлений для маршрутизации по топикам."""
 
-    PURCHASES = 'purchases'  # Покупки подписок, покупки с лендинга
+    PURCHASES = 'purchases'  # Покупки подписок и подарков из всех каналов
     RENEWALS = 'renewals'  # Продления
     TRIALS = 'trials'  # Триалы
     BALANCE = 'balance'  # Пополнение баланса
@@ -1637,23 +1638,27 @@ class AdminNotificationService:
         tariff_name: str,
         *,
         is_pending_activation: bool = False,
+        is_activation: bool = False,
     ) -> bool:
-        """Send admin notification for a guest/gift purchase (landing or cabinet)."""
+        """Report a purchase or its activation with the original sales channel."""
         if not self._is_enabled():
             return False
 
         try:
-            is_cabinet = purchase.source == 'cabinet'
-
-            # Event title
-            if is_cabinet and purchase.is_gift:
-                event_title = '🎁 ПОДАРОК ИЗ КАБИНЕТА'
-            elif is_pending_activation:
-                event_title = '⏳ ПОКУПКА С ЛЕНДИНГА (ожидает активации)'
+            source = get_purchase_source(purchase)
+            origin = {
+                'bot': 'ИЗ БОТА',
+                'cabinet': 'ИЗ КАБИНЕТА',
+                'landing': 'С ЛЕНДИНГА',
+            }.get(source, '')
+            if is_activation:
+                event_title = '🎁 ПОДАРОК АКТИВИРОВАН' if purchase.is_gift else '✅ ПОДПИСКА АКТИВИРОВАНА'
             elif purchase.is_gift:
-                event_title = '🎁 ПОКУПКА В ПОДАРОК С ЛЕНДИНГА'
+                event_title = f'🎁 ПОДАРОК {origin}'.rstrip()
+            elif is_pending_activation:
+                event_title = f'⏳ ПОКУПКА {origin} (ожидает активации)'
             else:
-                event_title = '🛒 ПОКУПКА С ЛЕНДИНГА'
+                event_title = f'🛒 ПОКУПКА {origin}'.rstrip()
 
             # Contact info
             contact_display = html.escape(purchase.contact_value or '—')
@@ -1664,42 +1669,49 @@ class AdminNotificationService:
             message_lines = [
                 f'<b>{event_title}</b>',
                 '',
+                f'🆔 Покупка: <b>#{purchase.id}</b>',
             ]
 
-            if is_cabinet:
-                # Cabinet gift: show buyer with link to user profile
-                buyer = getattr(purchase, 'buyer', None)
-                if buyer:
-                    if buyer.username:
-                        buyer_display = format_username_link(buyer.username)
-                    else:
-                        buyer_name = buyer.email or f'id:{buyer.id}'
-                        buyer_display = f'<code>{html.escape(buyer_name)}</code>'
-                    message_lines.append(f'👤 Покупатель: {buyer_display}')
-                else:
-                    message_lines.append(f'{contact_icon} Покупатель: <code>{contact_display}</code>')
+            if is_activation or source == 'unknown':
+                message_lines.append(f'📍 Источник: {get_purchase_source_label(purchase)}')
+
+            if source == 'landing':
+                landing = _loaded_relationship(purchase, 'landing')
+                if landing and landing.slug:
+                    message_lines.append(f'🌐 Страница: <b>/buy/{html.escape(landing.slug)}</b>')
+                elif purchase.landing_id:
+                    message_lines.append(f'🌐 Лендинг: <b>#{purchase.landing_id}</b>')
+
+            buyer = _loaded_relationship(purchase, 'buyer')
+            if buyer:
+                buyer_display = (
+                    format_username_link(buyer.username)
+                    if buyer.username
+                    else self._get_user_identifier_display(buyer)
+                )
+                message_lines.append(f'👤 Покупатель: {buyer_display}')
+            elif purchase.contact_type == 'telegram' and purchase.contact_value:
+                message_lines.append(f'{contact_icon} Покупатель: {format_username_link(purchase.contact_value)}')
             else:
-                # Landing: show page slug and buyer contact
-                landing_slug = '—'
-                try:
-                    landing = purchase.landing
-                    if landing:
-                        landing_slug = landing.slug
-                    elif purchase.landing_id:
-                        landing_slug = f'ID:{purchase.landing_id}'
-                except Exception:
-                    if purchase.landing_id:
-                        landing_slug = f'ID:{purchase.landing_id}'
-                message_lines.append(f'🌐 Страница: <b>/buy/{html.escape(landing_slug)}</b>')
                 message_lines.append(f'{contact_icon} Покупатель: <code>{contact_display}</code>')
 
             if purchase.is_gift:
-                if purchase.gift_recipient_value:
+                recipient = _loaded_relationship(purchase, 'user')
+                if is_activation and recipient:
+                    recipient_display = (
+                        format_username_link(recipient.username)
+                        if recipient.username
+                        else self._get_user_identifier_display(recipient)
+                    )
+                    message_lines.append(f'👤 Получатель: {recipient_display}')
+                elif purchase.gift_recipient_value:
                     recipient_icon = '📧' if purchase.gift_recipient_type == 'email' else '📱'
                     recipient_value = html.escape(purchase.gift_recipient_value)
                     message_lines.append(f'{recipient_icon} Получатель: <code>{recipient_value}</code>')
                 else:
                     message_lines.append('🔗 Получатель: <i>по коду активации</i>')
+                if is_pending_activation and not is_activation:
+                    message_lines.append('⏳ Статус: <b>оплачен, ожидает активации</b>')
                 if purchase.gift_message:
                     raw_msg = purchase.gift_message[:100]
                     suffix = '…' if len(purchase.gift_message) > 100 else ''

@@ -552,7 +552,8 @@ async def try_fulfill_guest_purchase(
             await update_purchase_status(db, purchase_token, GuestPurchaseStatus.FAILED)
             return True  # consumed, even though failed
 
-        # Idempotency: skip terminal states (and code-only gifts already in PAID)
+        # All paid gifts await a claim, including gifts with a typed recipient.
+        # Repeated webhooks must not repeat sale notifications or reset paid_at.
         if (
             existing
             and existing.status
@@ -565,7 +566,6 @@ async def try_fulfill_guest_purchase(
             existing
             and existing.status == GuestPurchaseStatus.PAID.value
             and existing.is_gift
-            and not existing.gift_recipient_type
         ):
             logger.info(
                 'Guest purchase already in terminal state, skipping',
@@ -598,6 +598,13 @@ async def try_fulfill_guest_purchase(
                 purchase_id=existing.id,
                 provider=provider_name,
             )
+            try:
+                from app.services.guest_purchase_service import notify_paid_gift_purchase
+
+                await db.refresh(existing)
+                await notify_paid_gift_purchase(existing, existing.tariff.name if existing.tariff else '')
+            except Exception:
+                logger.warning('Failed to report paid gift purchase', purchase_id=existing.id, exc_info=True)
             # NaloGO receipt: payment received, fulfillment deferred until code activation
             try:
                 await db.refresh(existing)

@@ -513,6 +513,8 @@ async def test_purchase_gift_stale_expected_price_rejected(monkeypatch):
 @pytest.mark.asyncio
 async def test_idempotent_replay_and_conflict(monkeypatch):
     """Repeating same idempotency key returns original result; changing input raises conflict."""
+    notify_paid = AsyncMock()
+    monkeypatch.setattr('app.services.gift_purchase_service.notify_paid_gift_purchase', notify_paid)
     async with memory_session(monkeypatch, _TABLES) as db:
         db.add(SystemSetting(key=GIFT_ENABLED_KEY, value='true'))
 
@@ -548,6 +550,7 @@ async def test_idempotent_replay_and_conflict(monkeypatch):
         )
         assert res1.is_idempotent_replay is False
         assert res1.remaining_balance_kopeks == 70000
+        notify_paid.assert_awaited_once_with(res1.purchase, 'Tariff 1')
 
         # Second call: exact same input -> idempotent replay
         res2 = await purchase_gift_from_balance(
@@ -562,6 +565,7 @@ async def test_idempotent_replay_and_conflict(monkeypatch):
         assert res2.purchase.id == res1.purchase.id
         assert res2.transaction.id == res1.transaction.id
         assert res2.remaining_balance_kopeks == 70000  # No second debit
+        assert notify_paid.await_count == 1  # No duplicate purchase notification
 
         # Verify only 1 purchase and 1 transaction exist in DB
         purchases = (await db.execute(select(GuestPurchase))).scalars().all()
@@ -593,6 +597,7 @@ async def test_idempotent_replay_and_conflict(monkeypatch):
         assert res3.remaining_balance_kopeks == 30000  # 70000 - 40000
         purchases_after = (await db.execute(select(GuestPurchase))).scalars().all()
         assert len(purchases_after) == 2
+        assert notify_paid.await_count == 2
 
 
 @pytest.mark.asyncio

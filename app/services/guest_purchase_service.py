@@ -53,6 +53,11 @@ from app.services.registration_access_service import (
 )
 from app.services.subscription_service import SubscriptionService
 from app.utils.gift_links import GIFT_TOKEN_MIN_PREFIX_LENGTH
+from app.utils.purchase_source import (
+    get_purchase_source,
+    get_purchase_source_label,
+    get_subscription_purchase_description,
+)
 
 
 logger = structlog.get_logger(__name__)
@@ -108,6 +113,7 @@ async def _send_admin_notification(
     tariff_name: str,
     *,
     is_pending_activation: bool = False,
+    is_activation: bool = False,
 ) -> None:
     """Send admin topic notification about a guest purchase (best-effort)."""
     if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) or not settings.BOT_TOKEN:
@@ -122,9 +128,25 @@ async def _send_admin_notification(
                 purchase,
                 tariff_name,
                 is_pending_activation=is_pending_activation,
+                is_activation=is_activation,
             )
     except Exception:
         logger.warning('Failed to send admin notification for guest purchase', purchase_id=purchase.id, exc_info=True)
+
+
+async def notify_paid_gift_purchase(purchase: GuestPurchase, tariff_name: str) -> None:
+    """Report a newly committed gift payment before its recipient claims it."""
+    logger.info(
+        'Gift purchase paid, awaiting activation',
+        purchase_id=purchase.id,
+        source=get_purchase_source(purchase),
+        buyer_user_id=purchase.buyer_user_id,
+        tariff_id=purchase.tariff_id,
+        period_days=purchase.period_days,
+        amount_kopeks=purchase.amount_kopeks,
+        payment_method=purchase.payment_method,
+    )
+    await _send_admin_notification(purchase, tariff_name, is_pending_activation=True)
 
 
 CLAIMABLE_GIFT_STATUSES = (
@@ -389,7 +411,7 @@ async def _create_nalogo_receipt_for_purchase(
                         receipt_uuid=receipt_uuid,
                         amount_kopeks=purchase.amount_kopeks,
                         telegram_user_id=receipt_telegram_id,
-                        context_label=f'Источник: гостевая покупка с лендинга (purchase_id={purchase.id})',
+                        context_label=f'Источник: {get_purchase_source_label(purchase)} (purchase_id={purchase.id})',
                         user_email=receipt_email,
                     )
             except Exception as notify_error:
@@ -636,7 +658,7 @@ async def fulfill_purchase(
                     user_id=user.id,
                     type=TransactionType.SUBSCRIPTION_PAYMENT,
                     amount_kopeks=purchase.amount_kopeks,
-                    description=f'Покупка подписки через лендинг ({notification_tariff_name}, {purchase.period_days} дн.)',
+                    description=get_subscription_purchase_description(purchase, notification_tariff_name),
                     payment_method=payment_method_enum,
                     external_id=purchase.payment_id,
                     is_completed=True,
@@ -1669,7 +1691,7 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
                     user_id=user.id,
                     type=TransactionType.SUBSCRIPTION_PAYMENT,
                     amount_kopeks=purchase.amount_kopeks,
-                    description=f'Покупка подписки через лендинг ({notification_tariff_name}, {purchase.period_days} дн.)',
+                    description=get_subscription_purchase_description(purchase, notification_tariff_name),
                     payment_method=payment_method_enum,
                     external_id=purchase.payment_id,
                     is_completed=True,
@@ -1696,7 +1718,7 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
             except Exception:
                 logger.exception('Failed to send delivery notification after activation', purchase_id=purchase.id)
 
-        await _send_admin_notification(purchase, notification_tariff_name, is_pending_activation=False)
+        await _send_admin_notification(purchase, notification_tariff_name, is_activation=True)
 
         # Clear plaintext password after email delivery
         if purchase.cabinet_password:
@@ -1707,6 +1729,9 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
             'Guest purchase activated',
             purchase_id=purchase.id,
             user_id=user.id,
+            source=get_purchase_source(purchase),
+            is_gift=purchase.is_gift,
+            buyer_user_id=purchase.buyer_user_id,
         )
 
     except GuestPurchaseError:
